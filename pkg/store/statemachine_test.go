@@ -5,17 +5,19 @@ import (
 )
 
 // TestCanTransition pins the full state machine:
-// draft/public → offered → accepted/declined → settled.
+// draft/public → offered → accepted/declined → issue_launched → settled.
 func TestCanTransition(t *testing.T) {
 	allowed := map[[2]string]bool{
-		{StatusDraft, StatusOffered}:    true,
-		{StatusDraft, StatusAccepted}:   true, // public idea accepted straight from a repo feed
-		{StatusOffered, StatusAccepted}: true,
-		{StatusOffered, StatusDeclined}: true,
-		{StatusDeclined, StatusOffered}: true, // re-offer after a decline
-		{StatusAccepted, StatusSettled}: true,
+		{StatusDraft, StatusOffered}:          true,
+		{StatusDraft, StatusAccepted}:         true, // public idea accepted straight from a repo feed
+		{StatusOffered, StatusAccepted}:       true,
+		{StatusOffered, StatusDeclined}:       true,
+		{StatusDeclined, StatusOffered}:       true, // re-offer after a decline
+		{StatusAccepted, StatusIssueLaunched}: true, // ideator opened the prefilled GitHub form
+		{StatusAccepted, StatusSettled}:       true, // legacy token settlement / direct confirm
+		{StatusIssueLaunched, StatusSettled}:  true, // ideator confirmed the filed issue URL
 	}
-	statuses := []string{StatusDraft, StatusOffered, StatusAccepted, StatusDeclined, StatusSettled}
+	statuses := []string{StatusDraft, StatusOffered, StatusAccepted, StatusDeclined, StatusIssueLaunched, StatusSettled}
 	for _, from := range statuses {
 		for _, to := range statuses {
 			want := allowed[[2]string{from, to}]
@@ -50,7 +52,7 @@ func TestTransitionEnforced(t *testing.T) {
 	if _, err := s.Transition(idea.ID, StatusSettled); err == nil {
 		t.Fatal("draft → settled must be rejected")
 	}
-	for _, step := range []string{StatusOffered, StatusDeclined, StatusOffered, StatusAccepted, StatusSettled} {
+	for _, step := range []string{StatusOffered, StatusDeclined, StatusOffered, StatusAccepted, StatusIssueLaunched, StatusSettled} {
 		if _, err := s.Transition(idea.ID, step); err != nil {
 			t.Fatalf("transition to %s: %v", step, err)
 		}

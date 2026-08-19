@@ -99,14 +99,16 @@ func main() {
 	}
 	engine := &match.Engine{Store: st, Registry: reg, LLM: llm, Notifier: &api.MatchNotifier{Notify: notifications}}
 
-	// Settlement: credited GitHub issues via DIBS_GITHUB_TOKEN. The hive
-	// GitHub App is the tracked follow-up.
+	// Settlement: by default Dibs is just the matchmaker — the ideator
+	// files the credited issue via a prefilled GitHub URL. Setting
+	// DIBS_GITHUB_TOKEN enables the demoted legacy mode where Dibs opens
+	// the issue server-side on accept.
 	settler := &settle.Settler{}
 	if gh := settle.FromEnv(); gh != nil {
 		settler.GitHub = gh
-		log.Printf("settlement: GitHub token configured")
+		log.Printf("settlement: %s set — LEGACY server-side issue creation enabled", settle.EnvGitHubToken)
 	} else {
-		log.Printf("settlement: %s unset — accepts recorded, issues not opened", settle.EnvGitHubToken)
+		log.Printf("settlement: matchmaker mode — ideators file issues via prefilled GitHub URLs")
 	}
 
 	if seed := os.Getenv("REPOS_SEED_FILE"); seed != "" {
