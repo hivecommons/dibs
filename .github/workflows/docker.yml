@@ -1,0 +1,42 @@
+name: Docker
+
+# Publishes ghcr.io/kubestellar/ideate on every push to main: `latest` plus
+# the full commit sha, so deployments can pin exactly what they run and the
+# `--version` freshness probe matches the deployed manifest.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          # GIT_HASH is passed explicitly because Actions checkouts are
+          # detached; the Dockerfile stamps it into the binary via ldflags.
+          build-args: |
+            GIT_HASH=${{ github.sha }}
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

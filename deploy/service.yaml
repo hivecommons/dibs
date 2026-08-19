@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ideate
+  namespace: ideate
+  labels:
+    app: ideate
+spec:
+  selector:
+    app: ideate
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

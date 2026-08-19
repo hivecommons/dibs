@@ -1,0 +1,14 @@
+# Backing storage for the JSON file store (ideas, repo profiles,
+# notifications). ReadWriteOnce + a single replica: the store is
+# single-writer by design.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ideate-data
+  namespace: ideate
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi

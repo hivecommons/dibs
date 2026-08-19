@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ideate-config
+  namespace: ideate
+data:
+  IDEATE_ADDR: ":8080"
+  IDEATE_BASE_PATH: "/"
+  HUB_URL: "https://hive.kubestellar.io"
+  DATA_DIR: "/data"
