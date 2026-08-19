@@ -1,5 +1,5 @@
 # Requires: DNS record for dibs.kubestellar.io → the cluster ingress LB,
-# and a cert-manager ClusterIssuer named "letsencrypt" (adjust if yours
+# and a cert-manager ClusterIssuer named "letsencrypt-prod" (adjust if yours
 # differs).
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -7,7 +7,7 @@ metadata:
   name: dibs
   namespace: dibs
   annotations:
-    cert-manager.io/cluster-issuer: letsencrypt
+    cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
   ingressClassName: nginx
   tls:
