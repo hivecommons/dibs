@@ -112,6 +112,9 @@ func New(cfg Config) http.Handler {
 	root.HandleFunc("GET "+base+"/api/ticker", dibsAPI.HandleTicker)
 	root.HandleFunc("GET "+base+"/api/board", dibsAPI.HandleBoard)
 	root.HandleFunc("GET "+base+"/api/stats", dibsAPI.HandleStats)
+	// The repo value-index chart series (see pkg/api/index.go): derived,
+	// aggregate-only numbers per listed repo.
+	root.HandleFunc("GET "+base+"/api/repos/{org}/{repo}/index", dibsAPI.HandleRepoIndex)
 	root.HandleFunc("GET "+base+"/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"status":"ok","version":"` + cfg.Version + `"}` + "\n"))

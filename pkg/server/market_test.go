@@ -147,3 +147,82 @@ func settleViaLaunch(t *testing.T, f *wave2Fixture, idea store.Idea, repoID, ide
 		t.Fatalf("confirm: %d %s", rec.Code, rec.Body.String())
 	}
 }
+
+type repoIndexResp struct {
+	RepoID  string  `json:"repoID"`
+	Symbol  string  `json:"symbol"`
+	Current float64 `json:"current"`
+	Delta   float64 `json:"delta"`
+	Points  []struct {
+		T     string  `json:"t"`
+		Value float64 `json:"value"`
+	} `json:"points"`
+	Bars []struct {
+		T     string `json:"t"`
+		Ideas int    `json:"ideas"`
+		Agent int    `json:"agent"`
+	} `json:"bars"`
+}
+
+type tickerWithReposResp struct {
+	Ticker []api.TickerEntry `json:"ticker"`
+	Repos  []api.RepoTicker  `json:"repos"`
+}
+
+// TestRepoIndexEndpoint: /api/repos/{org}/{repo}/index is public, 404s on
+// unknown repos, and reflects store activity in the derived series. The
+// ticker carries every listed repo's symbol/value/delta.
+func TestRepoIndexEndpoint(t *testing.T) {
+	f := newWave2Server(t, nil)
+
+	// Quiet repo: flat at the base, no activity.
+	rec := doJSON(t, f.h, "GET", "/api/repos/org/other/index", "", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("index: %d %s", rec.Code, rec.Body.String())
+	}
+	quiet := decode[repoIndexResp](t, rec)
+	if quiet.Current != 100 || quiet.Delta != 0 || len(quiet.Points) != 30 || quiet.Symbol != "OTHER" {
+		t.Fatalf("quiet index wrong: %+v", quiet)
+	}
+
+	// Unknown repo → 404.
+	if rec := doJSON(t, f.h, "GET", "/api/repos/no/nope/index", "", nil); rec.Code != http.StatusNotFound {
+		t.Fatalf("unknown repo: %d %s", rec.Code, rec.Body.String())
+	}
+
+	// Activity moves the index: settle an idea (offer + accept + settle).
+	idea := f.createIdea(t, "bob-session", "Index mover", "body", "public")
+	settleViaLaunch(t, f, idea, "kubestellar/dibs", "bob-session", "alice-session")
+
+	rec = doJSON(t, f.h, "GET", "/api/repos/kubestellar/dibs/index", "", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("index: %d %s", rec.Code, rec.Body.String())
+	}
+	busy := decode[repoIndexResp](t, rec)
+	if busy.Current <= 100 || busy.Delta <= 0 || busy.Symbol != "DIBS" {
+		t.Fatalf("busy index should be above base with positive delta: %+v", busy)
+	}
+	last := busy.Bars[len(busy.Bars)-1]
+	if last.Ideas < 1 || last.Agent < 2 { // offer; accept + settle
+		t.Fatalf("today's bars should show the activity: %+v", last)
+	}
+
+	// Determinism at the HTTP layer: same request, same series.
+	rec2 := doJSON(t, f.h, "GET", "/api/repos/kubestellar/dibs/index", "", nil)
+	if rec.Body.String() != rec2.Body.String() {
+		t.Fatalf("index endpoint not deterministic:\n%s\n%s", rec.Body.String(), rec2.Body.String())
+	}
+
+	// Ticker carries repo tickers, most active first.
+	rec = doJSON(t, f.h, "GET", "/api/ticker", "", nil)
+	tk := decode[tickerWithReposResp](t, rec)
+	if len(tk.Repos) != 2 {
+		t.Fatalf("want 2 repo tickers, got %+v", tk.Repos)
+	}
+	if tk.Repos[0].RepoID != "kubestellar/dibs" || tk.Repos[0].Symbol != "DIBS" || tk.Repos[0].Value <= 100 {
+		t.Fatalf("busiest repo should lead the tape: %+v", tk.Repos)
+	}
+	if tk.Repos[1].RepoID != "org/other" || tk.Repos[1].Value != 100 {
+		t.Fatalf("quiet repo ticker wrong: %+v", tk.Repos)
+	}
+}

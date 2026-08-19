@@ -136,10 +136,16 @@ func (a *API) HandleBoard(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"board": rows})
 }
 
-// HandleTicker serves the tape: each market idea's latest event, newest
-// first (public — see the privacy invariant at the top of this file).
+// HandleTicker serves the tape: every listed repo's ticker (symbol, index
+// value, delta), plus each market idea's latest event, newest first
+// (public — see the privacy invariant at the top of this file).
 func (a *API) HandleTicker(w http.ResponseWriter, r *http.Request) {
 	ideas, err := a.marketIdeas()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	repos, err := a.repoTickers()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -163,7 +169,7 @@ func (a *API) HandleTicker(w http.ResponseWriter, r *http.Request) {
 		}
 		entries = append(entries, e)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ticker": entries})
+	writeJSON(w, http.StatusOK, map[string]any{"ticker": entries, "repos": repos})
 }
 
 // MarketStats are the exchange-wide aggregate numbers under the hero.
