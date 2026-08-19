@@ -1,0 +1,7 @@
+/ideate
+/bin/
+/data/
+*.test
+*.out
+.DS_Store
+.env
