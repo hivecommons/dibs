@@ -22,18 +22,52 @@ const (
 	VisibilityPrivate = "private"
 )
 
-// Status values for an idea's lifecycle. Wave 1 only ever writes draft and
-// offered; the rest are reserved for the matching/settlement waves so the
-// schema doesn't churn.
+// Status values for an idea's lifecycle state machine:
+//
+//	draft ──offer──▶ offered ──accept──▶ accepted ──issue──▶ settled
+//	  │                 │
+//	  │                 └──decline──▶ declined ──re-offer──▶ offered
+//	  └──direct accept (public ideas only)──▶ accepted
 const (
-	StatusDraft       = "draft"
-	StatusOffered     = "offered"
-	StatusMatched     = "matched"
-	StatusSubmitted   = "submitted"
-	StatusAccepted    = "accepted"
-	StatusRejected    = "rejected"
-	StatusImplemented = "implemented"
+	StatusDraft    = "draft"
+	StatusOffered  = "offered"
+	StatusAccepted = "accepted"
+	StatusDeclined = "declined"
+	StatusSettled  = "settled"
 )
+
+// CanTransition reports whether the idea state machine allows from→to.
+func CanTransition(from, to string) bool {
+	switch from {
+	case StatusDraft:
+		return to == StatusOffered || to == StatusAccepted
+	case StatusOffered:
+		return to == StatusAccepted || to == StatusDeclined
+	case StatusDeclined:
+		return to == StatusOffered
+	case StatusAccepted:
+		return to == StatusSettled
+	default:
+		return false
+	}
+}
+
+// Offer status values (per-repo offers hanging off an idea).
+const (
+	OfferPending  = "pending"
+	OfferAccepted = "accepted"
+	OfferDeclined = "declined"
+)
+
+// Offer records the ideator explicitly offering the idea to one repo. For a
+// PRIVATE idea, an offer is the one and only thing that reveals it to that
+// repo's owner.
+type Offer struct {
+	RepoID    string     `json:"repoID"`
+	Status    string     `json:"status"` // pending | accepted | declined
+	CreatedAt time.Time  `json:"createdAt"`
+	DecidedAt *time.Time `json:"decidedAt,omitempty"`
+}
 
 // MaxBodyBytes caps an idea's markdown body.
 const MaxBodyBytes = 64 * 1024
@@ -41,13 +75,18 @@ const MaxBodyBytes = 64 * 1024
 // MaxTitleLen caps an idea's title.
 const MaxTitleLen = 200
 
-// Match is a Wave-2 LLM match suggestion. Defined now so the on-disk schema
-// is stable; always empty in Wave 1.
+// Match is a cached idea↔repo fit score. RepoHash fingerprints the repo
+// profile the score was computed against so repo edits invalidate the cache;
+// idea edits clear Matches wholesale (see Update).
 type Match struct {
 	RepoID      string    `json:"repoID"`
 	Score       float64   `json:"score"`
 	Reason      string    `json:"reason"`
 	SuggestedAt time.Time `json:"suggestedAt"`
+	RepoHash    string    `json:"repoHash,omitempty"`
+	// ByLLM records whether the score came from the LLM (vs the
+	// deterministic fallback).
+	ByLLM bool `json:"byLLM,omitempty"`
 }
 
 // Idea is one ideator-authored idea.
@@ -63,8 +102,33 @@ type Idea struct {
 	CreatedAt     time.Time `json:"createdAt"`
 	UpdatedAt     time.Time `json:"updatedAt"`
 	Matches       []Match   `json:"matches"`
-	TargetRepo    string    `json:"targetRepo,omitempty"`
-	IssueURL      string    `json:"issueURL,omitempty"`
+	// Offers are the repos the ideator explicitly offered this idea to.
+	Offers []Offer `json:"offers,omitempty"`
+	// PassedRepos are repos the ideator swiped away; they never resurface
+	// in the idea's match candidates.
+	PassedRepos []string `json:"passedRepos,omitempty"`
+	TargetRepo  string   `json:"targetRepo,omitempty"`
+	IssueURL    string   `json:"issueURL,omitempty"`
+}
+
+// OfferTo returns the idea's offer to repoID, or nil.
+func (i *Idea) OfferTo(repoID string) *Offer {
+	for k := range i.Offers {
+		if i.Offers[k].RepoID == repoID {
+			return &i.Offers[k]
+		}
+	}
+	return nil
+}
+
+// HasPassed reports whether the ideator swiped repoID away.
+func (i *Idea) HasPassed(repoID string) bool {
+	for _, r := range i.PassedRepos {
+		if r == repoID {
+			return true
+		}
+	}
+	return false
 }
 
 // ErrNotFound is returned when an idea does not exist.
@@ -93,7 +157,7 @@ func Validate(idea *Idea) error {
 		return &ValidationError{`visibility must be "public" or "private"`}
 	}
 	switch idea.Status {
-	case StatusDraft, StatusOffered, StatusMatched, StatusSubmitted, StatusAccepted, StatusRejected, StatusImplemented:
+	case StatusDraft, StatusOffered, StatusAccepted, StatusDeclined, StatusSettled:
 	default:
 		return &ValidationError{"invalid status"}
 	}
@@ -255,8 +319,10 @@ func (s *Store) readLocked(id string) (*Idea, error) {
 }
 
 // Update validates and persists an existing idea, bumping UpdatedAt. The
-// caller is responsible for authorization; ID/Author/CreatedAt are preserved
-// from the stored record.
+// caller is responsible for authorization; ID/Author/CreatedAt and the
+// server-managed fields (offers, passes, target, issue URL) are preserved
+// from the stored record. Editing the CONTENT (title/body) invalidates the
+// cached TLDR and matches so the match engine recomputes them.
 func (s *Store) Update(idea *Idea) error {
 	if err := Validate(idea); err != nil {
 		return err
@@ -270,10 +336,59 @@ func (s *Store) Update(idea *Idea) error {
 	idea.Author = existing.Author
 	idea.CreatedAt = existing.CreatedAt
 	idea.UpdatedAt = time.Now().UTC()
-	if idea.Matches == nil {
-		idea.Matches = existing.Matches
+	idea.Offers = existing.Offers
+	idea.PassedRepos = existing.PassedRepos
+	idea.TargetRepo = existing.TargetRepo
+	idea.IssueURL = existing.IssueURL
+	if idea.Title != existing.Title || idea.Body != existing.Body {
+		idea.TLDR = ""
+		idea.Matches = []Match{}
+	} else {
+		idea.TLDR = existing.TLDR
+		if idea.Matches == nil {
+			idea.Matches = existing.Matches
+		}
 	}
 	return s.persistLocked(idea)
+}
+
+// Mutate atomically read-modify-writes an idea under the store lock. fn may
+// change any field except identity/timestamps; the result is re-validated.
+// touch controls whether UpdatedAt is bumped (cache refreshes shouldn't
+// reorder listings). Returns a copy of the persisted idea.
+func (s *Store) Mutate(id string, touch bool, fn func(*Idea) error) (*Idea, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	idea, err := s.readLocked(id)
+	if err != nil {
+		return nil, err
+	}
+	if err := fn(idea); err != nil {
+		return nil, err
+	}
+	if err := Validate(idea); err != nil {
+		return nil, err
+	}
+	if touch {
+		idea.UpdatedAt = time.Now().UTC()
+	}
+	if err := s.persistLocked(idea); err != nil {
+		return nil, err
+	}
+	cp := *idea
+	return &cp, nil
+}
+
+// Transition moves an idea through the state machine, rejecting any move
+// CanTransition disallows.
+func (s *Store) Transition(id, to string) (*Idea, error) {
+	return s.Mutate(id, true, func(idea *Idea) error {
+		if !CanTransition(idea.Status, to) {
+			return &ValidationError{fmt.Sprintf("cannot transition %s → %s", idea.Status, to)}
+		}
+		idea.Status = to
+		return nil
+	})
 }
 
 // Delete removes an idea. The caller is responsible for authorization.
@@ -301,6 +416,31 @@ func (s *Store) ListByAuthor(author string) ([]*Idea, error) {
 // this is the invariant the private-idea tests pin down.
 func (s *Store) ListPublic() ([]*Idea, error) {
 	return s.list(func(e indexEntry) bool { return e.Visibility == VisibilityPublic })
+}
+
+// ListOfferedTo returns every idea — INCLUDING private ones — that carries a
+// PENDING offer to one of repoIDs, newest first. This is the only path by
+// which a private idea reaches anyone but its author: the ideator's explicit
+// offer to that specific repo.
+func (s *Store) ListOfferedTo(repoIDs []string) ([]*Idea, error) {
+	want := map[string]bool{}
+	for _, r := range repoIDs {
+		want[r] = true
+	}
+	all, err := s.list(func(indexEntry) bool { return true })
+	if err != nil {
+		return nil, err
+	}
+	out := []*Idea{}
+	for _, idea := range all {
+		for _, o := range idea.Offers {
+			if o.Status == OfferPending && want[o.RepoID] {
+				out = append(out, idea)
+				break
+			}
+		}
+	}
+	return out, nil
 }
 
 func (s *Store) list(keep func(indexEntry) bool) ([]*Idea, error) {

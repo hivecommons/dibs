@@ -1,0 +1,302 @@
+package match
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"log"
+	"regexp"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/kubestellar/ideate/pkg/registry"
+	"github.com/kubestellar/ideate/pkg/store"
+)
+
+// MaxMatches caps how many candidate repos an idea keeps — LLM cost control.
+const MaxMatches = 10
+
+// NotifyThreshold is the minimum fresh score that triggers a "new match"
+// notification to both sides.
+const NotifyThreshold = 60
+
+// MaxTLDRLen caps a generated TLDR.
+const MaxTLDRLen = 280
+
+// maxPromptBody bounds how much idea body we send to the LLM.
+const maxPromptBody = 4000
+
+// Notifier receives match events (both directions). Nil disables.
+type Notifier interface {
+	NewMatch(ideaAuthor, repoOwner string, idea *store.Idea, repo *registry.RepoProfile, score float64)
+}
+
+// Engine lazily computes and caches TLDRs and idea↔repo scores.
+type Engine struct {
+	Store    *store.Store
+	Registry *registry.Registry
+	// LLM is nil in fallback-only mode.
+	LLM      *LLM
+	Notifier Notifier
+}
+
+// RepoHash fingerprints the score-relevant part of a repo profile; a changed
+// hash invalidates every cached match against that repo.
+func RepoHash(rp *registry.RepoProfile) string {
+	h := sha256.New()
+	h.Write([]byte(rp.RepoID + "\x00" + rp.Description + "\x00" + strings.Join(rp.Topics, ",") + "\x00" + rp.Appetite))
+	return hex.EncodeToString(h.Sum(nil))[:16]
+}
+
+// EnsureTLDR returns the idea's cached TLDR, generating and persisting one
+// if missing ("X has an idea — let me TLDR it for you").
+func (e *Engine) EnsureTLDR(ctx context.Context, idea *store.Idea) (string, error) {
+	if idea.TLDR != "" {
+		return idea.TLDR, nil
+	}
+	tldr := e.generateTLDR(ctx, idea)
+	updated, err := e.Store.Mutate(idea.ID, false, func(i *store.Idea) error {
+		if i.TLDR == "" {
+			i.TLDR = tldr
+		}
+		return nil
+	})
+	if err != nil {
+		return "", err
+	}
+	idea.TLDR = updated.TLDR
+	return updated.TLDR, nil
+}
+
+func (e *Engine) generateTLDR(ctx context.Context, idea *store.Idea) string {
+	if e.LLM != nil {
+		out, err := e.LLM.Chat(ctx,
+			"You summarize open-source project ideas. Reply with ONLY a punchy TLDR of at most two sentences, third person, no preamble.",
+			"Title: "+idea.Title+"\n\n"+truncate(idea.Body, maxPromptBody))
+		if err == nil && out != "" {
+			return truncate(out, MaxTLDRLen)
+		}
+		if err != nil {
+			log.Printf("match: tldr llm failed, using fallback: %v", err)
+		}
+	}
+	return FallbackTLDR(idea)
+}
+
+// FallbackTLDR is the deterministic no-LLM TLDR: the first paragraph,
+// clipped.
+func FallbackTLDR(idea *store.Idea) string {
+	body := strings.TrimSpace(idea.Body)
+	if i := strings.Index(body, "\n\n"); i > 0 {
+		body = body[:i]
+	}
+	body = strings.Join(strings.Fields(body), " ")
+	return truncate(body, MaxTLDRLen)
+}
+
+func truncate(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n-1]) + "…"
+}
+
+// MatchesForIdea returns the idea's candidate repos (accepting-only, minus
+// passed/offered ones), scoring lazily: cached matches whose RepoHash still
+// matches are reused; everything else is (re)scored, persisted, and — if
+// strong and fresh — notified to both sides. Sorted by score desc, capped.
+func (e *Engine) MatchesForIdea(ctx context.Context, idea *store.Idea) ([]store.Match, error) {
+	cached := map[string]store.Match{}
+	for _, m := range idea.Matches {
+		cached[m.RepoID] = m
+	}
+	var out []store.Match
+	changed := false
+	for _, rp := range e.Registry.List(true) {
+		rp := rp
+		if idea.HasPassed(rp.RepoID) || idea.OfferTo(rp.RepoID) != nil {
+			continue
+		}
+		hash := RepoHash(&rp)
+		if m, ok := cached[rp.RepoID]; ok && m.RepoHash == hash {
+			out = append(out, m)
+			continue
+		}
+		m := e.score(ctx, idea, &rp, hash)
+		out = append(out, m)
+		changed = true
+		if m.Score >= NotifyThreshold && e.Notifier != nil {
+			e.Notifier.NewMatch(idea.Author, rp.Owner, idea, &rp, m.Score)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Score > out[j].Score })
+	if len(out) > MaxMatches {
+		out = out[:MaxMatches]
+	}
+	if changed {
+		persisted := out
+		if _, err := e.Store.Mutate(idea.ID, false, func(i *store.Idea) error {
+			i.Matches = persisted
+			return nil
+		}); err != nil {
+			return nil, err
+		}
+	}
+	if out == nil {
+		out = []store.Match{}
+	}
+	return out, nil
+}
+
+// ScoreForRepo returns the (cached or fresh) match between one idea and one
+// repo — the repo-side feed uses this so both directions share the cache.
+func (e *Engine) ScoreForRepo(ctx context.Context, idea *store.Idea, rp *registry.RepoProfile) (store.Match, error) {
+	hash := RepoHash(rp)
+	for _, m := range idea.Matches {
+		if m.RepoID == rp.RepoID && m.RepoHash == hash {
+			return m, nil
+		}
+	}
+	m := e.score(ctx, idea, rp, hash)
+	if _, err := e.Store.Mutate(idea.ID, false, func(i *store.Idea) error {
+		kept := m
+		replaced := false
+		for k := range i.Matches {
+			if i.Matches[k].RepoID == rp.RepoID {
+				i.Matches[k] = kept
+				replaced = true
+				break
+			}
+		}
+		if !replaced {
+			i.Matches = append(i.Matches, kept)
+		}
+		return nil
+	}); err != nil {
+		return store.Match{}, err
+	}
+	if m.Score >= NotifyThreshold && e.Notifier != nil {
+		e.Notifier.NewMatch(idea.Author, rp.Owner, idea, rp, m.Score)
+	}
+	return m, nil
+}
+
+func (e *Engine) score(ctx context.Context, idea *store.Idea, rp *registry.RepoProfile, hash string) store.Match {
+	m := store.Match{RepoID: rp.RepoID, SuggestedAt: time.Now().UTC(), RepoHash: hash}
+	if e.LLM != nil {
+		if score, reason, err := e.llmScore(ctx, idea, rp); err == nil {
+			m.Score, m.Reason, m.ByLLM = score, reason, true
+			return m
+		} else {
+			log.Printf("match: llm score failed for %s×%s, using fallback: %v", idea.ID, rp.RepoID, err)
+		}
+	}
+	m.Score, m.Reason = FallbackScore(idea, rp)
+	return m
+}
+
+var llmJSONRe = regexp.MustCompile(`\{[^{}]*\}`)
+
+func (e *Engine) llmScore(ctx context.Context, idea *store.Idea, rp *registry.RepoProfile) (float64, string, error) {
+	user := "IDEA\nTitle: " + idea.Title + "\nTLDR: " + idea.TLDR + "\nBody:\n" + truncate(idea.Body, maxPromptBody) +
+		"\n\nREPO\nName: " + rp.RepoID + "\nDescription: " + rp.Description +
+		"\nTopics: " + strings.Join(rp.Topics, ", ") + "\nAppetite: " + rp.Appetite
+	out, err := e.LLM.Chat(ctx,
+		`You score how well an idea fits an open-source repository. Reply with ONLY a JSON object: {"score": <0-100 integer>, "reason": "<one line why>"}.`,
+		user)
+	if err != nil {
+		return 0, "", err
+	}
+	raw := llmJSONRe.FindString(out)
+	if raw == "" {
+		return 0, "", fmt.Errorf("match: no JSON in llm reply: %.80s", out)
+	}
+	var parsed struct {
+		Score  float64 `json:"score"`
+		Reason string  `json:"reason"`
+	}
+	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
+		return 0, "", err
+	}
+	if parsed.Score < 0 {
+		parsed.Score = 0
+	}
+	if parsed.Score > 100 {
+		parsed.Score = 100
+	}
+	return parsed.Score, truncate(parsed.Reason, 200), nil
+}
+
+// ── deterministic fallback ──────────────────────────────────────────────
+
+var tokenRe = regexp.MustCompile(`[a-z0-9][a-z0-9\-]{2,}`)
+
+var stopwords = map[string]bool{
+	"the": true, "and": true, "for": true, "that": true, "this": true,
+	"with": true, "are": true, "was": true, "you": true, "your": true,
+	"have": true, "has": true, "can": true, "will": true, "would": true,
+	"should": true, "could": true, "from": true, "into": true, "its": true,
+	"our": true, "their": true, "them": true, "they": true, "not": true,
+	"but": true, "all": true, "any": true, "more": true, "some": true,
+	"what": true, "when": true, "where": true, "how": true, "why": true,
+	"idea": true, "ideas": true, "repo": true, "repos": true,
+}
+
+func tokens(s string) map[string]bool {
+	out := map[string]bool{}
+	for _, t := range tokenRe.FindAllString(strings.ToLower(s), -1) {
+		if !stopwords[t] {
+			out[t] = true
+		}
+	}
+	return out
+}
+
+// FallbackScore is the deterministic no-LLM scorer: weighted term overlap
+// between the idea's text and the repo's topics (weight 3), appetite
+// (weight 2), and name/description (weight 1). Score = 100 × matched weight
+// / total repo weight.
+func FallbackScore(idea *store.Idea, rp *registry.RepoProfile) (float64, string) {
+	ideaTerms := tokens(idea.Title + " " + idea.TLDR + " " + idea.Body)
+	type term struct {
+		word   string
+		weight float64
+	}
+	var terms []term
+	for _, t := range rp.Topics {
+		for w := range tokens(t) {
+			terms = append(terms, term{w, 3})
+		}
+	}
+	for w := range tokens(rp.Appetite) {
+		terms = append(terms, term{w, 2})
+	}
+	for w := range tokens(rp.RepoID + " " + rp.Description) {
+		terms = append(terms, term{w, 1})
+	}
+	var total, matched float64
+	var hits []string
+	for _, t := range terms {
+		total += t.weight
+		if ideaTerms[t.word] {
+			matched += t.weight
+			hits = append(hits, t.word)
+		}
+	}
+	if total == 0 {
+		return 0, "no repo profile terms to match against"
+	}
+	score := 100 * matched / total
+	if len(hits) == 0 {
+		return 0, "no keyword overlap with the repo profile"
+	}
+	sort.Strings(hits)
+	if len(hits) > 5 {
+		hits = hits[:5]
+	}
+	return score, "keyword overlap: " + strings.Join(hits, ", ")
+}

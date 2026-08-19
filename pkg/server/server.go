@@ -15,7 +15,10 @@ import (
 
 	"github.com/kubestellar/ideate/pkg/api"
 	"github.com/kubestellar/ideate/pkg/auth"
+	"github.com/kubestellar/ideate/pkg/match"
+	"github.com/kubestellar/ideate/pkg/notify"
 	"github.com/kubestellar/ideate/pkg/registry"
+	"github.com/kubestellar/ideate/pkg/settle"
 	"github.com/kubestellar/ideate/pkg/store"
 )
 
@@ -36,6 +39,13 @@ type Config struct {
 	Hub    auth.HubClient
 	Store  *store.Store
 	Repos  *registry.Registry
+	// Engine scores idea↔repo matches (nil disables matching).
+	Engine *match.Engine
+	// Settler opens credited GitHub issues on accept (nil-GitHub records
+	// accepts without opening issues).
+	Settler *settle.Settler
+	// Notify is the in-app notification store (nil disables).
+	Notify *notify.Store
 	// Version is the embedded git hash, exposed on the health endpoint.
 	Version string
 }
@@ -71,7 +81,7 @@ func New(cfg Config) http.Handler {
 
 	// Authenticated routes.
 	authed := http.NewServeMux()
-	(&api.API{Store: cfg.Store, Registry: cfg.Repos}).Register(authed, base)
+	(&api.API{Store: cfg.Store, Registry: cfg.Repos, Engine: cfg.Engine, Settler: cfg.Settler, Notify: cfg.Notify}).Register(authed, base)
 	authed.HandleFunc("GET "+base+"/{$}", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write(indexHTML)

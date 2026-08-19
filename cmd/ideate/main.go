@@ -12,9 +12,13 @@ import (
 	"os"
 	"time"
 
+	"github.com/kubestellar/ideate/pkg/api"
 	"github.com/kubestellar/ideate/pkg/auth"
+	"github.com/kubestellar/ideate/pkg/match"
+	"github.com/kubestellar/ideate/pkg/notify"
 	"github.com/kubestellar/ideate/pkg/registry"
 	"github.com/kubestellar/ideate/pkg/server"
+	"github.com/kubestellar/ideate/pkg/settle"
 	"github.com/kubestellar/ideate/pkg/store"
 )
 
@@ -71,6 +75,32 @@ func main() {
 		log.Fatalf("opening repo registry: %v", err)
 	}
 
+	notifications, err := notify.New(dataDir)
+	if err != nil {
+		log.Fatalf("opening notification store: %v", err)
+	}
+
+	// Match engine: LLM via hive's litellm gateway when IDEATE_LLM_BASE_URL
+	// is set, deterministic keyword fallback otherwise — Ideate fully works
+	// without a gateway.
+	llm := match.LLMFromEnv()
+	if llm != nil {
+		log.Printf("match engine: llm gateway %s (model %s)", llm.BaseURL, llm.Model)
+	} else {
+		log.Printf("match engine: %s unset — deterministic fallback matcher", match.EnvLLMBaseURL)
+	}
+	engine := &match.Engine{Store: st, Registry: reg, LLM: llm, Notifier: &api.MatchNotifier{Notify: notifications}}
+
+	// Settlement: credited GitHub issues via IDEATE_GITHUB_TOKEN. The hive
+	// GitHub App is the tracked follow-up.
+	settler := &settle.Settler{}
+	if gh := settle.FromEnv(); gh != nil {
+		settler.GitHub = gh
+		log.Printf("settlement: GitHub token configured")
+	} else {
+		log.Printf("settlement: %s unset — accepts recorded, issues not opened", settle.EnvGitHubToken)
+	}
+
 	if seed := os.Getenv("REPOS_SEED_FILE"); seed != "" {
 		if err := reg.LoadSeedFile(seed); err != nil {
 			log.Fatalf("loading REPOS_SEED_FILE: %v", err)
@@ -98,6 +128,9 @@ func main() {
 		Hub:      &auth.HTTPHubClient{BaseURL: hubURL},
 		Store:    st,
 		Repos:    reg,
+		Engine:   engine,
+		Settler:  settler,
+		Notify:   notifications,
 		Version:  gitHash,
 	})
 
