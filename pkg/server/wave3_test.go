@@ -120,7 +120,7 @@ func TestIdeatorStats(t *testing.T) {
 		return decode[api.IdeatorStats](t, rec)
 	}
 
-	if s := stats("bob-session"); s != (api.IdeatorStats{}) {
+	if s := stats("bob-session"); s.Posted != 0 || s.Score != 0 {
 		t.Fatalf("fresh user should have zero stats, got %+v", s)
 	}
 
@@ -134,11 +134,11 @@ func TestIdeatorStats(t *testing.T) {
 	settled := f.createIdea(t, "bob-session", "Settled one", "kubernetes operators body", "public")
 	f.settleIdea(t, "bob-session", "alice-session", "kubestellar/dibs", settled)
 
-	if s := stats("bob-session"); s != (api.IdeatorStats{Posted: 3, Offered: 2, Accepted: 1, Settled: 1}) {
+	if s := stats("bob-session"); s.Posted != 3 || s.Offered != 2 || s.Accepted != 1 || s.Settled != 1 {
 		t.Fatalf("bob stats wrong: %+v", s)
 	}
 	// Stats are caller-scoped: charlie sees none of bob's.
-	if s := stats("charlie-session"); s != (api.IdeatorStats{}) {
+	if s := stats("charlie-session"); s.Posted != 0 || s.Score != 0 {
 		t.Fatalf("charlie should have zero stats, got %+v", s)
 	}
 }

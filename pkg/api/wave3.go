@@ -8,8 +8,10 @@ package api
 
 import (
 	"net/http"
+	"sort"
 	"time"
 
+	"github.com/kubestellar/dibs/pkg/game"
 	"github.com/kubestellar/dibs/pkg/store"
 )
 
@@ -50,14 +52,19 @@ func (a *API) HandleCredits(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"credits": entries})
 }
 
-// IdeatorStats are the caller's lifecycle counts. Buckets are cumulative
-// down the funnel: an accepted idea was offered, a settled idea was
-// accepted — so settled ⊆ accepted ⊆ offered ⊆ posted.
+// IdeatorStats are the caller's lifecycle counts plus the gamification
+// layer. Buckets are cumulative down the funnel: an accepted idea was
+// offered, a settled idea was accepted — so settled ⊆ accepted ⊆ offered ⊆
+// posted. Score, level, and badges are DERIVED from stored idea state on
+// every request (see pkg/game) — never a mutable counter, so retries can't
+// double-award.
 type IdeatorStats struct {
 	Posted   int `json:"posted"`
 	Offered  int `json:"offered"`
 	Accepted int `json:"accepted"`
 	Settled  int `json:"settled"`
+	game.Progress
+	Badges []game.Badge `json:"badges"`
 }
 
 // handleMyStats returns the caller's ideator profile stats.
@@ -80,5 +87,75 @@ func (a *API) handleMyStats(w http.ResponseWriter, r *http.Request) {
 			st.Settled++
 		}
 	}
+	st.Progress = game.ProgressFor(game.Score(ideas))
+	st.Badges = game.Badges(ideas)
 	writeJSON(w, http.StatusOK, st)
+}
+
+// LeaderboardEntry is one ranked row on the public leaderboard.
+type LeaderboardEntry struct {
+	Rank          int          `json:"rank"`
+	Author        string       `json:"author"`
+	AuthorDisplay string       `json:"authorDisplay"`
+	Score         int          `json:"score"`
+	Level         game.Level   `json:"level"`
+	Settled       int          `json:"settled"`
+	Badges        []game.Badge `json:"badges"`
+}
+
+// HandleLeaderboard serves the public ranked leaderboard. Like the credit
+// wall it is registered OUTSIDE the auth middleware, so it only lists
+// ideators who already have at least one SETTLED idea (their handle is
+// public by construction via the credited GitHub issue), and it exposes
+// only aggregate numbers — never idea titles or bodies. Ordering: score
+// desc, then settled count desc, then handle asc.
+func (a *API) HandleLeaderboard(w http.ResponseWriter, r *http.Request) {
+	all, err := a.Store.ListAll()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	byAuthor := map[string][]*store.Idea{}
+	display := map[string]string{}
+	settledAuthors := map[string]bool{}
+	for _, idea := range all {
+		byAuthor[idea.Author] = append(byAuthor[idea.Author], idea)
+		display[idea.Author] = idea.AuthorDisplay
+		if idea.Status == store.StatusSettled {
+			settledAuthors[idea.Author] = true
+		}
+	}
+	entries := []LeaderboardEntry{}
+	for author := range settledAuthors {
+		ideas := byAuthor[author]
+		score := game.Score(ideas)
+		level, _ := game.LevelFor(score)
+		settled := 0
+		for _, i := range ideas {
+			if i.Status == store.StatusSettled {
+				settled++
+			}
+		}
+		entries = append(entries, LeaderboardEntry{
+			Author:        author,
+			AuthorDisplay: display[author],
+			Score:         score,
+			Level:         level,
+			Settled:       settled,
+			Badges:        game.Badges(ideas),
+		})
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].Score != entries[j].Score {
+			return entries[i].Score > entries[j].Score
+		}
+		if entries[i].Settled != entries[j].Settled {
+			return entries[i].Settled > entries[j].Settled
+		}
+		return entries[i].Author < entries[j].Author
+	})
+	for k := range entries {
+		entries[k].Rank = k + 1
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"leaderboard": entries})
 }

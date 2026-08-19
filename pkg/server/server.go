@@ -102,6 +102,9 @@ func New(cfg Config) http.Handler {
 	// The credit wall is the public proof-of-flywheel: settled ideas only,
 	// facts already public via the credited GitHub issue.
 	root.HandleFunc("GET "+base+"/api/credits", dibsAPI.HandleCredits)
+	// The leaderboard is the credit wall's gamified sibling: aggregate
+	// scores/levels/badges for ideators already public via a settled issue.
+	root.HandleFunc("GET "+base+"/api/leaderboard", dibsAPI.HandleLeaderboard)
 	root.HandleFunc("GET "+base+"/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"status":"ok","version":"` + cfg.Version + `"}` + "\n"))
