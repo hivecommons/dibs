@@ -451,6 +451,13 @@ func (s *Store) ListOfferedTo(repoIDs []string) ([]*Idea, error) {
 	return out, nil
 }
 
+// ListAll returns every idea (any author, any visibility), newest first.
+// Callers own the responsibility of not exposing private-idea CONTENT —
+// the leaderboard, for example, derives only aggregate numbers from it.
+func (s *Store) ListAll() ([]*Idea, error) {
+	return s.list(func(indexEntry) bool { return true })
+}
+
 // ListSettled returns every SETTLED idea (any visibility), newest first.
 // Settled ideas power the public credit wall: settlement opened a public
 // GitHub issue, so the idea's existence, title, TLDR, author, and issue URL

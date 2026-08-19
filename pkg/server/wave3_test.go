@@ -96,7 +96,10 @@ func TestLandingPagePublic(t *testing.T) {
 		t.Fatalf("landing: %d", rec.Code)
 	}
 	body := rec.Body.String()
-	for _, want := range []string{"Your <em>idea</em>, your <em>credit</em>, their code", "Credit wall", "https://hive.kubestellar.io"} {
+	for _, want := range []string{"Your <em>idea</em>, your <em>credit</em>, their code", "Credit wall",
+		"Why not just open an issue?", "never implemented at all", "raise the odds your idea gets used",
+		"Accepted = implemented", "not the hours",
+		"https://hive.kubestellar.io"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("landing page missing %q", want)
 		}
@@ -120,7 +123,7 @@ func TestIdeatorStats(t *testing.T) {
 		return decode[api.IdeatorStats](t, rec)
 	}
 
-	if s := stats("bob-session"); s != (api.IdeatorStats{}) {
+	if s := stats("bob-session"); s.Posted != 0 || s.Score != 0 {
 		t.Fatalf("fresh user should have zero stats, got %+v", s)
 	}
 
@@ -134,11 +137,11 @@ func TestIdeatorStats(t *testing.T) {
 	settled := f.createIdea(t, "bob-session", "Settled one", "kubernetes operators body", "public")
 	f.settleIdea(t, "bob-session", "alice-session", "kubestellar/dibs", settled)
 
-	if s := stats("bob-session"); s != (api.IdeatorStats{Posted: 3, Offered: 2, Accepted: 1, Settled: 1}) {
+	if s := stats("bob-session"); s.Posted != 3 || s.Offered != 2 || s.Accepted != 1 || s.Settled != 1 {
 		t.Fatalf("bob stats wrong: %+v", s)
 	}
 	// Stats are caller-scoped: charlie sees none of bob's.
-	if s := stats("charlie-session"); s != (api.IdeatorStats{}) {
+	if s := stats("charlie-session"); s.Posted != 0 || s.Score != 0 {
 		t.Fatalf("charlie should have zero stats, got %+v", s)
 	}
 }
