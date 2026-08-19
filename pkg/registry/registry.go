@@ -47,6 +47,20 @@ type RepoProfile struct {
 	// Appetite is the owner's free-text note on what kinds of ideas the repo
 	// is hungry for.
 	Appetite string `json:"appetite,omitempty"`
+	// PassedIdeas are idea IDs the repo owner swiped away; they never
+	// resurface in this repo's candidate feed. Local-only, like the other
+	// owner fields.
+	PassedIdeas []string `json:"passedIdeas,omitempty"`
+}
+
+// HasPassed reports whether the repo owner swiped ideaID away.
+func (rp *RepoProfile) HasPassed(ideaID string) bool {
+	for _, id := range rp.PassedIdeas {
+		if id == ideaID {
+			return true
+		}
+	}
+	return false
 }
 
 // ErrNotFound is returned when a repo profile does not exist.
@@ -184,6 +198,7 @@ func (r *Registry) Merge(incoming []RepoProfile) error {
 			in.AcceptingIdeas = existing.AcceptingIdeas
 			in.Topics = existing.Topics
 			in.Appetite = existing.Appetite
+			in.PassedIdeas = existing.PassedIdeas
 		}
 		r.repos[in.RepoID] = &in
 	}
@@ -307,4 +322,23 @@ func (r *Registry) ApplyOwnerUpdate(repoID, actor string, upd OwnerUpdate) (*Rep
 	}
 	cp := *rp
 	return &cp, nil
+}
+
+// AddPassedIdea records the owner swiping an idea away from repoID's feed.
+// Idempotent. Enforces that actor is the repo's owner.
+func (r *Registry) AddPassedIdea(repoID, actor, ideaID string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	rp, ok := r.repos[repoID]
+	if !ok {
+		return ErrNotFound
+	}
+	if rp.Owner != actor {
+		return ErrForbidden
+	}
+	if rp.HasPassed(ideaID) {
+		return nil
+	}
+	rp.PassedIdeas = append(rp.PassedIdeas, ideaID)
+	return r.persistLocked()
 }

@@ -38,9 +38,12 @@ deployments also work.
 |---|---|
 | `pkg/server` | HTTP server, base-path routing, embedded UI |
 | `pkg/auth` | Auth bridge — validates the hive hub session cookie against the hub |
-| `pkg/store` | Idea model + JSON file store (atomic writes, no external DB) |
-| `pkg/api` | Idea CRUD API (author-scoped, private ideas never leak) |
+| `pkg/store` | Idea model + JSON file store (atomic writes, no external DB), offer/settlement state machine |
+| `pkg/api` | Idea CRUD + matching/offer/feed/decide/notification API (author-scoped, private ideas never leak) |
 | `pkg/registry` | Hive-managed repo profiles + "accepting ideas" opt-in |
+| `pkg/match` | LLM idea↔repo scoring via litellm gateway, cached TLDRs, deterministic keyword fallback |
+| `pkg/settle` | Settlement — credited GitHub issue on accept (`ideated` label) |
+| `pkg/notify` | In-app notification feed (bell): matches, offers, decisions, issues |
 
 ### Configuration
 
@@ -51,12 +54,16 @@ deployments also work.
 | `HUB_URL` | `https://hive.kubestellar.io` | Hive hub for session validation & repo sync |
 | `DATA_DIR` | `/data` | JSON store directory |
 | `REPOS_SEED_FILE` | (unset) | Static JSON seed of repo profiles for dev/demo |
+| `IDEATE_LLM_BASE_URL` | (unset) | OpenAI-compatible gateway (hive litellm), e.g. `http://litellm:4000/v1`. Unset → deterministic keyword matcher |
+| `IDEATE_LLM_API_KEY` | (unset) | Bearer token for the LLM gateway |
+| `IDEATE_LLM_MODEL` | `gpt-4o-mini` | Model name routed by the gateway |
+| `IDEATE_GITHUB_TOKEN` | (unset) | GitHub PAT for opening credited issues on accept. Unset → accepts are recorded, issues deferred |
 
 ### Roadmap
 
-- **Wave 1 (this repo, now):** scaffold, hub auth bridge, idea CRUD, repo registry.
-- **Wave 2:** LLM matching, swipe UX ("offer" / "pass"), TL;DR generation.
-- **Wave 3:** issue settlement (credited GitHub issues), notifications, deploy.
+- **Wave 1 (done):** scaffold, hub auth bridge, idea CRUD, repo registry.
+- **Wave 2 (done):** LLM matching + TLDRs, swipe UX ("offer" / "pass"), issue settlement (credited GitHub issues), notifications.
+- **Wave 3:** deploy at idea.kubestellar.io, hive GitHub App settlement, ideator credit wall.
 
 ## Development
 

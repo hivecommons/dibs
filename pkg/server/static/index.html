@@ -59,10 +59,9 @@ p.page-sub { color: var(--muted); margin-bottom: 20px; }
 .chip { font-size: .68rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
 .chip.draft { color: var(--muted); }
 .chip.offered { color: var(--blue); border-color: var(--blue); }
-.chip.matched { color: var(--purple); border-color: var(--purple); }
-.chip.submitted { color: var(--amber); border-color: var(--amber); }
-.chip.accepted, .chip.implemented { color: var(--green); border-color: var(--green); }
-.chip.rejected { color: var(--red); border-color: var(--red); }
+.chip.accepted { color: var(--green); border-color: var(--green); }
+.chip.declined { color: var(--red); border-color: var(--red); }
+.chip.settled { color: var(--green); border-color: var(--green); background: rgba(116,223,154,.08); }
 .chip.private { color: var(--amber); }
 .chip.public { color: var(--green); }
 .chip.on { color: var(--green); border-color: var(--green); }
@@ -95,6 +94,37 @@ textarea.md { font-family: var(--font-mono); font-size: .82rem; min-height: 220p
 .switch input:checked + .track::before { transform: translateX(18px); background: #080b0f; }
 section.view { display: none; }
 section.view.active { display: block; }
+/* ── notifications bell ── */
+#bell-wrap { position: relative; }
+#bell { background: transparent; border: 1px solid transparent; color: var(--muted); font: inherit; font-size: 1.05rem; padding: 5px 10px; border-radius: 999px; cursor: pointer; position: relative; }
+#bell:hover { color: var(--text); border-color: var(--line); }
+#bell .badge { position: absolute; top: -2px; right: -2px; background: var(--red); color: #080b0f; font-size: .62rem; font-weight: 800; min-width: 16px; height: 16px; line-height: 16px; text-align: center; border-radius: 999px; padding: 0 3px; display: none; }
+#notif-panel { display: none; position: absolute; right: 0; top: 40px; width: 340px; max-height: 420px; overflow-y: auto; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: 0 10px 32px rgba(0,0,0,.5); z-index: 50; }
+#notif-panel.open { display: block; }
+#notif-panel .np-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line); font-weight: 700; font-size: .82rem; }
+#notif-panel .np-item { padding: 10px 14px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: .8rem; line-height: 1.45; }
+#notif-panel .np-item.unread { color: var(--text); background: rgba(244,199,95,.05); border-left: 3px solid var(--amber); }
+#notif-panel .np-item .np-time { display: block; font-size: .68rem; color: var(--muted); margin-top: 3px; }
+#notif-panel .np-empty { padding: 24px 14px; text-align: center; color: var(--muted); font-size: .8rem; }
+/* ── swipe deck ── */
+.tldr-banner { border-left: 3px solid var(--purple); background: var(--panel); padding: 12px 16px; border-radius: 0 var(--radius) var(--radius) 0; color: var(--muted); line-height: 1.5; margin-bottom: 18px; }
+.tldr-banner b { color: var(--purple); }
+.swipe-stage { max-width: 560px; margin: 0 auto; }
+.swipe-card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 24px; min-height: 220px; transition: transform .28s ease, opacity .28s ease; }
+.swipe-card.fly-left { transform: translateX(-120%) rotate(-8deg); opacity: 0; }
+.swipe-card.fly-right { transform: translateX(120%) rotate(8deg); opacity: 0; }
+.swipe-card h3 { font-size: 1.15rem; margin-bottom: 6px; }
+.swipe-card .score { display: inline-block; font-weight: 800; color: #080b0f; background: var(--amber); border-radius: 999px; padding: 3px 12px; font-size: .78rem; margin-bottom: 10px; }
+.swipe-card .score.low { background: var(--line); color: var(--muted); }
+.swipe-card .why { color: var(--muted); font-size: .8rem; font-style: italic; margin-top: 10px; }
+.swipe-actions { display: flex; justify-content: center; gap: 26px; margin-top: 22px; }
+.round-btn { width: 64px; height: 64px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel-2); font-size: 1.5rem; cursor: pointer; transition: transform .1s; }
+.round-btn:hover { transform: scale(1.08); }
+.round-btn.yes { border-color: var(--green); color: var(--green); }
+.round-btn.no { border-color: var(--red); color: var(--red); }
+.round-btn span { display: block; font-size: .58rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-top: 2px; }
+.deck-progress { text-align: center; color: var(--muted); font-size: .75rem; margin-top: 14px; }
+.ok-banner { background: rgba(116,223,154,.1); border: 1px solid var(--green); color: var(--green); padding: 10px 14px; border-radius: 6px; margin-bottom: 14px; display: none; }
 footer { text-align: center; color: var(--muted); font-size: .74rem; padding: 24px; border-top: 1px solid var(--line); }
 </style>
 </head>
@@ -107,11 +137,19 @@ footer { text-align: center; color: var(--muted); font-size: .74rem; padding: 24
     <button data-view="browse">Browse</button>
     <button data-view="repos">For repos</button>
   </nav>
+  <div id="bell-wrap">
+    <button id="bell" title="Notifications">🔔<span class="badge" id="bell-badge"></span></button>
+    <div id="notif-panel">
+      <div class="np-head"><span>Notifications</span><button class="pill small" id="np-readall">Mark all read</button></div>
+      <div id="np-list"></div>
+    </div>
+  </div>
   <div id="who"></div>
 </header>
 
 <main>
 <div id="err" class="error-banner"></div>
+<div id="ok" class="ok-banner"></div>
 
 <section id="view-home" class="view active">
   <div class="hero">
@@ -168,7 +206,7 @@ footer { text-align: center; color: var(--muted); font-size: .74rem; padding: 24
     </div>
     <div class="form-actions">
       <button type="submit" class="pill primary" id="btn-save">Save draft</button>
-      <button type="button" class="pill" id="btn-offer">Save &amp; offer</button>
+      <button type="button" class="pill" id="btn-offer">Save &amp; find matches</button>
       <button type="button" class="pill" id="btn-cancel">Cancel</button>
     </div>
   </form>
@@ -176,17 +214,43 @@ footer { text-align: center; color: var(--muted); font-size: .74rem; padding: 24
 
 <section id="view-browse" class="view">
   <h2 class="page-title">Browse public ideas</h2>
-  <p class="page-sub">Every public idea from the community. Matching (Wave 2) will pair these with repos.</p>
+  <p class="page-sub">Every public idea from the community, ready to be matched with hungry repos.</p>
   <div id="browse-list"></div>
 </section>
 
 <section id="view-repos" class="view">
   <h2 class="page-title">For repos</h2>
-  <p class="page-sub">Hive-managed repos opt in to receive ideas. Owners can toggle intake and set topics &amp; appetite.</p>
+  <p class="page-sub">Hive-managed repos opt in to receive ideas. Owners can toggle intake, set topics &amp; appetite, and review their idea feed.</p>
   <h3 style="margin:18px 0 10px;font-size:.95rem">My repos</h3>
   <div id="myrepos-list"></div>
   <h3 style="margin:26px 0 10px;font-size:.95rem">Repos accepting ideas</h3>
   <div id="repos-list"></div>
+</section>
+
+<section id="view-match" class="view">
+  <div class="toolbar">
+    <div>
+      <h2 class="page-title" id="match-title">Find a home for your idea</h2>
+      <p class="page-sub" style="margin:0">Swipe through matched repos — offer it, or pass.</p>
+    </div>
+    <button class="pill" data-goto="mine">← My ideas</button>
+  </div>
+  <div id="match-tldr" class="tldr-banner"></div>
+  <div class="swipe-stage" id="match-stage"></div>
+</section>
+
+<section id="view-feed" class="view">
+  <div class="toolbar">
+    <div>
+      <h2 class="page-title" id="feed-title">Idea feed</h2>
+      <p class="page-sub" style="margin:0">Incoming offers and matched public ideas for your repo.</p>
+    </div>
+    <button class="pill" data-goto="repos">← For repos</button>
+  </div>
+  <h3 style="margin:6px 0 10px;font-size:.95rem">📬 Offers to you</h3>
+  <div id="feed-offers"></div>
+  <h3 style="margin:26px 0 10px;font-size:.95rem">✨ Matched public ideas</h3>
+  <div class="swipe-stage" id="feed-stage"></div>
 </section>
 </main>
 
@@ -208,6 +272,9 @@ footer { text-align: center; color: var(--muted); font-size: .74rem; padding: 24
   function showErr(msg) {
     var e = $('err'); e.textContent = msg; e.style.display = msg ? 'block' : 'none';
   }
+  function showOk(msg) {
+    var e = $('ok'); e.innerHTML = msg; e.style.display = msg ? 'block' : 'none';
+  }
   function api(method, path, body) {
     return fetch('api/' + path, {
       method: method,
@@ -225,7 +292,7 @@ footer { text-align: center; color: var(--muted); font-size: .74rem; padding: 24
 
   /* ── navigation ── */
   function show(view) {
-    showErr('');
+    showErr(''); showOk('');
     document.querySelectorAll('section.view').forEach(function (s) { s.classList.remove('active'); });
     $('view-' + view).classList.add('active');
     document.querySelectorAll('nav button').forEach(function (b) {
@@ -234,6 +301,7 @@ footer { text-align: center; color: var(--muted); font-size: .74rem; padding: 24
     if (view === 'mine') loadMine();
     if (view === 'browse') loadBrowse();
     if (view === 'repos') loadRepos();
+    loadNotifs();
   }
   document.querySelectorAll('nav button').forEach(function (b) {
     b.addEventListener('click', function () { show(b.dataset.view); });
@@ -249,27 +317,57 @@ footer { text-align: center; color: var(--muted); font-size: .74rem; padding: 24
       '<span>' + esc(me.display_name || me.username) + '</span>';
   }).catch(function () { /* interstitial handles unauthenticated pages */ });
 
+  /* ── notifications ── */
+  function loadNotifs() {
+    api('GET', 'notifications').then(function (res) {
+      var badge = $('bell-badge');
+      if (res.unread > 0) { badge.textContent = res.unread > 99 ? '99+' : res.unread; badge.style.display = 'block'; }
+      else { badge.style.display = 'none'; }
+      var list = $('np-list'); list.innerHTML = '';
+      if (!res.notifications.length) { list.innerHTML = '<div class="np-empty">Nothing yet — post an idea or opt a repo in.</div>'; return; }
+      res.notifications.forEach(function (n) {
+        var d = document.createElement('div');
+        d.className = 'np-item' + (n.read ? '' : ' unread');
+        d.innerHTML = esc(n.message) + '<span class="np-time">' + new Date(n.createdAt).toLocaleString() + '</span>';
+        list.appendChild(d);
+      });
+    }).catch(function () { /* bell is best-effort */ });
+  }
+  $('bell').addEventListener('click', function (ev) {
+    ev.stopPropagation();
+    $('notif-panel').classList.toggle('open');
+  });
+  document.addEventListener('click', function (ev) {
+    if (!$('bell-wrap').contains(ev.target)) $('notif-panel').classList.remove('open');
+  });
+  $('np-readall').addEventListener('click', function () {
+    api('POST', 'notifications/read', { all: true }).then(loadNotifs).catch(function (e) { showErr(e.message); });
+  });
+  loadNotifs();
+  setInterval(loadNotifs, 60000);
+
   /* ── my ideas ── */
   function ideaCard(idea, mine) {
+    var matchable = idea.status === 'draft' || idea.status === 'offered' || idea.status === 'declined';
     var d = document.createElement('div'); d.className = 'card';
     d.innerHTML =
       '<div class="row"><h4>' + esc(idea.title) + '</h4>' +
       '<span class="chip ' + esc(idea.status) + '">' + esc(idea.status) + '</span>' +
       (mine ? '<span class="chip ' + esc(idea.visibility) + '">' + (idea.visibility === 'private' ? '🔒 private' : '🌐 public') + '</span>' : '') +
       '</div>' +
+      (idea.tldr ? '<div class="body-preview" style="font-style:italic">💜 ' + esc(idea.tldr) + '</div>' : '') +
       '<div class="body-preview">' + esc(idea.body.length > 280 ? idea.body.slice(0, 280) + '…' : idea.body) + '</div>' +
       '<div class="meta">by ' + esc(idea.authorDisplay || idea.author) + ' · updated ' + new Date(idea.updatedAt).toLocaleString() + '</div>' +
+      (idea.issueURL ? '<div class="meta">🎉 settled: <a href="' + esc(idea.issueURL) + '" target="_blank" rel="noopener">' + esc(idea.issueURL) + '</a></div>' : '') +
       (mine ? '<div class="row" style="margin-top:10px">' +
-        '<button class="pill small" data-act="edit">Edit</button>' +
-        (idea.status === 'draft' ? '<button class="pill small" data-act="offer">Offer</button>' : '') +
+        (matchable ? '<button class="pill small primary" data-act="match">🔥 Find matches</button>' : '') +
+        (matchable ? '<button class="pill small" data-act="edit">Edit</button>' : '') +
         '<button class="pill small danger" data-act="del">Delete</button></div>' : '');
     if (mine) {
-      d.querySelector('[data-act=edit]').addEventListener('click', function () { openEdit(idea); });
-      var offer = d.querySelector('[data-act=offer]');
-      if (offer) offer.addEventListener('click', function () {
-        api('PUT', 'ideas/' + idea.id, { title: idea.title, body: idea.body, visibility: idea.visibility, status: 'offered' })
-          .then(loadMine).catch(function (e) { showErr(e.message); });
-      });
+      var m = d.querySelector('[data-act=match]');
+      if (m) m.addEventListener('click', function () { openMatch(idea); });
+      var e = d.querySelector('[data-act=edit]');
+      if (e) e.addEventListener('click', function () { openEdit(idea); });
       d.querySelector('[data-act=del]').addEventListener('click', function () {
         if (!confirm('Delete "' + idea.title + '"?')) return;
         api('DELETE', 'ideas/' + idea.id).then(loadMine).catch(function (e) { showErr(e.message); });
@@ -314,21 +412,143 @@ footer { text-align: center; color: var(--muted); font-size: .74rem; padding: 24
   }
   $('btn-new').addEventListener('click', function () { openEdit(null); });
   $('btn-cancel').addEventListener('click', function () { show('mine'); });
-  function saveIdea(status) {
+  function saveIdea(thenMatch) {
     var payload = {
       title: $('f-title').value,
       body: $('f-body').value,
       visibility: document.querySelector('#f-vis input:checked').value
     };
-    if (status) payload.status = status;
     var p = editingId ? api('PUT', 'ideas/' + editingId, payload) : api('POST', 'ideas', payload);
-    p.then(function () { show('mine'); }).catch(function (e) { showErr(e.message); });
+    p.then(function (idea) {
+      if (thenMatch) openMatch(idea); else show('mine');
+    }).catch(function (e) { showErr(e.message); });
   }
-  $('idea-form').addEventListener('submit', function (ev) { ev.preventDefault(); saveIdea(null); });
+  $('idea-form').addEventListener('submit', function (ev) { ev.preventDefault(); saveIdea(false); });
   $('btn-offer').addEventListener('click', function () {
     if (!$('idea-form').reportValidity()) return;
-    saveIdea('offered');
+    saveIdea(true);
   });
+
+  /* ── swipe deck (shared by both directions) ── */
+  function renderDeck(stage, items, renderCard, emptyMsg) {
+    var i = 0;
+    function draw() {
+      stage.innerHTML = '';
+      if (i >= items.length) {
+        stage.innerHTML = '<div class="empty">' + emptyMsg + '</div>';
+        return;
+      }
+      var item = items[i];
+      var card = document.createElement('div'); card.className = 'swipe-card';
+      var actions = renderCard(card, item);
+      stage.appendChild(card);
+      var row = document.createElement('div'); row.className = 'swipe-actions';
+      actions.forEach(function (a) {
+        var b = document.createElement('button');
+        b.className = 'round-btn ' + a.cls;
+        b.innerHTML = a.icon + '<span>' + a.label + '</span>';
+        b.title = a.label;
+        b.addEventListener('click', function () {
+          b.disabled = true;
+          a.run(item).then(function () {
+            card.classList.add(a.cls === 'no' ? 'fly-left' : 'fly-right');
+            setTimeout(function () { i++; draw(); }, 260);
+          }).catch(function (e) { b.disabled = false; showErr(e.message); });
+        });
+        row.appendChild(b);
+      });
+      stage.appendChild(row);
+      var prog = document.createElement('div'); prog.className = 'deck-progress';
+      prog.textContent = (i + 1) + ' of ' + items.length;
+      stage.appendChild(prog);
+    }
+    draw();
+  }
+  function scorePill(score) {
+    var s = Math.round(score);
+    return '<span class="score' + (s < 40 ? ' low' : '') + '">' + s + '% fit</span>';
+  }
+
+  /* ── ideator matching: swipe through repos ── */
+  function openMatch(idea) {
+    show('match');
+    $('match-title').textContent = '🔥 Matches for “' + idea.title + '”';
+    $('match-tldr').innerHTML = 'Loading TLDR…';
+    $('match-stage').innerHTML = '<div class="empty">Scoring repos…</div>';
+    api('GET', 'ideas/' + idea.id + '/matches').then(function (res) {
+      $('match-tldr').innerHTML = '<b>' + esc(idea.authorDisplay || idea.author) +
+        ' has an idea — let me TLDR it for you:</b><br>' + esc(res.tldr || idea.body.slice(0, 200));
+      renderDeck($('match-stage'), res.matches, function (card, m) {
+        card.innerHTML =
+          '<h3>🐝 ' + esc(m.repo.repoID) + '</h3>' + scorePill(m.score) +
+          (m.repo.description ? '<p style="color:var(--muted);line-height:1.5">' + esc(m.repo.description) + '</p>' : '') +
+          '<div class="topics">' + (m.repo.topics || []).map(function (t) { return '<span class="t">' + esc(t) + '</span>'; }).join('') + '</div>' +
+          (m.repo.appetite ? '<div class="meta" style="margin-top:8px">appetite: ' + esc(m.repo.appetite) + '</div>' : '') +
+          '<div class="why">' + esc(m.reason) + (m.byLLM ? ' · scored by LLM' : ' · keyword match') + '</div>' +
+          (idea.visibility === 'private' ? '<div class="meta" style="margin-top:8px">🔒 Offering reveals this private idea to this repo\u2019s owner only.</div>' : '');
+        return [
+          { cls: 'no', icon: '✕', label: 'pass', run: function (m) { return api('POST', 'ideas/' + idea.id + '/pass', { repoID: m.repo.repoID }); } },
+          { cls: 'yes', icon: '💌', label: 'offer', run: function (m) {
+              return api('POST', 'ideas/' + idea.id + '/offer', { repoID: m.repo.repoID }).then(function () {
+                showOk('Offered “' + esc(idea.title) + '” to ' + esc(m.repo.repoID) + ' — you\u2019ll get a notification when they decide.');
+              });
+            } }
+        ];
+      }, 'No more matches. Check back as repos opt in — or sharpen the idea.');
+    }).catch(function (e) { showErr(e.message); });
+  }
+
+  /* ── repo-side feed: offers + swipe through public candidates ── */
+  function decide(repoID, ideaID, decision) {
+    return api('POST', 'repos/' + repoID + '/decide', { ideaID: ideaID, decision: decision }).then(function (res) {
+      if (res && res.issueURL) {
+        showOk('🎉 Idea accepted and settled — credited issue opened: <a href="' + esc(res.issueURL) + '" target="_blank" rel="noopener">' + esc(res.issueURL) + '</a>');
+      } else if (res && res.warning) {
+        showOk('✅ ' + esc(res.warning));
+      }
+      return res;
+    });
+  }
+  function feedIdeaHTML(v) {
+    var idea = v.idea;
+    return '<h3>💡 ' + esc(idea.title) + '</h3>' + scorePill(v.score) +
+      (idea.visibility === 'private' ? ' <span class="chip private">🔒 offered privately</span>' : '') +
+      (idea.tldr ? '<p style="color:var(--muted);line-height:1.5;font-style:italic">' + esc(idea.tldr) + '</p>' : '') +
+      '<div class="body-preview">' + esc(idea.body.length > 400 ? idea.body.slice(0, 400) + '…' : idea.body) + '</div>' +
+      '<div class="meta">by ' + esc(idea.authorDisplay || idea.author) + '</div>' +
+      '<div class="why">' + esc(v.reason || '') + (v.byLLM ? ' · scored by LLM' : ' · keyword match') + '</div>';
+  }
+  function openFeed(repo) {
+    show('feed');
+    $('feed-title').textContent = '🐝 ' + repo.repoID;
+    $('feed-offers').innerHTML = '<div class="empty">Loading…</div>';
+    $('feed-stage').innerHTML = '<div class="empty">Scoring ideas…</div>';
+    api('GET', 'repos/' + repo.repoID + '/feed').then(function (res) {
+      var offers = $('feed-offers'); offers.innerHTML = '';
+      if (!res.offers.length) offers.innerHTML = '<div class="empty">No offers yet.</div>';
+      res.offers.forEach(function (v) {
+        var d = document.createElement('div'); d.className = 'card';
+        d.innerHTML = feedIdeaHTML(v) +
+          '<div class="row" style="margin-top:10px">' +
+          '<button class="pill small primary" data-act="accept">✓ Accept — open credited issue</button>' +
+          '<button class="pill small danger" data-act="decline">✕ Decline</button></div>';
+        d.querySelector('[data-act=accept]').addEventListener('click', function () {
+          decide(repo.repoID, v.idea.id, 'accept').then(function () { openFeed(repo); }).catch(function (e) { showErr(e.message); });
+        });
+        d.querySelector('[data-act=decline]').addEventListener('click', function () {
+          decide(repo.repoID, v.idea.id, 'decline').then(function () { openFeed(repo); }).catch(function (e) { showErr(e.message); });
+        });
+        offers.appendChild(d);
+      });
+      renderDeck($('feed-stage'), res.candidates, function (card, v) {
+        card.innerHTML = feedIdeaHTML(v);
+        return [
+          { cls: 'no', icon: '✕', label: 'pass', run: function (v) { return decide(repo.repoID, v.idea.id, 'pass'); } },
+          { cls: 'yes', icon: '✓', label: 'accept', run: function (v) { return decide(repo.repoID, v.idea.id, 'accept'); } }
+        ];
+      }, 'No matched public ideas right now — the bell will ring when one lands.');
+    }).catch(function (e) { showErr(e.message); });
+  }
 
   /* ── repos ── */
   function repoCard(repo, editable) {
@@ -347,6 +567,10 @@ footer { text-align: center; color: var(--muted); font-size: .74rem; padding: 24
         api('PUT', 'repos/' + repo.repoID, { acceptingIdeas: ev.target.checked })
           .then(loadRepos).catch(function (e) { showErr(e.message); loadRepos(); });
       });
+      var feedRow = document.createElement('div'); feedRow.className = 'row'; feedRow.style.marginTop = '10px';
+      feedRow.innerHTML = '<button class="pill small primary">📬 Review ideas</button>';
+      feedRow.querySelector('button').addEventListener('click', function () { openFeed(repo); });
+      d.appendChild(feedRow);
       var editRow = document.createElement('div'); editRow.className = 'row'; editRow.style.marginTop = '10px';
       editRow.innerHTML =
         '<input type="text" placeholder="topics (comma-separated)" value="' + esc((repo.topics || []).join(', ')) + '" style="flex:1">' +
