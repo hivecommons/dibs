@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dibs-config
+  namespace: dibs
+data:
+  DIBS_ADDR: ":8080"
+  DIBS_BASE_PATH: "/"
+  HUB_URL: "https://hive.kubestellar.io"
+  DATA_DIR: "/data"

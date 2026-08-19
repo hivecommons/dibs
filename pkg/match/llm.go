@@ -21,12 +21,12 @@ import (
 
 // Env vars configuring the LLM gateway.
 const (
-	EnvLLMBaseURL = "IDEATE_LLM_BASE_URL" // e.g. http://litellm:4000/v1 — empty disables the LLM (fallback only)
-	EnvLLMAPIKey  = "IDEATE_LLM_API_KEY"
-	EnvLLMModel   = "IDEATE_LLM_MODEL"
+	EnvLLMBaseURL = "DIBS_LLM_BASE_URL" // e.g. http://litellm:4000/v1 — empty disables the LLM (fallback only)
+	EnvLLMAPIKey  = "DIBS_LLM_API_KEY"
+	EnvLLMModel   = "DIBS_LLM_MODEL"
 )
 
-// DefaultModel is used when IDEATE_LLM_MODEL is unset — litellm routes model
+// DefaultModel is used when DIBS_LLM_MODEL is unset — litellm routes model
 // aliases, so any name the gateway knows works here.
 const DefaultModel = "gpt-4o-mini"
 
@@ -43,20 +43,30 @@ type LLM struct {
 	Client  *http.Client
 }
 
-// LLMFromEnv builds an LLM from the IDEATE_LLM_* env vars, or nil when
-// IDEATE_LLM_BASE_URL is unset (fallback-only mode).
+// envValue reads a DIBS_-prefixed var, honoring the legacy IDEATE_-prefixed
+// name (the product's pre-rename env prefix) as a fallback.
+func envValue(key string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return os.Getenv("IDEATE_" + strings.TrimPrefix(key, "DIBS_"))
+}
+
+// LLMFromEnv builds an LLM from the DIBS_LLM_* env vars (legacy IDEATE_LLM_*
+// names still honored), or nil when DIBS_LLM_BASE_URL is unset
+// (fallback-only mode).
 func LLMFromEnv() *LLM {
-	base := strings.TrimSpace(os.Getenv(EnvLLMBaseURL))
+	base := strings.TrimSpace(envValue(EnvLLMBaseURL))
 	if base == "" {
 		return nil
 	}
-	model := strings.TrimSpace(os.Getenv(EnvLLMModel))
+	model := strings.TrimSpace(envValue(EnvLLMModel))
 	if model == "" {
 		model = DefaultModel
 	}
 	return &LLM{
 		BaseURL: strings.TrimRight(base, "/"),
-		APIKey:  os.Getenv(EnvLLMAPIKey),
+		APIKey:  envValue(EnvLLMAPIKey),
 		Model:   model,
 	}
 }

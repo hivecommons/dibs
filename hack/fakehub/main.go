@@ -1,13 +1,13 @@
 // Command fakehub is a tiny dev-only stand-in for the hive hub, implementing
-// the two endpoints Ideate consumes:
+// the two endpoints Dibs consumes:
 //
 //	GET /api/saas/whoami        — any non-empty hive_hub_user cookie → the dev user
-//	GET /api/saas/ideate/repos  — a small static repo list
+//	GET /api/saas/dibs/repos  — a small static repo list
 //
 // Usage:
 //
 //	go run ./hack/fakehub               # listens on :9999
-//	HUB_URL=http://127.0.0.1:9999 DATA_DIR=./data go run ./cmd/ideate
+//	HUB_URL=http://127.0.0.1:9999 DATA_DIR=./data go run ./cmd/dibs
 //	curl -H 'Cookie: hive_hub_user=dev' http://127.0.0.1:8080/api/me
 package main
 
@@ -38,11 +38,11 @@ func main() {
 			"avatar_url":   "https://github.com/" + c.Value + ".png",
 		})
 	})
-	mux.HandleFunc("GET /api/saas/ideate/repos", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /api/saas/dibs/repos", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode([]map[string]any{
 			{"repoID": "kubestellar/kubestellar", "hiveID": "hive-ks", "owner": "dev", "description": "Multi-cluster configuration management"},
-			{"repoID": "kubestellar/ideate", "hiveID": "hive-ks", "owner": "dev", "description": "A marketplace of ideas"},
+			{"repoID": "kubestellar/dibs", "hiveID": "hive-ks", "owner": "dev", "description": "A marketplace of ideas"},
 		})
 	})
 	log.Printf("fakehub listening on %s", addr)

@@ -1,9 +1,9 @@
-// Package auth bridges Ideate to the hive hub's session authentication.
+// Package auth bridges Dibs to the hive hub's session authentication.
 //
-// Ideate has no login of its own. It is served at idea.kubestellar.io and
+// Dibs has no login of its own. It is served at dibs.kubestellar.io and
 // relies on the hive hub's session cookie ("hive_hub_user"). For the browser
 // to send that cookie here, the hub must scope it to .kubestellar.io (or
-// Ideate grows its own OAuth flow against the hub) — a deployment follow-up
+// Dibs grows its own OAuth flow against the hub) — a deployment follow-up
 // tracked in the Wave 1 PR. This package validates whatever cookie arrives by
 // calling back to the hub and attaches the resulting identity to the request
 // context.
@@ -176,7 +176,7 @@ func (m *Middleware) reject(w http.ResponseWriter, r *http.Request, err error) {
 
 var interstitialTmpl = template.Must(template.New("interstitial").Parse(`<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sign in — Ideate</title>
+<title>Sign in — Dibs</title>
 <style>
 body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
 background:#0d1117;color:#f6f8fb;font-family:Inter,ui-sans-serif,system-ui,-apple-system,sans-serif}
@@ -187,7 +187,7 @@ padding:10px 24px;border-radius:999px}
 </style></head><body>
 <div class="card">
 <div style="font-size:2rem;margin-bottom:8px">&#128161;</div>
-<h1>Sign in to Ideate</h1>
-<p>Ideate uses your Hive Hub account. Sign in at hive.kubestellar.io, then come back &mdash; your session carries over automatically.</p>
+<h1>Sign in to Dibs</h1>
+<p>Dibs uses your Hive Hub account. Sign in at hive.kubestellar.io, then come back &mdash; your session carries over automatically.</p>
 <a class="pill" href="{{.HubURL}}">Sign in at hive.kubestellar.io</a>
 </div></body></html>`))

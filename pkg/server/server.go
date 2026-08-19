@@ -1,29 +1,31 @@
-// Package server assembles the Ideate HTTP server: base-path routing, the
+// Package server assembles the Dibs HTTP server: base-path routing, the
 // embedded static UI, health, and the auth-guarded API.
 //
-// Every route lives under a base path (IDEATE_BASE_PATH, default "/") —
-// Ideate is served at its own subdomain, idea.kubestellar.io, so the default
+// Every route lives under a base path (DIBS_BASE_PATH, default "/") —
+// Dibs is served at its own subdomain, dibs.kubestellar.io, so the default
 // is the root; a prefix (e.g. "/ideas") remains fully supported for
 // path-based reverse-proxy deployments. The UI only uses RELATIVE URLs so it
 // needs no base-path templating.
 package server
 
 import (
+	"bytes"
 	"embed"
+	"html/template"
 	"net/http"
 	"strings"
 
-	"github.com/kubestellar/ideate/pkg/api"
-	"github.com/kubestellar/ideate/pkg/auth"
-	"github.com/kubestellar/ideate/pkg/match"
-	"github.com/kubestellar/ideate/pkg/notify"
-	"github.com/kubestellar/ideate/pkg/registry"
-	"github.com/kubestellar/ideate/pkg/settle"
-	"github.com/kubestellar/ideate/pkg/store"
+	"github.com/kubestellar/dibs/pkg/api"
+	"github.com/kubestellar/dibs/pkg/auth"
+	"github.com/kubestellar/dibs/pkg/match"
+	"github.com/kubestellar/dibs/pkg/notify"
+	"github.com/kubestellar/dibs/pkg/registry"
+	"github.com/kubestellar/dibs/pkg/settle"
+	"github.com/kubestellar/dibs/pkg/store"
 )
 
-// DefaultBasePath is where Ideate is mounted when IDEATE_BASE_PATH is unset:
-// the root, because Ideate lives on its own subdomain (idea.kubestellar.io).
+// DefaultBasePath is where Dibs is mounted when DIBS_BASE_PATH is unset:
+// the root, because Dibs lives on its own subdomain (dibs.kubestellar.io).
 const DefaultBasePath = "/"
 
 //go:embed static/index.html
@@ -70,6 +72,10 @@ func New(cfg Config) http.Handler {
 	if err != nil {
 		panic("server: embedded index.html missing: " + err.Error())
 	}
+	// The page is served to UNAUTHENTICATED visitors too (landing + credit
+	// wall), so it needs the hub origin for its sign-in links; substitute it
+	// into the embedded HTML once at startup.
+	indexHTML = bytes.ReplaceAll(indexHTML, []byte("__HUB_URL__"), []byte(template.HTMLEscapeString(cfg.HubURL)))
 
 	mw := &auth.Middleware{
 		Hub:    cfg.Hub,
@@ -81,14 +87,21 @@ func New(cfg Config) http.Handler {
 
 	// Authenticated routes.
 	authed := http.NewServeMux()
-	(&api.API{Store: cfg.Store, Registry: cfg.Repos, Engine: cfg.Engine, Settler: cfg.Settler, Notify: cfg.Notify}).Register(authed, base)
-	authed.HandleFunc("GET "+base+"/{$}", func(w http.ResponseWriter, r *http.Request) {
+	dibsAPI := &api.API{Store: cfg.Store, Registry: cfg.Repos, Engine: cfg.Engine, Settler: cfg.Settler, Notify: cfg.Notify}
+	dibsAPI.Register(authed, base)
+
+	// Public routes + the auth-guarded rest. The UI page itself is public:
+	// logged-out visitors get the landing pitch + credit wall (the page asks
+	// /api/me and downgrades itself); every data API except the credit wall
+	// stays behind the auth middleware.
+	root := http.NewServeMux()
+	root.HandleFunc("GET "+base+"/{$}", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write(indexHTML)
 	})
-
-	// Public routes + the auth-guarded rest.
-	root := http.NewServeMux()
+	// The credit wall is the public proof-of-flywheel: settled ideas only,
+	// facts already public via the credited GitHub issue.
+	root.HandleFunc("GET "+base+"/api/credits", dibsAPI.HandleCredits)
 	root.HandleFunc("GET "+base+"/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"status":"ok","version":"` + cfg.Version + `"}` + "\n"))

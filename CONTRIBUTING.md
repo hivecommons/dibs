@@ -1,4 +1,4 @@
-# Contributing to Ideate
+# Contributing to Dibs
 
 Thanks for contributing! A few ground rules:
 
@@ -26,6 +26,6 @@ unsigned commits will not pass CI.
 ## Code conventions
 
 - Standard library first; no external DB — the JSON file store is deliberate.
-- Every HTTP route must work behind the `IDEATE_BASE_PATH` prefix.
+- Every HTTP route must work behind the `DIBS_BASE_PATH` prefix.
 - Private ideas must never appear in any listing other than the author's own —
   add a test if you touch listing code.

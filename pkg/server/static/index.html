@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💡</text></svg>">
-<title>Ideate — a marketplace of ideas</title>
+<title>Dibs — a marketplace of ideas</title>
 <style>
 :root {
   --bg: #0d1117; --panel: #1c2128; --panel-2: #22272e; --line: #30363d;
@@ -33,6 +33,7 @@ main { max-width: 900px; margin: 0 auto; padding: 28px 24px 64px; }
 .hero { text-align: center; padding: 48px 0 36px; }
 .hero h1 { font-size: 2rem; margin-bottom: 10px; }
 .hero h1 em { color: var(--amber); font-style: normal; }
+.hero p.tagline { color: var(--amber); font-weight: 800; font-size: 1.05rem; letter-spacing: .01em; margin-bottom: 14px; }
 .hero p.sub { color: var(--muted); font-size: 1.05rem; max-width: 620px; margin: 0 auto 26px; line-height: 1.55; }
 .two-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 24px 0; }
 @media (max-width: 640px) { .two-sides { grid-template-columns: 1fr; } }
@@ -126,18 +127,45 @@ section.view.active { display: block; }
 .deck-progress { text-align: center; color: var(--muted); font-size: .75rem; margin-top: 14px; }
 .ok-banner { background: rgba(116,223,154,.1); border: 1px solid var(--green); color: var(--green); padding: 10px 14px; border-radius: 6px; margin-bottom: 14px; display: none; }
 footer { text-align: center; color: var(--muted); font-size: .74rem; padding: 24px; border-top: 1px solid var(--line); }
+/* ── logged-out (landing) mode ── */
+body.anon [data-auth] { display: none !important; }
+#signin { display: none; background: var(--amber); color: #080b0f; font-weight: 700; text-decoration: none; padding: 6px 16px; border-radius: 999px; font-size: .8rem; white-space: nowrap; }
+body.anon #signin { display: inline-block; }
+.landing-extra { display: none; }
+body.anon .landing-extra { display: block; }
+.how { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 24px 0; }
+@media (max-width: 640px) { .how { grid-template-columns: 1fr; } }
+.how .step { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
+.how .step .n { display: inline-block; width: 26px; height: 26px; line-height: 26px; text-align: center; border-radius: 50%; background: var(--amber); color: #080b0f; font-weight: 800; margin-bottom: 10px; }
+.how .step h4 { font-size: .92rem; margin-bottom: 6px; }
+.how .step p { color: var(--muted); line-height: 1.5; font-size: .82rem; }
+/* ── ideator stats ── */
+.stats-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
+@media (max-width: 640px) { .stats-strip { grid-template-columns: repeat(2, 1fr); } }
+.stat { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; text-align: center; }
+.stat .num { font-size: 1.4rem; font-weight: 800; color: var(--amber); }
+.stat .lbl { font-size: .68rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-top: 2px; }
+/* ── credit wall ── */
+.credit-row { display: flex; align-items: baseline; gap: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 18px; margin-bottom: 10px; flex-wrap: wrap; }
+.credit-row .handle { font-weight: 800; color: var(--amber); white-space: nowrap; }
+.credit-row .what { flex: 1; min-width: 220px; }
+.credit-row .what .t { font-weight: 700; }
+.credit-row .what .tldr { color: var(--muted); font-size: .8rem; line-height: 1.45; margin-top: 3px; font-style: italic; }
+.credit-row .where { font-size: .78rem; color: var(--muted); white-space: nowrap; }
 </style>
 </head>
 <body>
 <header>
-  <div class="logo">💡 Ide<span>ate</span></div>
+  <div class="logo">💡 Di<span>bs</span></div>
   <nav>
     <button data-view="home" class="active">Home</button>
-    <button data-view="mine">My Ideas</button>
-    <button data-view="browse">Browse</button>
-    <button data-view="repos">For repos</button>
+    <button data-view="mine" data-auth>My Ideas</button>
+    <button data-view="browse" data-auth>Browse</button>
+    <button data-view="repos" data-auth>For repos</button>
+    <button data-view="credits">Credit wall</button>
   </nav>
-  <div id="bell-wrap">
+  <a id="signin" href="__HUB_URL__">Sign in</a>
+  <div id="bell-wrap" data-auth>
     <button id="bell" title="Notifications">🔔<span class="badge" id="bell-badge"></span></button>
     <div id="notif-panel">
       <div class="np-head"><span>Notifications</span><button class="pill small" id="np-readall">Mark all read</button></div>
@@ -153,27 +181,53 @@ footer { text-align: center; color: var(--muted); font-size: .74rem; padding: 24
 
 <section id="view-home" class="view active">
   <div class="hero">
-    <h1>Have ideas? <em>Repos need them.</em></h1>
-    <p class="sub">Ideate is a marketplace of ideas. Post yours — an LLM matches it with hive-managed
-    repositories whose AI agents are hungry for well-formed work. On a mutual match, your idea becomes a
-    credited GitHub issue and the agents build it.</p>
-    <button class="pill primary" data-goto="mine">Post an idea</button>
-    <button class="pill" data-goto="repos" style="margin-left:8px">My repo wants ideas</button>
+    <h1>The missing <em>contributor layer</em> for the AI-agent era.</h1>
+    <p class="tagline">Your idea, your credit, their code.</p>
+    <p class="sub">Dibs makes ideators first-class open-source contributors. Call dibs on an idea —
+    a well-formed write-up, not code — and you bring the insight. Hive-managed repositories bring
+    implementation capacity: AI agent swarms hungry for exactly that kind of work. Dibs matches the
+    two, and when a repo accepts your idea it becomes a GitHub issue <b>credited to you</b>, which
+    the agents then build.</p>
+    <span data-auth>
+      <button class="pill primary" data-goto="mine">Post an idea</button>
+      <button class="pill" data-goto="repos" style="margin-left:8px">My repo wants ideas</button>
+    </span>
+    <span class="landing-extra">
+      <a class="pill primary" href="__HUB_URL__">Sign in with your Hive Hub account</a>
+      <button class="pill" data-goto="credits" style="margin-left:8px">See the credit wall</button>
+    </span>
   </div>
   <div class="two-sides">
     <div class="panel">
-      <h3>🧠 For ideators</h3>
+      <h3>🧠 Have ideas?</h3>
       <p>Researchers, operators, designers, power users — you know exactly what a project needs, even if
-      you'll never open a pull request. Write it down. That's the contribution.</p>
+      you'll never open a pull request. Write it down. That's the contribution. Post it public or keep it
+      private until you choose exactly which repo gets to see it.</p>
     </div>
     <div class="panel">
-      <h3>🐝 For repos</h3>
+      <h3>🐝 Need ideas?</h3>
       <p>Opt your hive-managed repo in, declare your topics and appetite, and receive matched, well-formed
-      ideas ready for your agent swarm to implement.</p>
+      ideas ready for your agent swarm to implement — a demand-side pipeline for implementation capacity
+      that would otherwise sit idle.</p>
+    </div>
+  </div>
+  <div class="landing-extra">
+    <div class="how">
+      <div class="step"><span class="n">1</span><h4>Write the idea</h4>
+        <p>A title and a markdown body: the problem, who benefits, what “done” looks like. An LLM distills
+        it into a TLDR and scores its fit against every opted-in repo.</p></div>
+      <div class="step"><span class="n">2</span><h4>Match &amp; offer</h4>
+        <p>Review your matches and offer the idea to the repos you choose — or let repos discover your
+        public ideas in their own feeds. Both sides must say yes.</p></div>
+      <div class="step"><span class="n">3</span><h4>Get credited</h4>
+        <p>On acceptance the idea becomes a GitHub issue attributed to you, labeled <code>ideated</code>.
+        Agents implement it; your name stays on it, forever traceable.</p></div>
     </div>
   </div>
   <div class="credit-note">
-    Ideators are a first-class open-source contributor class here:
+    Open source has always known ideas are contributions — the all-contributors spec has a 💡
+    <b>“ideas”</b> emoji, and academia's CRediT taxonomy credits <b>“Conceptualization”</b> as a
+    first-class role. Dibs makes that credit real and public:
     <b>creators get credit, agents do the work, projects take the bow.</b>
     Every implemented idea traces back to the person who thought of it.
   </div>
@@ -187,6 +241,7 @@ footer { text-align: center; color: var(--muted); font-size: .74rem; padding: 24
     </div>
     <button class="pill primary" id="btn-new">＋ New idea</button>
   </div>
+  <div class="stats-strip" id="my-stats"></div>
   <div id="mine-list"></div>
 </section>
 
@@ -252,16 +307,23 @@ footer { text-align: center; color: var(--muted); font-size: .74rem; padding: 24
   <h3 style="margin:26px 0 10px;font-size:.95rem">✨ Matched public ideas</h3>
   <div class="swipe-stage" id="feed-stage"></div>
 </section>
+<section id="view-credits" class="view">
+  <h2 class="page-title">💡 Credit wall</h2>
+  <p class="page-sub">Ideators whose ideas shipped: each row is an accepted idea, settled as a GitHub
+  issue credited to the person who thought of it.</p>
+  <div id="credits-list"></div>
+</section>
 </main>
 
-<footer>Ideate · a KubeStellar project · creators get credit, agents do the work, projects take the bow</footer>
+<footer>Dibs · a KubeStellar project · creators get credit, agents do the work, projects take the bow</footer>
 
 <script>
-/* All URLs are RELATIVE so the app works at the root (idea.kubestellar.io)
-   or behind any reverse-proxy prefix (IDEATE_BASE_PATH). */
+/* All URLs are RELATIVE so the app works at the root (dibs.kubestellar.io)
+   or behind any reverse-proxy prefix (DIBS_BASE_PATH). */
 (function () {
   'use strict';
   var editingId = null;
+  var anon = false; // flipped when /api/me says we're not signed in
 
   function $(id) { return document.getElementById(id); }
   function esc(s) {
@@ -291,16 +353,19 @@ footer { text-align: center; color: var(--muted); font-size: .74rem; padding: 24
   }
 
   /* ── navigation ── */
+  var authViews = { mine: 1, browse: 1, repos: 1, edit: 1, match: 1, feed: 1 };
   function show(view) {
+    if (anon && authViews[view]) view = 'home';
     showErr(''); showOk('');
     document.querySelectorAll('section.view').forEach(function (s) { s.classList.remove('active'); });
     $('view-' + view).classList.add('active');
     document.querySelectorAll('nav button').forEach(function (b) {
       b.classList.toggle('active', b.dataset.view === view);
     });
-    if (view === 'mine') loadMine();
+    if (view === 'mine') { loadMine(); loadStats(); }
     if (view === 'browse') loadBrowse();
     if (view === 'repos') loadRepos();
+    if (view === 'credits') loadCredits();
     loadNotifs();
   }
   document.querySelectorAll('nav button').forEach(function (b) {
@@ -315,10 +380,16 @@ footer { text-align: center; color: var(--muted); font-size: .74rem; padding: 24
     var w = $('who');
     w.innerHTML = (me.avatar_url ? '<img src="' + esc(me.avatar_url) + '" alt="">' : '') +
       '<span>' + esc(me.display_name || me.username) + '</span>';
-  }).catch(function () { /* interstitial handles unauthenticated pages */ });
+  }).catch(function () {
+    // Not signed in: landing mode. The page stays useful (pitch + public
+    // credit wall); authed nav and the bell disappear.
+    anon = true;
+    document.body.classList.add('anon');
+  });
 
   /* ── notifications ── */
   function loadNotifs() {
+    if (anon) return;
     api('GET', 'notifications').then(function (res) {
       var badge = $('bell-badge');
       if (res.unread > 0) { badge.textContent = res.unread > 99 ? '99+' : res.unread; badge.style.display = 'block'; }
@@ -388,6 +459,39 @@ footer { text-align: center; color: var(--muted); font-size: .74rem; padding: 24
   function loadBrowse() {
     api('GET', 'ideas?scope=public').then(function (ideas) {
       renderList($('browse-list'), ideas, false, 'No public ideas yet. Be the first.');
+    }).catch(function (e) { showErr(e.message); });
+  }
+
+  /* ── ideator profile stats ── */
+  function loadStats() {
+    api('GET', 'me/stats').then(function (s) {
+      $('my-stats').innerHTML = [
+        ['posted', s.posted], ['offered', s.offered], ['accepted', s.accepted], ['settled', s.settled]
+      ].map(function (p) {
+        return '<div class="stat"><div class="num">' + p[1] + '</div><div class="lbl">' + p[0] + '</div></div>';
+      }).join('');
+    }).catch(function () { $('my-stats').innerHTML = ''; });
+  }
+
+  /* ── credit wall (public) ── */
+  function loadCredits() {
+    api('GET', 'credits').then(function (res) {
+      var el = $('credits-list'); el.innerHTML = '';
+      if (!res.credits.length) {
+        el.innerHTML = '<div class="empty">No settled ideas yet — the wall is waiting for its first name.</div>';
+        return;
+      }
+      res.credits.forEach(function (c) {
+        var d = document.createElement('div'); d.className = 'credit-row';
+        d.innerHTML =
+          '<span class="handle">💡 ' + esc(c.authorDisplay || c.author) + '</span>' +
+          '<span class="what"><span class="t">' + esc(c.title) + '</span>' +
+          (c.tldr ? '<div class="tldr">' + esc(c.tldr) + '</div>' : '') + '</span>' +
+          '<span class="where">' + esc(c.repoID) +
+          (c.issueURL ? ' · <a href="' + esc(c.issueURL) + '" target="_blank" rel="noopener">issue</a>' : '') +
+          ' · ' + new Date(c.settledAt).toLocaleDateString() + '</span>';
+        el.appendChild(d);
+      });
     }).catch(function (e) { showErr(e.message); });
   }
 

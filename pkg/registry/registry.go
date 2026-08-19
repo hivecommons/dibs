@@ -7,7 +7,7 @@
 //
 // Hub contract (follow-up):
 //
-//	GET {HUB_URL}/api/saas/ideate/repos
+//	GET {HUB_URL}/api/saas/dibs/repos
 //
 // returns 200 with
 //
@@ -36,7 +36,7 @@ const MaxAppetiteLen = 500
 // MaxTopics caps the topics list.
 const MaxTopics = 20
 
-// RepoProfile is one hive-managed repository's ideate profile.
+// RepoProfile is one hive-managed repository's dibs profile.
 type RepoProfile struct {
 	RepoID         string   `json:"repoID"` // org/name
 	HiveID         string   `json:"hiveID"`
@@ -82,7 +82,7 @@ type HTTPHubClient struct {
 }
 
 // ReposPath is the hub endpoint listing hive-managed repos.
-const ReposPath = "/api/saas/ideate/repos"
+const ReposPath = "/api/saas/dibs/repos"
 
 const hubRequestTimeout = 10 * time.Second
 

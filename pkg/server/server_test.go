@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kubestellar/ideate/pkg/auth"
-	"github.com/kubestellar/ideate/pkg/registry"
-	"github.com/kubestellar/ideate/pkg/store"
+	"github.com/kubestellar/dibs/pkg/auth"
+	"github.com/kubestellar/dibs/pkg/registry"
+	"github.com/kubestellar/dibs/pkg/store"
 )
 
 // newTestServer wires the full handler with a fake hub. Sessions:
@@ -27,7 +27,7 @@ func newTestServer(t *testing.T, basePath string) http.Handler {
 		t.Fatalf("registry.New: %v", err)
 	}
 	if err := reg.Merge([]registry.RepoProfile{
-		{RepoID: "kubestellar/ideate", HiveID: "hive-ks", Owner: "alice"},
+		{RepoID: "kubestellar/dibs", HiveID: "hive-ks", Owner: "alice"},
 	}); err != nil {
 		t.Fatalf("registry.Merge: %v", err)
 	}
@@ -99,14 +99,16 @@ func TestBasePathRouting(t *testing.T) {
 
 			// UI page, authenticated.
 			rec = doJSON(t, h, "GET", base+"/", "alice-session", nil)
-			if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "Repos need them") {
+			if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "contributor layer") {
 				t.Fatalf("UI page: %d", rec.Code)
 			}
 
-			// UI page, unauthenticated → HTML interstitial.
+			// UI page, unauthenticated → same public page (landing mode);
+			// the hub sign-in origin is substituted in.
 			rec = doJSON(t, h, "GET", base+"/", "", nil)
-			if rec.Code != http.StatusUnauthorized || !strings.Contains(rec.Body.String(), "Sign in") {
-				t.Fatalf("interstitial: %d %s", rec.Code, rec.Body.String())
+			if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "contributor layer") ||
+				!strings.Contains(rec.Body.String(), "https://hive.kubestellar.io") {
+				t.Fatalf("public landing: %d", rec.Code)
 			}
 
 			// API round-trip under the prefix.
@@ -224,7 +226,7 @@ func TestRegistryToggleAuthorization(t *testing.T) {
 	h := newTestServer(t, "/ideas")
 
 	// Non-owner (bob) cannot toggle alice's repo.
-	rec := doJSON(t, h, "PUT", "/ideas/api/repos/kubestellar/ideate", "bob-session",
+	rec := doJSON(t, h, "PUT", "/ideas/api/repos/kubestellar/dibs", "bob-session",
 		map[string]any{"acceptingIdeas": true})
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("non-owner toggle: want 403, got %d %s", rec.Code, rec.Body.String())
@@ -237,7 +239,7 @@ func TestRegistryToggleAuthorization(t *testing.T) {
 	}
 
 	// Owner toggles on with topics + appetite.
-	rec = doJSON(t, h, "PUT", "/ideas/api/repos/kubestellar/ideate", "alice-session",
+	rec = doJSON(t, h, "PUT", "/ideas/api/repos/kubestellar/dibs", "alice-session",
 		map[string]any{"acceptingIdeas": true, "topics": []string{"ai"}, "appetite": "small features"})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("owner toggle: %d %s", rec.Code, rec.Body.String())
@@ -249,7 +251,7 @@ func TestRegistryToggleAuthorization(t *testing.T) {
 
 	// Everyone now sees it in the accepting list.
 	rec = doJSON(t, h, "GET", "/ideas/api/repos", "bob-session", nil)
-	if l := decode[[]registry.RepoProfile](t, rec); len(l) != 1 || l[0].RepoID != "kubestellar/ideate" {
+	if l := decode[[]registry.RepoProfile](t, rec); len(l) != 1 || l[0].RepoID != "kubestellar/dibs" {
 		t.Fatalf("accepting list: %+v", l)
 	}
 }
