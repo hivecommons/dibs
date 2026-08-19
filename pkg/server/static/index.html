@@ -43,8 +43,6 @@ main { max-width: 900px; margin: 0 auto; padding: 28px 24px 64px; }
 .hero h1 em { color: var(--amber); font-style: normal; }
 .hero p.tagline { color: var(--amber); font-weight: 800; font-size: 1.1rem; margin-bottom: 12px; }
 .hero p.sub { color: var(--muted); font-size: 1.05rem; max-width: 540px; margin: 0 auto 24px; line-height: 1.6; }
-.two-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 24px 0; }
-@media (max-width: 640px) { .two-sides { grid-template-columns: 1fr; } }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; }
 .panel h3 { font-size: 1.05rem; margin-bottom: 8px; }
 .panel p { color: var(--muted); line-height: 1.55; }
@@ -284,6 +282,23 @@ details.how-details .how-body { padding: 16px 18px; }
 /* market cards (the three contrast cards) */
 .why-grid .panel { background: linear-gradient(rgba(48,54,61,.35) 1px, transparent 1px) 0 0 / 100% 28px, var(--panel); }
 .why-grid .panel h4 .tag { display: block; font-family: var(--font-mono); font-size: .66rem; letter-spacing: .12em; color: var(--muted); font-weight: 700; margin-bottom: 4px; }
+/* ── 🏛️ how the market works: two-capital strip ── */
+.how-market { margin: 34px 0 6px; }
+.how-market h3 { text-align: center; font-size: 1.15rem; margin-bottom: 4px; }
+.how-market p.hm-sub { text-align: center; color: var(--muted); font-size: .9rem; max-width: 620px; margin: 0 auto 18px; line-height: 1.55; }
+.cap-grid { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: 10px; align-items: stretch; }
+@media (max-width: 640px) { .cap-grid { grid-template-columns: 1fr; } .cap-arrow { transform: rotate(90deg); } }
+.cap-grid .panel { background: linear-gradient(rgba(48,54,61,.35) 1px, transparent 1px) 0 0 / 100% 28px, var(--panel); }
+.cap-arrow { align-self: center; color: var(--muted); font-size: 1.2rem; text-align: center; }
+.cap-tag { display: block; font-family: var(--font-mono); font-size: .66rem; letter-spacing: .12em; color: var(--muted); font-weight: 700; margin-bottom: 6px; }
+.cap-grid .panel h4 { font-size: .98rem; margin-bottom: 6px; color: var(--amber); }
+.cap-grid .panel p { font-size: .88rem; }
+.cap-grid .panel p b { color: var(--text); }
+.cap-status { display: inline-block; font-family: var(--font-mono); font-size: .66rem; font-weight: 700; letter-spacing: .1em; padding: 2px 9px; border-radius: 999px; margin-top: 10px; }
+.cap-status.live { color: var(--green); border: 1px solid rgba(116,223,154,.5); background: rgba(116,223,154,.07); }
+.cap-status.soon { color: var(--blue); border: 1px solid rgba(128,191,255,.5); background: rgba(128,191,255,.07); }
+.backing-teaser { text-align: center; margin: 18px auto 0; color: var(--muted); font-size: .9rem; line-height: 1.6; max-width: 560px; }
+.backing-teaser b { color: var(--text); }
 /* ── reduced motion: kill every animation & transition ── */
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
@@ -340,33 +355,54 @@ details.how-details .how-body { padding: 16px 18px; }
     <div class="hero">
       <h1>Your <em>idea</em>, your <em>credit</em>, their code.</h1>
       <p class="tagline">The open-source idea exchange.</p>
-      <p class="sub">List your idea. Repos bid with AI agent capacity.
+      <p class="sub">Repos are the listed companies. Two kinds of capital move the market:
+      <b>ideas</b> and <b>spare AI tokens</b>. List your idea. Repos bid with AI agent capacity.
       Shipped ideas pay dividends in credit — the GitHub issue is filed
       <b>by you, under your name</b>, forever.</p>
       <a class="pill primary" href="__HUB_URL__">Sign in with your Hive Hub account</a>
       <button class="pill" data-goto="credits" style="margin-left:8px">📊 See The Board</button>
       <div class="mkt-stats" id="mkt-stats" aria-label="Exchange statistics"></div>
     </div>
+    <div class="how-market" aria-label="How the market works">
+      <h3>🏛️ How the market works</h3>
+      <p class="hm-sub">A stock market where <b>repos are the listed companies</b> — and two
+      investor classes provide the capital that gets ideas built.</p>
+      <div class="cap-grid">
+        <div class="panel">
+          <span class="cap-tag">INTELLECTUAL CAPITAL</span>
+          <h4>💡 Innovators invest ideas</h4>
+          <p>You know what a project needs — even if you'll never open a PR. List the idea;
+          the exchange finds the repos where it can <b>thrive</b>.</p>
+          <span class="cap-status live">● LIVE</span>
+        </div>
+        <div class="cap-arrow" aria-hidden="true">→</div>
+        <div class="panel">
+          <span class="cap-tag">COMPUTE CAPITAL</span>
+          <h4>🏦 Investors back them</h4>
+          <p>Your AI subscription's spare tokens <b>expire weekly</b>. Pledge that idle capacity
+          to repos and ideas you believe in — it powers the agents that build them.</p>
+          <span class="cap-status soon">📈 BACKING OPENS SOON</span>
+        </div>
+        <div class="cap-arrow" aria-hidden="true">→</div>
+        <div class="panel">
+          <span class="cap-tag">EXECUTION</span>
+          <h4>🚀 Repos ship them</h4>
+          <p>Agent swarms implement the idea; the credited GitHub issue carries the innovator's
+          name. <b>Dividends are paid in credit</b> — everyone's name on the result.</p>
+          <span class="cap-status live">● LIVE</span>
+        </div>
+      </div>
+      <p class="backing-teaser">📈 <b>Backing opens soon</b> — put idle tokens to work on ideas you
+      believe in, before they reset. <a href="__HUB_URL__">Join the board now</a> and be ready on
+      day one.</p>
+    </div>
     <div class="markets" aria-label="Live markets">
       <h3>📈 Live markets</h3>
-      <p class="mkts-sub">Every public idea on the exchange — phase, venue, momentum.</p>
+      <p class="mkts-sub">Every public idea on the exchange — phase, listing venue, momentum.</p>
       <h4 id="bt-head">🔥 Trending</h4>
       <div class="board" id="board-trending" role="list" aria-labelledby="bt-head"></div>
       <h4 id="bn-head">🆕 New listings</h4>
       <div class="board" id="board-new" role="list" aria-labelledby="bn-head"></div>
-    </div>
-    <div class="two-sides">
-      <div class="panel">
-        <h3>🧠 Have ideas?</h3>
-        <p><b>Ideas ≠ hours.</b> You know what a project needs — even if you'll never open a PR.
-        List it on the exchange; repos bid for it with agent capacity. Earn points, levels, and
-        badges as your portfolio ships.</p>
-      </div>
-      <div class="panel">
-        <h3>🐝 Need ideas?</h3>
-        <p>Opt your hive-managed repo in and bid on matched, well-formed
-        ideas with the one thing you have to spend: <b>AI agent capacity</b>.</p>
-      </div>
     </div>
     <div class="why-not">
       <h3>🤔 Why not just open an issue?</h3>
@@ -661,7 +697,7 @@ details.how-details .how-body { padding: 16px 18px; }
   var HUB_URL = document.getElementById('signin').getAttribute('href');
   var TICKER_EVENTS = {
     listed: { emoji: '💡', verb: 'listed', up: false },
-    matched: { emoji: '🤝', verb: 'matched to', up: true },
+    matched: { emoji: '🤝', verb: 'listed on', up: true },
     shipped: { emoji: '🚀', verb: 'shipped', up: true }
   };
   // Shown when the store has nothing to tick yet — clearly marked examples.
@@ -704,7 +740,7 @@ details.how-details .how-body { padding: 16px 18px; }
   }
   function boardRowHTML(r) {
     return '<a class="board-row" role="listitem" href="' + esc(HUB_URL) + '"' +
-      ' aria-label="' + esc('$' + r.symbol + ' — ' + r.title + ', ' + r.phase + (r.repoID ? ' at ' + r.repoID : '') + '. Sign in to trade.') + '">' +
+      ' aria-label="' + esc('$' + r.symbol + ' — ' + r.title + ', ' + r.phase + (r.repoID ? ', listed on ' + r.repoID : '') + '. Sign in to trade.') + '">' +
       '<span class="tsym">$' + esc(r.symbol) + '</span>' +
       '<span class="b-title">' + esc(r.title) + '</span>' +
       '<span class="phase ' + esc(r.phase) + '">' + esc(r.phase) + '</span>' +
@@ -713,7 +749,7 @@ details.how-details .how-body { padding: 16px 18px; }
       (r.momentum ? '▲' : '·') + '</span></a>';
   }
   var BOARD_HEAD = '<div class="board-head"><span>Symbol</span><span>Idea</span>' +
-    '<span>Phase</span><span class="bh-venue">Venue</span><span class="bh-mom" style="text-align:right">Mom.</span></div>';
+    '<span>Phase</span><span class="bh-venue">Listed on</span><span class="bh-mom" style="text-align:right">Mom.</span></div>';
   function renderBoard(el, rows, emptyMsg) {
     el.innerHTML = rows.length
       ? BOARD_HEAD + rows.map(boardRowHTML).join('')

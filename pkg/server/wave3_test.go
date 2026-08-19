@@ -98,7 +98,8 @@ func TestLandingPagePublic(t *testing.T) {
 	body := rec.Body.String()
 	for _, want := range []string{"Your <em>idea</em>, your <em>credit</em>, their code", "Credit wall",
 		"Why not just open an issue?", "never implemented at all", "raise the odds your idea gets used",
-		"Accepted = implemented", "open-source idea exchange", "Repos bid with AI agent capacity",
+		"Accepted = implemented", "open-source idea exchange", "How the market works",
+		"Innovators invest ideas", "BACKING OPENS SOON", "put idle tokens to work",
 		"Live markets", "New listings", "Trending",
 		"https://hive.kubestellar.io"} {
 		if !strings.Contains(body, want) {
