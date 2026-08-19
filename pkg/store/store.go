@@ -103,7 +103,8 @@ type Idea struct {
 	Author        string    `json:"author"`        // identity key (github login / provider:sub)
 	AuthorDisplay string    `json:"authorDisplay"` // human name for credit
 	Title         string    `json:"title"`
-	Body          string    `json:"body"`           // markdown
+	Symbol        string    `json:"symbol,omitempty"` // $TICKER-style display symbol, assigned at creation
+	Body          string    `json:"body"`             // markdown
 	TLDR          string    `json:"tldr,omitempty"` // filled by the matching wave
 	Visibility    string    `json:"visibility"`     // public | private
 	Status        string    `json:"status"`
@@ -178,6 +179,7 @@ type indexEntry struct {
 	ID         string    `json:"id"`
 	Author     string    `json:"author"`
 	Visibility string    `json:"visibility"`
+	Symbol     string    `json:"symbol,omitempty"`
 	UpdatedAt  time.Time `json:"updatedAt"`
 }
 
@@ -263,7 +265,7 @@ func (s *Store) persistLocked(idea *Idea) error {
 	if err := atomicWriteJSON(s.ideaPath(idea.ID), idea); err != nil {
 		return err
 	}
-	s.index[idea.ID] = indexEntry{ID: idea.ID, Author: idea.Author, Visibility: idea.Visibility, UpdatedAt: idea.UpdatedAt}
+	s.index[idea.ID] = indexEntry{ID: idea.ID, Author: idea.Author, Visibility: idea.Visibility, Symbol: idea.Symbol, UpdatedAt: idea.UpdatedAt}
 	return s.writeIndexLocked()
 }
 
@@ -298,6 +300,7 @@ func (s *Store) Create(idea *Idea) error {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	idea.Symbol = uniqueSymbol(TickerSymbol(idea.Title), s.symbolTakenLocked)
 	return s.persistLocked(idea)
 }
 
@@ -342,6 +345,7 @@ func (s *Store) Update(idea *Idea) error {
 		return err
 	}
 	idea.Author = existing.Author
+	idea.Symbol = existing.Symbol
 	idea.CreatedAt = existing.CreatedAt
 	idea.UpdatedAt = time.Now().UTC()
 	idea.Offers = existing.Offers

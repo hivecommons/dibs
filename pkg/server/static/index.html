@@ -43,8 +43,6 @@ main { max-width: 900px; margin: 0 auto; padding: 28px 24px 64px; }
 .hero h1 em { color: var(--amber); font-style: normal; }
 .hero p.tagline { color: var(--amber); font-weight: 800; font-size: 1.1rem; margin-bottom: 12px; }
 .hero p.sub { color: var(--muted); font-size: 1.05rem; max-width: 540px; margin: 0 auto 24px; line-height: 1.6; }
-.two-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 24px 0; }
-@media (max-width: 640px) { .two-sides { grid-template-columns: 1fr; } }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; }
 .panel h3 { font-size: 1.05rem; margin-bottom: 8px; }
 .panel p { color: var(--muted); line-height: 1.55; }
@@ -232,6 +230,124 @@ details.how-details .how-body { padding: 16px 18px; }
 .credit-row .what .t { font-weight: 700; }
 .credit-row .what .tldr { color: var(--muted); font-size: .84rem; line-height: 1.45; margin-top: 3px; font-style: italic; }
 .credit-row .where { font-size: .82rem; color: var(--muted); white-space: nowrap; }
+/* ── 📈 market landing: ticker tape ── */
+#tape { border-bottom: 1px solid var(--line); background: var(--panel); overflow: hidden; }
+.tape-viewport { overflow: hidden; white-space: nowrap; }
+.tape-track { display: inline-block; white-space: nowrap; padding: 6px 0; animation: tape-scroll var(--tape-dur, 40s) linear infinite; will-change: transform; }
+#tape:hover .tape-track, #tape:focus-within .tape-track { animation-play-state: paused; }
+@keyframes tape-scroll { to { transform: translateX(-50%); } }
+.tape-item { display: inline-block; margin: 0 22px; font-size: .82rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tape-item .tsym { margin-right: 4px; }
+.tape-item .venue { color: var(--text); }
+.tape-item .ex { color: var(--muted); font-style: italic; font-size: .72rem; }
+@media (prefers-reduced-motion: reduce) {
+  .tape-viewport { overflow-x: auto; }
+  .tape-track { animation: none; }
+}
+/* ── ticker symbol chip ── */
+.tsym { font-family: var(--font-mono); font-weight: 700; font-size: .78rem; color: var(--amber); background: rgba(244,199,95,.09); border: 1px solid rgba(244,199,95,.35); border-radius: 4px; padding: 1px 6px; white-space: nowrap; letter-spacing: .02em; }
+.tape-item.up .tsym { color: var(--green); background: rgba(116,223,154,.09); border-color: rgba(116,223,154,.35); }
+/* ── market stats strip ── */
+.mkt-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; margin: 26px auto 0; max-width: 720px; }
+@media (max-width: 640px) { .mkt-stats { grid-template-columns: repeat(2, 1fr); } }
+.mkt-stats .cell { background: var(--panel); padding: 14px 10px; text-align: center; }
+.mkt-stats .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 1.7rem; font-weight: 800; color: var(--text); }
+.mkt-stats .num .up { color: var(--green); font-size: .95rem; vertical-align: 2px; margin-left: 3px; }
+.mkt-stats .lbl { font-size: .68rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-top: 3px; font-variant-caps: all-small-caps; }
+/* ── live markets board ── */
+.markets { margin: 34px 0 6px; }
+.markets h3 { text-align: center; font-size: 1.15rem; margin-bottom: 4px; }
+.markets p.mkts-sub { text-align: center; color: var(--muted); font-size: .9rem; margin-bottom: 18px; }
+.markets h4 { font-size: .95rem; margin: 20px 0 8px; color: var(--muted); letter-spacing: .04em; }
+.board { border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--panel); }
+.board-head, .board-row { display: grid; grid-template-columns: 110px 1fr 100px minmax(90px, 160px) 46px; gap: 10px; align-items: center; padding: 9px 14px; }
+@media (max-width: 640px) { .board-head, .board-row { grid-template-columns: 90px 1fr 86px; } .board .bh-venue, .board .bh-mom, .board .b-venue, .board .b-mom { display: none; } }
+.board-head { background: var(--panel-2); font-size: .68rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--line); }
+.board-row { border-bottom: 1px solid var(--line); text-decoration: none; color: var(--text); font-size: .88rem; }
+.board-row:last-child { border-bottom: none; }
+.board-row:hover, .board-row:focus-visible { background: var(--panel-2); outline: none; }
+.board-row .b-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-row .b-venue { color: var(--muted); font-size: .8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); }
+.board-row .b-mom { text-align: right; font-family: var(--font-mono); font-size: .82rem; }
+.board-row .b-mom.up { color: var(--green); }
+.board-row .b-mom.flat { color: var(--muted); }
+.board-empty { padding: 22px 14px; text-align: center; color: var(--muted); font-size: .86rem; }
+/* phase pills — colorblind-safe on the dark base: each phase pairs a
+   distinct hue WITH its text label, so color never carries meaning alone */
+.phase { font-family: var(--font-mono); font-size: .68rem; font-weight: 700; letter-spacing: .08em; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); text-align: center; white-space: nowrap; }
+.phase.OPEN { color: var(--amber); border-color: rgba(244,199,95,.5); background: rgba(244,199,95,.07); }
+.phase.MATCHED { color: var(--blue); border-color: rgba(128,191,255,.5); background: rgba(128,191,255,.07); }
+.phase.BACKED, .phase.BUILDING { color: var(--purple); border-color: rgba(192,166,240,.5); background: rgba(192,166,240,.07); }
+.phase.SHIPPED { color: var(--green); border-color: rgba(116,223,154,.5); background: rgba(116,223,154,.07); }
+/* market cards (the three contrast cards) */
+.why-grid .panel { background: linear-gradient(rgba(48,54,61,.35) 1px, transparent 1px) 0 0 / 100% 28px, var(--panel); }
+.why-grid .panel h4 .tag { display: block; font-family: var(--font-mono); font-size: .66rem; letter-spacing: .12em; color: var(--muted); font-weight: 700; margin-bottom: 4px; }
+/* ── 🏛️ how the market works: two-capital strip ── */
+.how-market { margin: 34px 0 6px; }
+.how-market h3 { text-align: center; font-size: 1.15rem; margin-bottom: 4px; }
+.how-market p.hm-sub { text-align: center; color: var(--muted); font-size: .9rem; max-width: 620px; margin: 0 auto 18px; line-height: 1.55; }
+.cap-grid { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: 10px; align-items: stretch; }
+@media (max-width: 640px) { .cap-grid { grid-template-columns: 1fr; } .cap-arrow { transform: rotate(90deg); } }
+.cap-grid .panel { background: linear-gradient(rgba(48,54,61,.35) 1px, transparent 1px) 0 0 / 100% 28px, var(--panel); }
+.cap-arrow { align-self: center; color: var(--muted); font-size: 1.2rem; text-align: center; }
+.cap-tag { display: block; font-family: var(--font-mono); font-size: .66rem; letter-spacing: .12em; color: var(--muted); font-weight: 700; margin-bottom: 6px; }
+.cap-grid .panel h4 { font-size: .98rem; margin-bottom: 6px; color: var(--amber); }
+.cap-grid .panel p { font-size: .88rem; }
+.cap-grid .panel p b { color: var(--text); }
+.cap-status { display: inline-block; font-family: var(--font-mono); font-size: .66rem; font-weight: 700; letter-spacing: .1em; padding: 2px 9px; border-radius: 999px; margin-top: 10px; }
+.cap-status.live { color: var(--green); border: 1px solid rgba(116,223,154,.5); background: rgba(116,223,154,.07); }
+.cap-status.soon { color: var(--blue); border: 1px solid rgba(128,191,255,.5); background: rgba(128,191,255,.07); }
+.backing-teaser { text-align: center; margin: 18px auto 0; color: var(--muted); font-size: .9rem; line-height: 1.6; max-width: 560px; }
+.backing-teaser b { color: var(--text); }
+/* ── 📊 the terminal: repo value-index chart ── */
+.hero.compact { padding: 26px 0 18px; }
+.hero.compact h1 { font-size: 1.8rem; }
+.chart-panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px 12px; margin: 18px 0 0; }
+.chart-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.chart-title-wrap { display: flex; align-items: baseline; gap: 10px; }
+.chart-sym { font-family: var(--font-mono); font-weight: 800; font-size: 1.25rem; color: var(--amber); }
+.chart-repo { color: var(--muted); font-size: .85rem; font-family: var(--font-mono); }
+.chart-quote { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 1.25rem; font-weight: 800; }
+.chart-quote .qd { font-size: .85rem; font-weight: 700; margin-left: 6px; }
+.chart-quote .qd.up { color: var(--green); }
+.chart-quote .qd.down { color: var(--red); }
+.chart-quote .ex { color: var(--muted); font-style: italic; font-size: .72rem; font-weight: 400; margin-left: 8px; }
+.chip-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 4px; }
+.chip-row button { font-family: var(--font-mono); font-size: .74rem; font-weight: 700; letter-spacing: .02em; background: var(--panel-2); border: 1px solid var(--line); color: var(--muted); border-radius: 999px; padding: 3px 11px; cursor: pointer; }
+.chip-row button:hover, .chip-row button:focus-visible { color: var(--text); border-color: var(--amber); }
+.chip-row button[aria-selected="true"] { color: #080b0f; background: var(--amber); border-color: var(--amber); }
+#chart-stage svg { display: block; width: 100%; height: auto; }
+#chart-stage .grid-line { stroke: var(--line); stroke-width: 1; stroke-dasharray: 2 4; }
+#chart-stage .axis-label { fill: var(--muted); font-family: var(--font-mono); font-size: 10px; font-variant-numeric: tabular-nums; }
+#chart-stage .idx-line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+#chart-stage .idx-line.up { stroke: var(--green); }
+#chart-stage .idx-line.down { stroke: var(--red); }
+#chart-stage .idx-line.flat { stroke: var(--amber); }
+#chart-stage .bar-ideas { fill: rgba(244,199,95,.55); }
+#chart-stage .bar-agent { fill: rgba(192,166,240,.6); }
+#chart-stage .quote-box { fill: var(--panel-2); stroke: var(--line); }
+#chart-stage .quote-text { fill: var(--text); font-family: var(--font-mono); font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
+#chart-stage .quote-delta.up { fill: var(--green); }
+#chart-stage .quote-delta.down { fill: var(--red); }
+/* blinking live dot at the last point (reduced-motion → static via the
+   global animation kill below) */
+#chart-stage .live-dot { fill: var(--amber); }
+#chart-stage .live-dot.up { fill: var(--green); }
+#chart-stage .live-dot.down { fill: var(--red); }
+#chart-stage .live-pulse { fill: none; stroke-width: 2; opacity: 0; animation: live-pulse 1.8s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+#chart-stage .live-pulse.up { stroke: var(--green); }
+#chart-stage .live-pulse.down { stroke: var(--red); }
+#chart-stage .live-pulse.flat { stroke: var(--amber); }
+@keyframes live-pulse { 0% { opacity: .8; transform: scale(.4); } 100% { opacity: 0; transform: scale(2.4); } }
+.chart-legend { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.legend-chip { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: .7rem; font-weight: 700; background: transparent; border: 1px solid var(--line); color: var(--muted); border-radius: 999px; padding: 3px 10px; cursor: pointer; }
+.legend-chip .sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.legend-chip .sw-ideas { background: rgba(244,199,95,.8); }
+.legend-chip .sw-agent { background: rgba(192,166,240,.85); }
+.legend-chip:not(.on) { opacity: .45; }
+.legend-chip:hover, .legend-chip:focus-visible { border-color: var(--amber); color: var(--text); }
+.chart-note { color: var(--muted); font-size: .7rem; font-style: italic; margin-left: auto; }
+.chart-empty { color: var(--muted); text-align: center; padding: 40px 12px; font-size: .88rem; }
 /* ── reduced motion: kill every animation & transition ── */
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
@@ -241,14 +357,18 @@ details.how-details .how-body { padding: 16px 18px; }
 </style>
 </head>
 <body>
+<!-- 📈 ticker tape — logged-out landing only; real market events from /api/ticker -->
+<div id="tape" class="landing-extra" aria-label="Recent market activity ticker">
+  <div class="tape-viewport"><div class="tape-track" id="tape-track" aria-hidden="false"></div></div>
+</div>
 <header>
   <div class="logo">💡 Di<span>bs</span></div>
   <nav aria-label="Main">
     <button data-view="home" class="active">🔥 Match</button>
-    <button data-view="mine" data-auth>💡 My ideas</button>
+    <button data-view="mine" data-auth>💼 Positions</button>
     <button data-view="browse" data-auth>🌍 Browse</button>
     <button data-view="repos" data-auth>🐝 Repos</button>
-    <button data-view="credits">🏆 Leaderboard</button>
+    <button data-view="credits">📊 The Board</button>
   </nav>
   <a id="signin" href="__HUB_URL__">Sign in</a>
   <button id="level-chip" data-auth data-goto="mine" aria-label="Your score and level — open profile"></button>
@@ -274,34 +394,80 @@ details.how-details .how-body { padding: 16px 18px; }
         <h2 class="page-title">🔥 Your matches</h2>
         <p class="page-sub" style="margin:0">One card at a time. Say yes, or pass.</p>
       </div>
-      <button class="pill primary" id="btn-home-new">＋ Post an idea</button>
+      <button class="pill primary" id="btn-home-new">＋ List your idea</button>
     </div>
     <div class="swipe-stage" id="home-stage"><div class="empty">Loading your matches…</div></div>
     <p class="key-hint" id="home-key-hint" style="display:none"><kbd>←</kbd> pass · <kbd>→</kbd> accept</p>
   </div>
-  <!-- Logged out: the landing pitch. -->
+  <!-- Logged out: the landing pitch, exchange-style. -->
   <div class="landing-extra">
-    <div class="hero">
+    <div class="hero compact">
       <h1>Your <em>idea</em>, your <em>credit</em>, their code.</h1>
-      <p class="tagline">You have ideas. Repos need ideas. We make the match.</p>
-      <p class="sub"><b>Have ideas but not the hours to build them?</b> That's exactly what AI is
-      for. Match with a repo whose agent swarm has the time you don't — and file the GitHub issue
-      yourself, your name on it forever.</p>
+      <p class="tagline">The open-source idea exchange.</p>
+      <p class="sub">Repos are the listed companies. Two kinds of capital move the market:
+      <b>ideas</b> and <b>spare AI tokens</b>. Shipped ideas pay dividends in credit —
+      the GitHub issue is filed <b>by you, under your name</b>, forever.</p>
       <a class="pill primary" href="__HUB_URL__">Sign in with your Hive Hub account</a>
-      <button class="pill" data-goto="credits" style="margin-left:8px">🏆 See the leaderboard</button>
+      <button class="pill" data-goto="credits" style="margin-left:8px">📊 See The Board</button>
     </div>
-    <div class="two-sides">
-      <div class="panel">
-        <h3>🧠 Have ideas?</h3>
-        <p><b>Ideas ≠ hours.</b> You know what a project needs — even if you'll never open a PR.
-        Write it down; the hive supplies the implementation time. Earn points, levels, and badges
-        as it ships.</p>
+    <!-- 📊 the terminal: derived repo value-index chart -->
+    <div class="chart-panel" aria-label="Repo value index chart">
+      <div class="chart-head">
+        <div class="chart-title-wrap">
+          <span class="chart-sym" id="chart-sym"></span>
+          <span class="chart-repo" id="chart-repo"></span>
+        </div>
+        <div class="chart-quote" id="chart-quote" aria-live="polite"></div>
       </div>
-      <div class="panel">
-        <h3>🐝 Need ideas?</h3>
-        <p>Opt your hive-managed repo in and receive matched, well-formed
-        ideas — ready for your agent swarm to implement.</p>
+      <div class="chip-row" id="chart-chips" role="tablist" aria-label="Listed repos"></div>
+      <div id="chart-stage"></div>
+      <div class="chart-legend" id="chart-legend">
+        <button class="legend-chip on" data-series="ideas" aria-pressed="true"><span class="sw sw-ideas"></span>ideas listed/matched</button>
+        <button class="legend-chip on" data-series="agent" aria-pressed="true"><span class="sw sw-agent"></span>agent activity (est.)</button>
+        <span class="chart-note" id="chart-note">index derived from market activity — offers, bids hit, settlements</span>
       </div>
+    </div>
+    <div class="mkt-stats" id="mkt-stats" aria-label="Exchange statistics"></div>
+    <div class="markets" aria-label="Live markets">
+      <h3>📈 Live idea board</h3>
+      <p class="mkts-sub">Every public idea on the exchange — phase, listing venue, momentum.</p>
+      <h4 id="bt-head">🔥 Trending</h4>
+      <div class="board" id="board-trending" role="list" aria-labelledby="bt-head"></div>
+      <h4 id="bn-head">🆕 New listings</h4>
+      <div class="board" id="board-new" role="list" aria-labelledby="bn-head"></div>
+    </div>
+    <div class="how-market" aria-label="How the market works">
+      <h3>🏛️ How the market works</h3>
+      <p class="hm-sub">A stock market where <b>repos are the listed companies</b> — and two
+      investor classes provide the capital that gets ideas built.</p>
+      <div class="cap-grid">
+        <div class="panel">
+          <span class="cap-tag">INTELLECTUAL CAPITAL</span>
+          <h4>💡 Innovators invest ideas</h4>
+          <p>You know what a project needs — even if you'll never open a PR. List the idea;
+          the exchange finds the repos where it can <b>thrive</b>.</p>
+          <span class="cap-status live">● LIVE</span>
+        </div>
+        <div class="cap-arrow" aria-hidden="true">→</div>
+        <div class="panel">
+          <span class="cap-tag">COMPUTE CAPITAL</span>
+          <h4>🏦 Investors back them</h4>
+          <p>Your AI subscription's spare tokens <b>expire weekly</b>. Pledge that idle capacity
+          to repos and ideas you believe in — it powers the agents that build them.</p>
+          <span class="cap-status soon">📈 BACKING OPENS SOON</span>
+        </div>
+        <div class="cap-arrow" aria-hidden="true">→</div>
+        <div class="panel">
+          <span class="cap-tag">EXECUTION</span>
+          <h4>🚀 Repos ship them</h4>
+          <p>Agent swarms implement the idea; the credited GitHub issue carries the innovator's
+          name. <b>Dividends are paid in credit</b> — everyone's name on the result.</p>
+          <span class="cap-status live">● LIVE</span>
+        </div>
+      </div>
+      <p class="backing-teaser">📈 <b>Backing opens soon</b> — put idle tokens to work on ideas you
+      believe in, before they reset. <a href="__HUB_URL__">Join the board now</a> and be ready on
+      day one.</p>
     </div>
     <div class="why-not">
       <h3>🤔 Why not just open an issue?</h3>
@@ -310,17 +476,17 @@ details.how-details .how-body { padding: 16px 18px; }
       What if you could <b>raise the odds your idea gets used</b> — without building it yourself?</p>
       <div class="why-grid">
         <div class="panel">
-          <h4>🔭 Discovery</h4>
-          <p>Dibs finds the projects where your idea can <b>thrive</b> — including ones you didn't
+          <h4><span class="tag">MARKET REACH</span>🔭 Discovery</h4>
+          <p>Dibs finds the venues where your idea can <b>thrive</b> — including ones you didn't
           know existed. No guessing which repo to file against.</p>
         </div>
         <div class="panel">
-          <h4>🚀 Accepted = implemented</h4>
-          <p>A repo that accepts your idea has <b>AI agent capacity ready to build it</b>.
+          <h4><span class="tag">EXECUTION GUARANTEE</span>🚀 Accepted = implemented</h4>
+          <p>A repo that bids on your idea has <b>AI agent capacity ready to build it</b>.
           An ordinary issue can sit stale in a queue for years.</p>
         </div>
         <div class="panel">
-          <h4>🏷️ Credit, in writing</h4>
+          <h4><span class="tag">DIVIDENDS</span>🏷️ Credit, in writing</h4>
           <p>The issue is filed <b>by you, under your name</b> — natively attributed,
           traceable forever.</p>
         </div>
@@ -355,10 +521,10 @@ details.how-details .how-body { padding: 16px 18px; }
 <section id="view-mine" class="view">
   <div class="toolbar">
     <div>
-      <h2 class="page-title">💡 My ideas</h2>
-      <p class="page-sub" style="margin:0">Drafts stay yours. Offer an idea to enter matching.</p>
+      <h2 class="page-title">💼 Your positions</h2>
+      <p class="page-sub" style="margin:0">Your ideas on the exchange. Drafts stay yours. Offer one to enter matching.</p>
     </div>
-    <button class="pill primary" id="btn-new">＋ New idea</button>
+    <button class="pill primary" id="btn-new">＋ List an idea</button>
   </div>
   <div class="level-banner panel" id="level-banner" style="display:none"></div>
   <div class="stats-strip" id="my-stats"></div>
@@ -366,7 +532,7 @@ details.how-details .how-body { padding: 16px 18px; }
 </section>
 
 <section id="view-edit" class="view">
-  <h2 class="page-title" id="edit-title">✍️ New idea</h2>
+  <h2 class="page-title" id="edit-title">✍️ List an idea</h2>
   <form id="idea-form" class="panel" style="margin-top:14px">
     <label for="f-title">Title</label>
     <input type="text" id="f-title" maxlength="200" placeholder="One line that sells the idea" required>
@@ -428,7 +594,7 @@ details.how-details .how-body { padding: 16px 18px; }
       <h2 class="page-title" id="match-title">🔥 Find a home for your idea</h2>
       <p class="page-sub" style="margin:0">Offer it, or pass.</p>
     </div>
-    <button class="pill" data-goto="mine">← My ideas</button>
+    <button class="pill" data-goto="mine">← Your positions</button>
   </div>
   <div id="match-tldr" class="tldr-banner"></div>
   <div class="swipe-stage" id="match-stage"></div>
@@ -441,7 +607,7 @@ details.how-details .how-body { padding: 16px 18px; }
       <h2 class="page-title" id="launch-title">🚀 File the issue</h2>
       <p class="page-sub" style="margin:0">Your account, your name, your credit. We're just the matchmaker.</p>
     </div>
-    <button class="pill" data-goto="mine">← My ideas</button>
+    <button class="pill" data-goto="mine">← Your positions</button>
   </div>
   <form class="panel" id="launch-form">
     <label for="l-title">Issue title</label>
@@ -483,8 +649,8 @@ details.how-details .how-body { padding: 16px 18px; }
 </section>
 
 <section id="view-credits" class="view">
-  <h2 class="page-title">🏆 Leaderboard</h2>
-  <p class="page-sub">The hive's top ideators — ranked by points earned as ideas ship.</p>
+  <h2 class="page-title">📊 The Board</h2>
+  <p class="page-sub">Top ideators by portfolio — ranked by dividends earned as ideas ship.</p>
   <div id="leaderboard-list"></div>
   <h3 style="margin:30px 0 6px;font-size:1.05rem">💡 Credit wall</h3>
   <p class="page-sub" style="font-size:.9rem">Every settled idea, credited to the person who thought of it.</p>
@@ -546,6 +712,10 @@ details.how-details .how-body { padding: 16px 18px; }
         esc(b.emoji) + ' ' + esc(b.name) + '</span>';
     }).join('');
   }
+  // Ticker-symbol chip — shown everywhere an idea appears.
+  function symChip(symbol) {
+    return symbol ? '<span class="tsym">$' + esc(symbol) + '</span> ' : '';
+  }
 
   /* ── navigation ── */
   var authViews = { mine: 1, browse: 1, repos: 1, edit: 1, match: 1, feed: 1, launch: 1 };
@@ -581,11 +751,255 @@ details.how-details .how-body { padding: 16px 18px; }
     loadHomeDeck();
     loadGamebar();
   }).catch(function () {
-    // Not signed in: landing mode. The page stays useful (pitch + public
-    // leaderboard); authed nav and the bell disappear.
+    // Not signed in: landing mode. The page stays useful (exchange landing
+    // + The Board); authed nav and the bell disappear.
     anon = true;
     document.body.classList.add('anon');
+    loadLanding();
   });
+
+  /* ── 📈 market landing (logged out): tape + stats + live markets ── */
+  var HUB_URL = document.getElementById('signin').getAttribute('href');
+  var TICKER_EVENTS = {
+    listed: { emoji: '💡', verb: 'listed', up: false },
+    matched: { emoji: '🤝', verb: 'listed on', up: true },
+    shipped: { emoji: '🚀', verb: 'shipped', up: true }
+  };
+  // Shown when the store has nothing to tick yet — clearly marked examples.
+  var TAPE_EXAMPLES = [
+    { symbol: 'DARKMODE', event: 'listed' },
+    { symbol: 'AUTOSCALE', event: 'matched', repoID: 'org/repo' },
+    { symbol: 'OFFLINESYNC', event: 'shipped', repoID: 'org/repo' }
+  ];
+  function tapeItemHTML(e, isExample) {
+    var ev = TICKER_EVENTS[e.event] || TICKER_EVENTS.listed;
+    return '<span class="tape-item' + (ev.up ? ' up' : '') + '">' + ev.emoji + ' ' +
+      '<span class="tsym">$' + esc(e.symbol) + '</span>' + esc(ev.verb) +
+      (e.repoID ? ' <span class="venue">' + esc(e.repoID) + '</span>' : '') +
+      (isExample ? ' <span class="ex">(example)</span>' : '') + '</span>';
+  }
+  function loadTape() {
+    api('GET', 'ticker').then(function (res) {
+      var entries = res.ticker || [];
+      var repos = res.repos || [];
+      var isExample = !entries.length && !repos.length;
+      if (isExample) entries = TAPE_EXAMPLES;
+      // Repo tickers lead the tape (they're the listed securities), then
+      // idea events.
+      var html = repos.map(function (r) { return repoTapeHTML(r); })
+        .concat(entries.map(function (e) { return tapeItemHTML(e, isExample); })).join('');
+      var track = $('tape-track');
+      // Two copies make the -50% translate loop seamless; the second copy
+      // is decoration only.
+      track.innerHTML = '<span>' + html + '</span><span aria-hidden="true">' + html + '</span>';
+      track.style.setProperty('--tape-dur', Math.max(24, (entries.length + repos.length) * 6) + 's');
+      initChart(repos);
+    }).catch(function () { $('tape-track').innerHTML = ''; initChart([]); });
+  }
+  function fmtDelta(delta) {
+    var s = Math.abs(delta).toFixed(1);
+    if (delta > 0) return { cls: 'up', text: '▲ +' + s };
+    if (delta < 0) return { cls: 'down', text: '▼ −' + s };
+    return { cls: 'flat', text: '· 0.0' };
+  }
+  function repoTapeHTML(r) {
+    var d = fmtDelta(r.delta);
+    return '<span class="tape-item' + (r.delta > 0 ? ' up' : '') + '">📈 ' +
+      '<span class="tsym">$' + esc(r.symbol) + '</span>' +
+      '<span class="venue">' + r.value.toFixed(1) + '</span> ' +
+      '<span class="' + d.cls + '">' + d.text + '</span></span>';
+  }
+
+  /* ── 📊 the terminal: repo value-index chart ──
+     Inline SVG, no libs. Series come from /api/repos/{org}/{repo}/index —
+     a value index DERIVED from market activity (weights documented server-
+     side in pkg/api/index.go). The "agent activity (est.)" bars are an
+     honest proxy until real token metering exists. */
+  var chartRepos = [];        // repo tickers, most active first
+  var chartCache = {};        // repoID → index payload
+  var chartCurrent = null;    // repoID being shown (null = example mode)
+  var seriesOn = { ideas: true, agent: true };
+  var CHART_EXAMPLE = (function () {
+    // Deterministic fake series, clearly labeled — shown only when no
+    // repos are listed yet.
+    var points = [], bars = [], v = 100;
+    for (var i = 0; i < 30; i++) {
+      var bump = (i % 7 === 3) ? 6 : (i % 5 === 1) ? 2 : 0;
+      v += bump;
+      points.push({ t: 'day ' + (i + 1), value: v });
+      bars.push({ t: 'day ' + (i + 1), ideas: i % 5 === 1 ? 1 : 0, agent: i % 7 === 3 ? 1 : 0 });
+    }
+    return { repoID: 'org/example-repo', symbol: 'EXAMPLE', points: points, bars: bars,
+      current: v, delta: 0, example: true };
+  })();
+  function initChart(repos) {
+    chartRepos = repos;
+    var chips = $('chart-chips');
+    if (!repos.length) {
+      chips.innerHTML = '';
+      renderChart(CHART_EXAMPLE);
+      return;
+    }
+    chips.innerHTML = repos.map(function (r, i) {
+      return '<button role="tab" aria-selected="' + (i === 0) + '" data-repo="' + esc(r.repoID) + '">$' + esc(r.symbol) + '</button>';
+    }).join('');
+    chips.querySelectorAll('button').forEach(function (b) {
+      b.addEventListener('click', function () { showChart(b.dataset.repo); });
+    });
+    showChart(repos[0].repoID); // default: the most active repo
+  }
+  function showChart(repoID) {
+    chartCurrent = repoID;
+    $('chart-chips').querySelectorAll('button').forEach(function (b) {
+      b.setAttribute('aria-selected', String(b.dataset.repo === repoID));
+    });
+    if (chartCache[repoID]) { renderChart(chartCache[repoID]); return; }
+    $('chart-stage').innerHTML = '<div class="chart-empty">Loading the tape…</div>';
+    api('GET', 'repos/' + repoID + '/index').then(function (d) {
+      chartCache[repoID] = d;
+      if (chartCurrent === repoID) renderChart(d);
+    }).catch(function () {
+      $('chart-stage').innerHTML = '<div class="chart-empty">Chart unavailable — markets are warming up.</div>';
+    });
+  }
+  var TREND_COLOR = { up: '#74df9a', down: '#ff7e7e', flat: '#f4c75f' };
+  function renderChart(d) {
+    var trend = d.delta > 0 ? 'up' : d.delta < 0 ? 'down' : 'flat';
+    $('chart-sym').textContent = '$' + d.symbol;
+    $('chart-repo').textContent = d.repoID;
+    var qd = fmtDelta(d.delta);
+    $('chart-quote').innerHTML = d.current.toFixed(1) +
+      '<span class="qd ' + qd.cls + '">' + qd.text + ' today</span>' +
+      (d.example ? '<span class="ex">(example data — no repos listed yet)</span>' : '');
+    $('chart-note').textContent = d.example
+      ? 'example data — real charts appear when repos list on the exchange'
+      : 'index derived from market activity — offers, bids hit, settlements';
+
+    var W = 820, H = 300, L = 46, R = 806;
+    var plotTop = 14, plotBot = 192, barTop = 210, barBot = 278;
+    var pts = d.points, n = pts.length;
+    var min = Infinity, max = -Infinity;
+    pts.forEach(function (p) { if (p.value < min) min = p.value; if (p.value > max) max = p.value; });
+    if (max - min < 4) { max += 2; min -= 2; } // keep flat lines mid-plot
+    var pad = (max - min) * 0.08; min -= pad; max += pad;
+    function x(i) { return L + (R - L) * (n === 1 ? 0.5 : i / (n - 1)); }
+    function y(v) { return plotBot - (plotBot - plotTop) * ((v - min) / (max - min)); }
+
+    var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' +
+      esc('$' + d.symbol + ' value index: current ' + d.current.toFixed(1) + ', today ' + qd.text +
+        (d.example ? ' (example data)' : '')) + '">';
+    svg += '<defs><linearGradient id="cgrad" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0%" stop-color="' + TREND_COLOR[trend] + '" stop-opacity=".28"/>' +
+      '<stop offset="100%" stop-color="' + TREND_COLOR[trend] + '" stop-opacity="0"/></linearGradient></defs>';
+
+    // Horizontal gridlines + tabular y labels.
+    for (var g = 0; g <= 4; g++) {
+      var gv = min + (max - min) * g / 4, gy = y(gv);
+      svg += '<line class="grid-line" x1="' + L + '" y1="' + gy + '" x2="' + R + '" y2="' + gy + '"/>' +
+        '<text class="axis-label" x="' + (L - 6) + '" y="' + (gy + 3) + '" text-anchor="end">' + gv.toFixed(0) + '</text>';
+    }
+    // X labels: first, two mids, last.
+    [0, Math.floor(n / 3), Math.floor(2 * n / 3), n - 1].forEach(function (i) {
+      svg += '<text class="axis-label" x="' + x(i) + '" y="' + (H - 6) + '" text-anchor="middle">' + esc(shortDate(pts[i].t)) + '</text>';
+    });
+
+    // Area + line.
+    var line = pts.map(function (p, i) { return (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(p.value).toFixed(1); }).join('');
+    svg += '<path d="' + line + 'L' + R + ' ' + plotBot + 'L' + L + ' ' + plotBot + 'Z" fill="url(#cgrad)"/>' +
+      '<path class="idx-line ' + trend + '" d="' + line + '"/>';
+
+    // Sub-chart bars: ideas + agent activity, toggleable via the legend.
+    var bmax = 1;
+    d.bars.forEach(function (b) { bmax = Math.max(bmax, b.ideas, b.agent); });
+    var bw = Math.max(2, ((R - L) / n - 4) / 2);
+    d.bars.forEach(function (b, i) {
+      var cx = x(i);
+      if (seriesOn.ideas && b.ideas > 0) {
+        var h1 = (barBot - barTop) * b.ideas / bmax;
+        svg += '<rect class="bar-ideas" x="' + (cx - bw - 1) + '" y="' + (barBot - h1) + '" width="' + bw + '" height="' + h1 + '"><title>' + esc(b.t) + ': ' + b.ideas + ' idea event(s)</title></rect>';
+      }
+      if (seriesOn.agent && b.agent > 0) {
+        var h2 = (barBot - barTop) * b.agent / bmax;
+        svg += '<rect class="bar-agent" x="' + (cx + 1) + '" y="' + (barBot - h2) + '" width="' + bw + '" height="' + h2 + '"><title>' + esc(b.t) + ': ' + b.agent + ' agent event(s) (est.)</title></rect>';
+      }
+    });
+    svg += '<line class="grid-line" x1="' + L + '" y1="' + barBot + '" x2="' + R + '" y2="' + barBot + '"/>';
+
+    // Blinking live dot at the last point + floating quote label.
+    var lx = x(n - 1), ly = y(pts[n - 1].value);
+    svg += '<circle class="live-pulse ' + trend + '" cx="' + lx + '" cy="' + ly + '" r="7"/>' +
+      '<circle class="live-dot ' + trend + '" cx="' + lx + '" cy="' + ly + '" r="4"/>';
+    var label = d.current.toFixed(1), dtext = qd.text;
+    var boxW = 12 + (label.length + dtext.length + 1) * 7.2;
+    var bx = Math.min(lx + 12, R - boxW), by = Math.max(plotTop, ly - 26);
+    svg += '<rect class="quote-box" x="' + bx + '" y="' + by + '" width="' + boxW + '" height="18" rx="4"/>' +
+      '<text class="quote-text" x="' + (bx + 6) + '" y="' + (by + 13) + '">' + label +
+      ' <tspan class="quote-delta ' + trend + '">' + dtext + '</tspan></text>';
+    svg += '</svg>';
+    $('chart-stage').innerHTML = svg;
+  }
+  function shortDate(t) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t);
+    if (!m) return t;
+    var MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return MON[+m[2] - 1] + ' ' + (+m[3]);
+  }
+  // Legend chips toggle each bar series and re-render from cache.
+  $('chart-legend').querySelectorAll('.legend-chip').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var s = b.dataset.series;
+      seriesOn[s] = !seriesOn[s];
+      b.classList.toggle('on', seriesOn[s]);
+      b.setAttribute('aria-pressed', String(seriesOn[s]));
+      var d = chartCurrent ? chartCache[chartCurrent] : CHART_EXAMPLE;
+      if (d) renderChart(d);
+    });
+  });
+
+  function loadMktStats() {
+    api('GET', 'stats').then(function (s) {
+      $('mkt-stats').innerHTML = [
+        ['Ideas listed', s.listed], ['Matches made', s.matched],
+        ['Ideas shipped', s.shipped], ['Ideators on the board', s.ideators]
+      ].map(function (p) {
+        return '<div class="cell"><div class="num">' + p[1] +
+          (p[1] > 0 ? '<span class="up" aria-hidden="true">▲</span>' : '') +
+          '</div><div class="lbl">' + p[0] + '</div></div>';
+      }).join('');
+    }).catch(function () { $('mkt-stats').innerHTML = ''; });
+  }
+  function boardRowHTML(r) {
+    return '<a class="board-row" role="listitem" href="' + esc(HUB_URL) + '"' +
+      ' aria-label="' + esc('$' + r.symbol + ' — ' + r.title + ', ' + r.phase + (r.repoID ? ', listed on ' + r.repoID : '') + '. Sign in to trade.') + '">' +
+      '<span class="tsym">$' + esc(r.symbol) + '</span>' +
+      '<span class="b-title">' + esc(r.title) + '</span>' +
+      '<span class="phase ' + esc(r.phase) + '">' + esc(r.phase) + '</span>' +
+      '<span class="b-venue">' + esc(r.repoID || '—') + '</span>' +
+      '<span class="b-mom ' + (r.momentum ? 'up' : 'flat') + '" title="' + (r.momentum ? 'Recent activity' : 'Quiet') + '">' +
+      (r.momentum ? '▲' : '·') + '</span></a>';
+  }
+  var BOARD_HEAD = '<div class="board-head"><span>Symbol</span><span>Idea</span>' +
+    '<span>Phase</span><span class="bh-venue">Listed on</span><span class="bh-mom" style="text-align:right">Mom.</span></div>';
+  function renderBoard(el, rows, emptyMsg) {
+    el.innerHTML = rows.length
+      ? BOARD_HEAD + rows.map(boardRowHTML).join('')
+      : '<div class="board-empty">' + emptyMsg + '</div>';
+  }
+  function loadBoard() {
+    api('GET', 'board').then(function (res) {
+      var rows = res.board || [];
+      var trending = rows.filter(function (r) { return r.momentum; })
+        .sort(function (a, b) { return new Date(b.updatedAt) - new Date(a.updatedAt); }).slice(0, 8);
+      var fresh = rows.slice()
+        .sort(function (a, b) { return new Date(b.createdAt) - new Date(a.createdAt); }).slice(0, 8);
+      renderBoard($('board-trending'), trending, 'No movers yet — the first listing starts the market.');
+      renderBoard($('board-new'), fresh, 'No listings yet. Sign in and be the first: $YOURIDEA could open the market.');
+    }).catch(function () {
+      renderBoard($('board-trending'), [], 'Markets are warming up…');
+      renderBoard($('board-new'), [], 'Markets are warming up…');
+    });
+  }
+  function loadLanding() { loadTape(); loadMktStats(); loadBoard(); }
 
   /* ── navbar score/level chip ── */
   function loadGamebar() {
@@ -668,7 +1082,7 @@ details.how-details .how-body { padding: 16px 18px; }
     var launchable = idea.status === 'accepted' || idea.status === 'issue_launched';
     var d = document.createElement('div'); d.className = 'card';
     d.innerHTML =
-      '<div class="row"><h4>' + esc(idea.title) + '</h4>' +
+      '<div class="row">' + symChip(idea.symbol) + '<h4>' + esc(idea.title) + '</h4>' +
       '<span class="chip ' + esc(idea.status) + '">' + esc(statusLabels[idea.status] || idea.status) + '</span>' +
       (mine ? '<span class="chip ' + esc(idea.visibility) + '">' + (idea.visibility === 'private' ? '🔒 private' : '🌐 public') + '</span>' : '') +
       '</div>' +
@@ -705,7 +1119,7 @@ details.how-details .how-body { padding: 16px 18px; }
   function loadMine() {
     api('GET', 'ideas').then(function (ideas) {
       renderList($('mine-list'), ideas, true,
-        'No ideas yet — post your first and earn the 🥇 First Dibs badge.<br><button class="pill primary" id="mine-empty-new">＋ New idea</button>');
+        'No ideas yet — list your first and earn the 🥇 First Dibs badge.<br><button class="pill primary" id="mine-empty-new">＋ List an idea</button>');
       var b = $('mine-empty-new');
       if (b) b.addEventListener('click', function () { openEdit(null); });
     }).catch(function (e) { showErr(e.message); });
@@ -775,7 +1189,7 @@ details.how-details .how-body { padding: 16px 18px; }
         var d = document.createElement('div'); d.className = 'credit-row';
         d.innerHTML =
           '<span class="handle">💡 ' + esc(c.authorDisplay || c.author) + '</span>' +
-          '<span class="what"><span class="t">' + esc(c.title) + '</span>' +
+          '<span class="what"><span class="t">' + symChip(c.symbol) + esc(c.title) + '</span>' +
           (c.tldr ? '<div class="tldr">' + esc(c.tldr) + '</div>' : '') + '</span>' +
           '<span class="where">' + esc(c.repoID) +
           (c.issueURL ? ' · <a href="' + esc(c.issueURL) + '" target="_blank" rel="noopener">issue</a>' : '') +
@@ -822,7 +1236,7 @@ details.how-details .how-body { padding: 16px 18px; }
   $('f-body').addEventListener('input', updateMeter);
   function openEdit(idea) {
     editingId = idea ? idea.id : null;
-    $('edit-title').textContent = idea ? '✍️ Edit idea' : '✍️ New idea';
+    $('edit-title').textContent = idea ? '✍️ Edit idea' : '✍️ List an idea';
     $('f-title').value = idea ? idea.title : '';
     $('f-body').value = idea ? idea.body : '';
     setVis(idea ? idea.visibility : 'public');
@@ -1056,8 +1470,8 @@ details.how-details .how-body { padding: 16px 18px; }
           return bs - as;
         });
         var emptyMsg = ideas.length
-          ? '🎉 All caught up! New matches appear as repos opt in.<br><button class="pill" data-new-idea>＋ Post another idea</button>'
-          : 'No ideas yet — post your first and earn the 🥇 First Dibs badge.<br><button class="pill primary" data-new-idea>＋ Post an idea</button>';
+          ? '🎉 All caught up! New matches appear as repos opt in.<br><button class="pill" data-new-idea>＋ List another idea</button>'
+          : 'No ideas yet — list your first and earn the 🥇 First Dibs badge.<br><button class="pill primary" data-new-idea>＋ List your idea</button>';
         $('home-key-hint').style.display = items.length ? 'block' : 'none';
         renderDeck(stage, items, function (card, item) {
           return item.kind === 'repo' ? repoMatchCard(card, item) : ideaMatchCard(card, item);
@@ -1070,7 +1484,7 @@ details.how-details .how-body { padding: 16px 18px; }
     var m = item.m, idea = item.idea;
     card.innerHTML =
       '<h3>🐝 ' + esc(m.repo.repoID) + '</h3>' +
-      '<div class="for-line">for your idea <b>💡 ' + esc(idea.title) + '</b></div>' +
+      '<div class="for-line">for your idea ' + symChip(idea.symbol) + '<b>💡 ' + esc(idea.title) + '</b></div>' +
       scorePill(m.score) +
       (m.repo.description ? '<p style="color:var(--muted);line-height:1.5">' + esc(m.repo.description) + '</p>' : '') +
       '<div class="topics">' + (m.repo.topics || []).map(function (t) { return '<span class="t">' + esc(t) + '</span>'; }).join('') + '</div>' +
@@ -1123,7 +1537,7 @@ details.how-details .how-body { padding: 16px 18px; }
         ' has an idea — let me TLDR it for you:</b><br>' + esc(res.tldr || idea.body.slice(0, 200));
       renderDeck($('match-stage'), res.matches.map(function (m) { return { kind: 'repo', idea: idea, m: m }; }),
         repoMatchCard,
-        '🎉 No more matches for this idea. Check back as repos opt in — or sharpen the idea.<br><button class="pill" data-goto="mine">← My ideas</button>');
+        '🎉 No more matches for this idea. Check back as repos opt in — or sharpen the idea.<br><button class="pill" data-goto="mine">← Your positions</button>');
     }).catch(function (e) { showErr(e.message); });
   }
 
@@ -1142,7 +1556,7 @@ details.how-details .how-body { padding: 16px 18px; }
   }
   function feedIdeaHTML(v) {
     var idea = v.idea;
-    return '<h3>💡 ' + esc(idea.title) + '</h3>' + scorePill(v.score) +
+    return '<h3>💡 ' + symChip(idea.symbol) + esc(idea.title) + '</h3>' + scorePill(v.score) +
       (idea.visibility === 'private' ? ' <span class="chip private">🔒 offered privately</span>' : '') +
       (idea.tldr ? '<p style="color:var(--muted);line-height:1.5;font-style:italic">' + esc(idea.tldr) + '</p>' : '') +
       '<div class="body-preview">' + esc(idea.body.length > 400 ? idea.body.slice(0, 400) + '…' : idea.body) + '</div>' +
