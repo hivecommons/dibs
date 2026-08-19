@@ -175,6 +175,14 @@ body.anon [data-auth] { display: none !important; }
 body.anon #signin { display: inline-block; }
 .landing-extra { display: none; }
 body.anon .landing-extra { display: block; }
+/* ── "why not just open an issue?" comparison ── */
+.why-not { margin: 28px 0; }
+.why-not h3 { text-align: center; font-size: 1.15rem; margin-bottom: 14px; }
+.why-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+@media (max-width: 640px) { .why-grid { grid-template-columns: 1fr; } }
+.why-grid .panel h4 { font-size: .98rem; margin-bottom: 6px; color: var(--amber); }
+.why-grid .panel p { font-size: .9rem; }
+.why-grid .panel p b { color: var(--text); }
 details.how-details { margin: 20px auto; max-width: 720px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); }
 details.how-details summary { cursor: pointer; padding: 14px 18px; font-weight: 700; color: var(--amber); list-style-position: inside; }
 details.how-details[open] summary { border-bottom: 1px solid var(--line); }
@@ -274,21 +282,43 @@ details.how-details .how-body { padding: 16px 18px; }
     <div class="hero">
       <h1>Your <em>idea</em>, your <em>credit</em>, their code.</h1>
       <p class="tagline">You have ideas. Repos need ideas. We make the match.</p>
-      <p class="sub">Write the idea. Match with a repo. File the GitHub issue yourself —
-      your name on it, forever. AI agent swarms build it.</p>
+      <p class="sub"><b>Have ideas but not the hours to build them?</b> That's exactly what AI is
+      for. Match with a repo whose agent swarm has the time you don't — and file the GitHub issue
+      yourself, your name on it forever.</p>
       <a class="pill primary" href="__HUB_URL__">Sign in with your Hive Hub account</a>
       <button class="pill" data-goto="credits" style="margin-left:8px">🏆 See the leaderboard</button>
     </div>
     <div class="two-sides">
       <div class="panel">
         <h3>🧠 Have ideas?</h3>
-        <p>You know what a project needs — even if you never open a PR.
-        Write it down. That's the contribution. Earn points, levels, and badges as it ships.</p>
+        <p><b>Ideas ≠ hours.</b> You know what a project needs — even if you'll never open a PR.
+        Write it down; the hive supplies the implementation time. Earn points, levels, and badges
+        as it ships.</p>
       </div>
       <div class="panel">
         <h3>🐝 Need ideas?</h3>
         <p>Opt your hive-managed repo in and receive matched, well-formed
         ideas — ready for your agent swarm to implement.</p>
+      </div>
+    </div>
+    <div class="why-not">
+      <h3>🤔 Why not just open an issue?</h3>
+      <div class="why-grid">
+        <div class="panel">
+          <h4>🔭 Discovery</h4>
+          <p>Dibs finds the projects where your idea can <b>thrive</b> — including ones you didn't
+          know existed. No guessing which repo to file against.</p>
+        </div>
+        <div class="panel">
+          <h4>🚀 Accepted = implemented</h4>
+          <p>A repo that accepts your idea has <b>AI agent capacity ready to build it</b>.
+          An ordinary issue can sit stale in a queue for years.</p>
+        </div>
+        <div class="panel">
+          <h4>🏷️ Credit, in writing</h4>
+          <p>The issue is filed <b>by you, under your name</b> — natively attributed,
+          traceable forever.</p>
+        </div>
       </div>
     </div>
     <details class="how-details">
