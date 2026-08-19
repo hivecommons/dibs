@@ -24,7 +24,8 @@ type API struct {
 	Registry *registry.Registry
 }
 
-// Register mounts the API routes onto mux under basePath (e.g. "/ideas").
+// Register mounts the API routes onto mux under basePath — "" for the root,
+// or a normalized "/prefix" (e.g. "/ideas").
 func (a *API) Register(mux *http.ServeMux, basePath string) {
 	mux.HandleFunc("GET "+basePath+"/api/me", a.handleMe)
 	mux.HandleFunc("GET "+basePath+"/api/ideas", a.handleListIdeas)

@@ -1,5 +1,6 @@
 // Command ideate serves the Ideate marketplace: JSON API + embedded static UI
-// in a single process, under IDEATE_BASE_PATH (default /ideas).
+// in a single process, under IDEATE_BASE_PATH (default "/" — Ideate is served
+// at its own subdomain, idea.kubestellar.io).
 package main
 
 import (
@@ -38,6 +39,14 @@ func envOr(key, def string) string {
 		return v
 	}
 	return def
+}
+
+// displayBasePath renders the normalized base path ("" means root) for logs.
+func displayBasePath(base string) string {
+	if base == "" {
+		return "/"
+	}
+	return base
 }
 
 func main() {
@@ -92,7 +101,7 @@ func main() {
 		Version:  gitHash,
 	})
 
-	log.Printf("ideate %s listening on %s (base path %s, hub %s, data %s)", gitShort, addr, basePath, hubURL, dataDir)
+	log.Printf("ideate %s listening on %s (base path %s, hub %s, data %s)", gitShort, addr, displayBasePath(basePath), hubURL, dataDir)
 	srv := &http.Server{
 		Addr:              addr,
 		Handler:           handler,

@@ -30,7 +30,9 @@ a contribution.
 ## Architecture
 
 Single Go binary (`cmd/ideate`) serving both the JSON API and an embedded
-static UI, designed to be reverse-proxied at `hive.kubestellar.io/ideas`.
+static UI, deployed at its own subdomain: **idea.kubestellar.io**. The base
+path is configurable (`IDEATE_BASE_PATH`), so path-prefixed reverse-proxy
+deployments also work.
 
 | Package | Purpose |
 |---|---|
@@ -44,7 +46,7 @@ static UI, designed to be reverse-proxied at `hive.kubestellar.io/ideas`.
 
 | Env var | Default | Meaning |
 |---|---|---|
-| `IDEATE_BASE_PATH` | `/ideas` | Base path every route/asset is served under |
+| `IDEATE_BASE_PATH` | `/` | Base path every route/asset is served under (set e.g. `/ideas` for path-prefixed proxying) |
 | `IDEATE_ADDR` | `:8080` | Listen address |
 | `HUB_URL` | `https://hive.kubestellar.io` | Hive hub for session validation & repo sync |
 | `DATA_DIR` | `/data` | JSON store directory |
@@ -61,7 +63,7 @@ static UI, designed to be reverse-proxied at `hive.kubestellar.io/ideas`.
 ```sh
 go build ./...
 go test -race -count=1 ./...
-go run ./cmd/ideate            # serves on :8080 under /ideas
+go run ./cmd/ideate            # serves on :8080 at /
 ./ideate --version             # prints the embedded commit
 ```
 

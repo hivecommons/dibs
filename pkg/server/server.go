@@ -1,9 +1,11 @@
 // Package server assembles the Ideate HTTP server: base-path routing, the
 // embedded static UI, health, and the auth-guarded API.
 //
-// Every route lives under a base path (IDEATE_BASE_PATH, default "/ideas")
-// because the service is reverse-proxied at hive.kubestellar.io/ideas. The UI
-// only uses RELATIVE URLs so it needs no base-path templating.
+// Every route lives under a base path (IDEATE_BASE_PATH, default "/") —
+// Ideate is served at its own subdomain, idea.kubestellar.io, so the default
+// is the root; a prefix (e.g. "/ideas") remains fully supported for
+// path-based reverse-proxy deployments. The UI only uses RELATIVE URLs so it
+// needs no base-path templating.
 package server
 
 import (
@@ -17,16 +19,17 @@ import (
 	"github.com/kubestellar/ideate/pkg/store"
 )
 
-// DefaultBasePath is where Ideate is mounted when IDEATE_BASE_PATH is unset.
-const DefaultBasePath = "/ideas"
+// DefaultBasePath is where Ideate is mounted when IDEATE_BASE_PATH is unset:
+// the root, because Ideate lives on its own subdomain (idea.kubestellar.io).
+const DefaultBasePath = "/"
 
 //go:embed static/index.html
 var staticFS embed.FS
 
 // Config assembles a server.
 type Config struct {
-	// BasePath is the URL prefix every route is served under, e.g. "/ideas".
-	// Must start with "/" and not end with "/".
+	// BasePath is the URL prefix every route is served under: "/" (or "")
+	// for the root, or "/prefix" (no trailing slash) for path-based proxying.
 	BasePath string
 	// HubURL is the human-facing hub origin (sign-in interstitial link).
 	HubURL string
@@ -37,13 +40,12 @@ type Config struct {
 	Version string
 }
 
-// NormalizeBasePath coerces a configured base path into the canonical
-// "/prefix" form ("" and "/" both mean the default).
+// NormalizeBasePath coerces a configured base path into canonical form:
+// "" for the root ("", "/", and whitespace all mean root), otherwise
+// "/prefix" with no trailing slash. The "" form is what route registration
+// concatenates with, so root patterns come out as "/healthz", "/api/...".
 func NormalizeBasePath(p string) string {
 	p = strings.TrimSpace(p)
-	if p == "" || p == "/" {
-		return DefaultBasePath
-	}
 	if !strings.HasPrefix(p, "/") {
 		p = "/" + p
 	}
@@ -81,11 +83,14 @@ func New(cfg Config) http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"status":"ok","version":"` + cfg.Version + `"}` + "\n"))
 	})
-	// Bare base path (no trailing slash) → canonical UI URL. Relative asset
-	// and API URLs in the page only resolve correctly under "{base}/".
-	root.HandleFunc("GET "+base, func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, base+"/", http.StatusMovedPermanently)
-	})
+	// With a prefix, the bare base path (no trailing slash) redirects to the
+	// canonical UI URL: relative asset and API URLs in the page only resolve
+	// correctly under "{base}/". At the root there is no bare form.
+	if base != "" {
+		root.HandleFunc("GET "+base, func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, base+"/", http.StatusMovedPermanently)
+		})
+	}
 	root.Handle(base+"/", mw.Wrap(authed))
 	return root
 }

@@ -8,7 +8,7 @@
 //
 //	go run ./hack/fakehub               # listens on :9999
 //	HUB_URL=http://127.0.0.1:9999 DATA_DIR=./data go run ./cmd/ideate
-//	curl -H 'Cookie: hive_hub_user=dev' http://127.0.0.1:8080/ideas/api/me
+//	curl -H 'Cookie: hive_hub_user=dev' http://127.0.0.1:8080/api/me
 package main
 
 import (

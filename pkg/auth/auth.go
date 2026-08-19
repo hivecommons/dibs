@@ -1,10 +1,12 @@
 // Package auth bridges Ideate to the hive hub's session authentication.
 //
-// Ideate has no login of its own. It is reverse-proxied under the hub's
-// domain (hive.kubestellar.io/ideas), so the browser sends the hub session
-// cookie ("hive_hub_user") with every request. This package validates that
-// cookie by calling back to the hub and attaches the resulting identity to
-// the request context.
+// Ideate has no login of its own. It is served at idea.kubestellar.io and
+// relies on the hive hub's session cookie ("hive_hub_user"). For the browser
+// to send that cookie here, the hub must scope it to .kubestellar.io (or
+// Ideate grows its own OAuth flow against the hub) — a deployment follow-up
+// tracked in the Wave 1 PR. This package validates whatever cookie arrives by
+// calling back to the hub and attaches the resulting identity to the request
+// context.
 //
 // Hub contract (see the follow-up note in the Wave 1 PR): the hub exposes
 //

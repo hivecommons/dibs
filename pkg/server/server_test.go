@@ -74,12 +74,13 @@ func decode[T any](t *testing.T, rec *httptest.ResponseRecorder) T {
 	return v
 }
 
-// TestBasePathRouting: every route must work under the configured prefix —
-// both the default /ideas and a non-default one — and NOT at the bare root.
+// TestBasePathRouting: every route must work at the default root base path
+// AND under a configured prefix — and, when prefixed, NOT at the bare root.
 func TestBasePathRouting(t *testing.T) {
-	for _, base := range []string{"/ideas", "/some/other/prefix"} {
-		t.Run(base, func(t *testing.T) {
-			h := newTestServer(t, base)
+	for _, configured := range []string{"/", "/ideas", "/some/other/prefix"} {
+		t.Run(configured, func(t *testing.T) {
+			h := newTestServer(t, configured)
+			base := NormalizeBasePath(configured) // "" at root
 
 			// Health (unauthenticated) with version.
 			rec := doJSON(t, h, "GET", base+"/healthz", "", nil)
@@ -87,10 +88,13 @@ func TestBasePathRouting(t *testing.T) {
 				t.Fatalf("healthz: %d %s", rec.Code, rec.Body.String())
 			}
 
-			// Bare base path redirects to the canonical trailing-slash URL.
-			rec = doJSON(t, h, "GET", base, "", nil)
-			if rec.Code != http.StatusMovedPermanently || rec.Header().Get("Location") != base+"/" {
-				t.Fatalf("bare base: %d loc=%q", rec.Code, rec.Header().Get("Location"))
+			// Bare base path (prefixed deployments only) redirects to the
+			// canonical trailing-slash URL.
+			if base != "" {
+				rec = doJSON(t, h, "GET", base, "", nil)
+				if rec.Code != http.StatusMovedPermanently || rec.Header().Get("Location") != base+"/" {
+					t.Fatalf("bare base: %d loc=%q", rec.Code, rec.Header().Get("Location"))
+				}
 			}
 
 			// UI page, authenticated.
@@ -123,10 +127,12 @@ func TestBasePathRouting(t *testing.T) {
 				t.Fatalf("unauth API: %d ct=%q", rec.Code, rec.Header().Get("Content-Type"))
 			}
 
-			// Nothing is served at the bare root.
-			rec = doJSON(t, h, "GET", "/", "alice-session", nil)
-			if rec.Code != http.StatusNotFound {
-				t.Fatalf("bare root should 404, got %d", rec.Code)
+			// With a prefix, nothing is served at the bare root.
+			if base != "" {
+				rec = doJSON(t, h, "GET", "/", "alice-session", nil)
+				if rec.Code != http.StatusNotFound {
+					t.Fatalf("bare root should 404, got %d", rec.Code)
+				}
 			}
 		})
 	}
@@ -273,8 +279,8 @@ func TestValidationOverAPI(t *testing.T) {
 
 func TestNormalizeBasePath(t *testing.T) {
 	for in, want := range map[string]string{
-		"":        "/ideas",
-		"/":       "/ideas",
+		"":        "", // root
+		"/":       "", // root
 		"/ideas":  "/ideas",
 		"/ideas/": "/ideas",
 		"ideas":   "/ideas",
