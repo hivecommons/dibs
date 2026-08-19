@@ -22,7 +22,7 @@ func newTestRegistry(t *testing.T) (*Registry, string) {
 func sampleRepos() []RepoProfile {
 	return []RepoProfile{
 		{RepoID: "kubestellar/kubestellar", HiveID: "hive-ks", Owner: "alice", Description: "Multi-cluster"},
-		{RepoID: "kubestellar/ideate", HiveID: "hive-ks", Owner: "bob", Description: "Idea marketplace"},
+		{RepoID: "kubestellar/dibs", HiveID: "hive-ks", Owner: "bob", Description: "Idea marketplace"},
 	}
 }
 
@@ -43,11 +43,11 @@ func TestSyncAndList(t *testing.T) {
 
 	// Owner opts in; accepting list now shows it.
 	on := true
-	if _, err := r.ApplyOwnerUpdate("kubestellar/ideate", "bob", OwnerUpdate{AcceptingIdeas: &on}); err != nil {
+	if _, err := r.ApplyOwnerUpdate("kubestellar/dibs", "bob", OwnerUpdate{AcceptingIdeas: &on}); err != nil {
 		t.Fatalf("ApplyOwnerUpdate: %v", err)
 	}
 	accepting := r.List(true)
-	if len(accepting) != 1 || accepting[0].RepoID != "kubestellar/ideate" {
+	if len(accepting) != 1 || accepting[0].RepoID != "kubestellar/dibs" {
 		t.Fatalf("accepting list wrong: %+v", accepting)
 	}
 }
@@ -62,14 +62,14 @@ func TestSyncPreservesLocalEdits(t *testing.T) {
 	on := true
 	topics := []string{"ai", "multicluster"}
 	appetite := "small, well-scoped features"
-	if _, err := r.ApplyOwnerUpdate("kubestellar/ideate", "bob", OwnerUpdate{AcceptingIdeas: &on, Topics: &topics, Appetite: &appetite}); err != nil {
+	if _, err := r.ApplyOwnerUpdate("kubestellar/dibs", "bob", OwnerUpdate{AcceptingIdeas: &on, Topics: &topics, Appetite: &appetite}); err != nil {
 		t.Fatalf("ApplyOwnerUpdate: %v", err)
 	}
 
 	if err := r.Sync(context.Background(), hub); err != nil {
 		t.Fatalf("re-Sync: %v", err)
 	}
-	rp, err := r.Get("kubestellar/ideate")
+	rp, err := r.Get("kubestellar/dibs")
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -85,10 +85,10 @@ func TestOwnerAuthorization(t *testing.T) {
 		t.Fatalf("Merge: %v", err)
 	}
 	on := true
-	if _, err := r.ApplyOwnerUpdate("kubestellar/ideate", "mallory", OwnerUpdate{AcceptingIdeas: &on}); !errors.Is(err, ErrForbidden) {
+	if _, err := r.ApplyOwnerUpdate("kubestellar/dibs", "mallory", OwnerUpdate{AcceptingIdeas: &on}); !errors.Is(err, ErrForbidden) {
 		t.Fatalf("non-owner toggle: want ErrForbidden, got %v", err)
 	}
-	rp, _ := r.Get("kubestellar/ideate")
+	rp, _ := r.Get("kubestellar/dibs")
 	if rp.AcceptingIdeas {
 		t.Fatal("non-owner toggle took effect")
 	}
@@ -103,7 +103,7 @@ func TestPersistenceAcrossReopen(t *testing.T) {
 		t.Fatalf("Merge: %v", err)
 	}
 	on := true
-	if _, err := r.ApplyOwnerUpdate("kubestellar/ideate", "bob", OwnerUpdate{AcceptingIdeas: &on}); err != nil {
+	if _, err := r.ApplyOwnerUpdate("kubestellar/dibs", "bob", OwnerUpdate{AcceptingIdeas: &on}); err != nil {
 		t.Fatalf("ApplyOwnerUpdate: %v", err)
 	}
 
@@ -111,7 +111,7 @@ func TestPersistenceAcrossReopen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reopen: %v", err)
 	}
-	rp, err := r2.Get("kubestellar/ideate")
+	rp, err := r2.Get("kubestellar/dibs")
 	if err != nil {
 		t.Fatalf("Get after reopen: %v", err)
 	}

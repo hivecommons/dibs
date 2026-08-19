@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kubestellar/ideate/pkg/store"
+	"github.com/kubestellar/dibs/pkg/store"
 )
 
 func testIdea() *store.Idea {

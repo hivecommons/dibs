@@ -9,10 +9,10 @@ import (
 	"net/http"
 	"sort"
 
-	"github.com/kubestellar/ideate/pkg/notify"
-	"github.com/kubestellar/ideate/pkg/registry"
-	"github.com/kubestellar/ideate/pkg/settle"
-	"github.com/kubestellar/ideate/pkg/store"
+	"github.com/kubestellar/dibs/pkg/notify"
+	"github.com/kubestellar/dibs/pkg/registry"
+	"github.com/kubestellar/dibs/pkg/settle"
+	"github.com/kubestellar/dibs/pkg/store"
 )
 
 // maxFeedCandidates caps the repo-side candidate feed (LLM cost control).

@@ -1,27 +1,27 @@
-# Requires: DNS record for idea.kubestellar.io → the cluster ingress LB,
+# Requires: DNS record for dibs.kubestellar.io → the cluster ingress LB,
 # and a cert-manager ClusterIssuer named "letsencrypt" (adjust if yours
 # differs).
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: ideate
-  namespace: ideate
+  name: dibs
+  namespace: dibs
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt
 spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - idea.kubestellar.io
-      secretName: ideate-tls
+        - dibs.kubestellar.io
+      secretName: dibs-tls
   rules:
-    - host: idea.kubestellar.io
+    - host: dibs.kubestellar.io
       http:
         paths:
           - path: /
             pathType: Prefix
             backend:
               service:
-                name: ideate
+                name: dibs
                 port:
                   name: http

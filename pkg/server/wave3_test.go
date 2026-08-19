@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kubestellar/ideate/pkg/api"
-	"github.com/kubestellar/ideate/pkg/settle"
-	"github.com/kubestellar/ideate/pkg/store"
+	"github.com/kubestellar/dibs/pkg/api"
+	"github.com/kubestellar/dibs/pkg/settle"
+	"github.com/kubestellar/dibs/pkg/store"
 )
 
 // settleIdea walks an idea through offer → accept → settled so credit-wall
@@ -39,7 +39,7 @@ func TestCreditWallPublic(t *testing.T) {
 	f := newWave2Server(t, &settle.Fake{})
 
 	settled := f.createIdea(t, "bob-session", "Cluster idea", "kubernetes marketplace operators body", "public")
-	issueURL := f.settleIdea(t, "bob-session", "alice-session", "kubestellar/ideate", settled)
+	issueURL := f.settleIdea(t, "bob-session", "alice-session", "kubestellar/dibs", settled)
 
 	// Noise that must NOT appear on the wall: an unsettled public idea and
 	// a private draft.
@@ -59,7 +59,7 @@ func TestCreditWallPublic(t *testing.T) {
 	}
 	c := res.Credits[0]
 	if c.Author != "bob" || c.AuthorDisplay != "Bob B" || c.Title != "Cluster idea" ||
-		c.RepoID != "kubestellar/ideate" || c.IssueURL != issueURL {
+		c.RepoID != "kubestellar/dibs" || c.IssueURL != issueURL {
 		t.Fatalf("credit entry wrong: %+v", c)
 	}
 	if c.TLDR == "" {
@@ -132,7 +132,7 @@ func TestIdeatorStats(t *testing.T) {
 		t.Fatalf("offer: %d %s", rec.Code, rec.Body.String())
 	}
 	settled := f.createIdea(t, "bob-session", "Settled one", "kubernetes operators body", "public")
-	f.settleIdea(t, "bob-session", "alice-session", "kubestellar/ideate", settled)
+	f.settleIdea(t, "bob-session", "alice-session", "kubestellar/dibs", settled)
 
 	if s := stats("bob-session"); s != (api.IdeatorStats{Posted: 3, Offered: 2, Accepted: 1, Settled: 1}) {
 		t.Fatalf("bob stats wrong: %+v", s)

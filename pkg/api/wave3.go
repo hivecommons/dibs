@@ -2,7 +2,7 @@
 //
 // Credit-wall positioning: ideators are a first-class contributor class —
 // the all-contributors spec has had a 💡 "ideas" emoji since 2016 and the
-// academic CRediT taxonomy a "Conceptualization" role; Ideate makes that
+// academic CRediT taxonomy a "Conceptualization" role; Dibs makes that
 // credit machine-readable and public.
 package api
 
@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/kubestellar/ideate/pkg/store"
+	"github.com/kubestellar/dibs/pkg/store"
 )
 
 // CreditEntry is one row on the public credit wall: a settled idea's

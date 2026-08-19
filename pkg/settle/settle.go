@@ -3,7 +3,7 @@
 // full idea text, and an `ideated` label (created if missing).
 //
 // GitHub access is abstracted behind the Client interface with a fake for
-// tests. Production uses a PAT from IDEATE_GITHUB_TOKEN; settling through
+// tests. Production uses a PAT from DIBS_GITHUB_TOKEN; settling through
 // the hive GitHub App instead is a tracked follow-up.
 package settle
 
@@ -19,22 +19,22 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kubestellar/ideate/pkg/store"
+	"github.com/kubestellar/dibs/pkg/store"
 )
 
 // EnvGitHubToken configures the GitHub PAT. Unset disables settlement
 // (accepts still record; the issue is opened once a token is configured
 // and the accept is retried).
-const EnvGitHubToken = "IDEATE_GITHUB_TOKEN"
+const EnvGitHubToken = "DIBS_GITHUB_TOKEN"
 
 // Label is applied to every settled issue.
 const Label = "ideated"
 
-// LabelColor is the amber from the Ideate/hive palette.
+// LabelColor is the amber from the Dibs/hive palette.
 const LabelColor = "f4c75f"
 
 // LabelDescription documents the label on GitHub.
-const LabelDescription = "Idea contributed through Ideate — creators get credit, agents do the work"
+const LabelDescription = "Idea contributed through Dibs — creators get credit, agents do the work"
 
 // ErrNoGitHub means settlement is not configured (no token).
 var ErrNoGitHub = errors.New("settle: no GitHub client configured (set " + EnvGitHubToken + ")")
@@ -60,9 +60,13 @@ type HTTPClient struct {
 	Client  *http.Client
 }
 
-// FromEnv returns an HTTPClient from IDEATE_GITHUB_TOKEN, or nil if unset.
+// FromEnv returns an HTTPClient from DIBS_GITHUB_TOKEN (legacy
+// IDEATE_GITHUB_TOKEN still honored), or nil if unset.
 func FromEnv() *HTTPClient {
 	tok := strings.TrimSpace(os.Getenv(EnvGitHubToken))
+	if tok == "" {
+		tok = strings.TrimSpace(os.Getenv("IDEATE_GITHUB_TOKEN"))
+	}
 	if tok == "" {
 		return nil
 	}
@@ -197,12 +201,12 @@ func IssueBody(idea *store.Idea) string {
 		display = handle
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "> 💡 **Idea by @%s** (%s) via [Ideate](https://idea.kubestellar.io) — creators get credit, agents do the work, projects take the bow.\n\n", handle, display)
+	fmt.Fprintf(&b, "> 💡 **Idea by @%s** (%s) via [Dibs](https://dibs.kubestellar.io) — creators get credit, agents do the work, projects take the bow.\n\n", handle, display)
 	if idea.TLDR != "" {
 		fmt.Fprintf(&b, "**TLDR:** %s\n\n---\n\n", idea.TLDR)
 	}
 	b.WriteString(idea.Body)
-	fmt.Fprintf(&b, "\n\n---\n_Opened automatically by Ideate (idea `%s`)._\n", idea.ID)
+	fmt.Fprintf(&b, "\n\n---\n_Opened automatically by Dibs (idea `%s`)._\n", idea.ID)
 	return b.String()
 }
 

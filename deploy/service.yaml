@@ -1,13 +1,13 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: ideate
-  namespace: ideate
+  name: dibs
+  namespace: dibs
   labels:
-    app: ideate
+    app: dibs
 spec:
   selector:
-    app: ideate
+    app: dibs
   ports:
     - name: http
       port: 80

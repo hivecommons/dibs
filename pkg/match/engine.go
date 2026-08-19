@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kubestellar/ideate/pkg/registry"
-	"github.com/kubestellar/ideate/pkg/store"
+	"github.com/kubestellar/dibs/pkg/registry"
+	"github.com/kubestellar/dibs/pkg/store"
 )
 
 // MaxMatches caps how many candidate repos an idea keeps — LLM cost control.

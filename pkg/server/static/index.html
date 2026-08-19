@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💡</text></svg>">
-<title>Ideate — a marketplace of ideas</title>
+<title>Dibs — a marketplace of ideas</title>
 <style>
 :root {
   --bg: #0d1117; --panel: #1c2128; --panel-2: #22272e; --line: #30363d;
@@ -33,6 +33,7 @@ main { max-width: 900px; margin: 0 auto; padding: 28px 24px 64px; }
 .hero { text-align: center; padding: 48px 0 36px; }
 .hero h1 { font-size: 2rem; margin-bottom: 10px; }
 .hero h1 em { color: var(--amber); font-style: normal; }
+.hero p.tagline { color: var(--amber); font-weight: 800; font-size: 1.05rem; letter-spacing: .01em; margin-bottom: 14px; }
 .hero p.sub { color: var(--muted); font-size: 1.05rem; max-width: 620px; margin: 0 auto 26px; line-height: 1.55; }
 .two-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 24px 0; }
 @media (max-width: 640px) { .two-sides { grid-template-columns: 1fr; } }
@@ -155,7 +156,7 @@ body.anon .landing-extra { display: block; }
 </head>
 <body>
 <header>
-  <div class="logo">💡 Ide<span>ate</span></div>
+  <div class="logo">💡 Di<span>bs</span></div>
   <nav>
     <button data-view="home" class="active">Home</button>
     <button data-view="mine" data-auth>My Ideas</button>
@@ -181,10 +182,12 @@ body.anon .landing-extra { display: block; }
 <section id="view-home" class="view active">
   <div class="hero">
     <h1>The missing <em>contributor layer</em> for the AI-agent era.</h1>
-    <p class="sub">Ideate makes ideators first-class open-source contributors. You bring the insight —
-    a well-formed idea, not code. Hive-managed repositories bring implementation capacity: AI agent
-    swarms hungry for exactly that kind of work. Ideate matches the two, and when a repo accepts your
-    idea it becomes a GitHub issue <b>credited to you</b>, which the agents then build.</p>
+    <p class="tagline">Your idea, your credit, their code.</p>
+    <p class="sub">Dibs makes ideators first-class open-source contributors. Call dibs on an idea —
+    a well-formed write-up, not code — and you bring the insight. Hive-managed repositories bring
+    implementation capacity: AI agent swarms hungry for exactly that kind of work. Dibs matches the
+    two, and when a repo accepts your idea it becomes a GitHub issue <b>credited to you</b>, which
+    the agents then build.</p>
     <span data-auth>
       <button class="pill primary" data-goto="mine">Post an idea</button>
       <button class="pill" data-goto="repos" style="margin-left:8px">My repo wants ideas</button>
@@ -224,7 +227,7 @@ body.anon .landing-extra { display: block; }
   <div class="credit-note">
     Open source has always known ideas are contributions — the all-contributors spec has a 💡
     <b>“ideas”</b> emoji, and academia's CRediT taxonomy credits <b>“Conceptualization”</b> as a
-    first-class role. Ideate makes that credit real and public:
+    first-class role. Dibs makes that credit real and public:
     <b>creators get credit, agents do the work, projects take the bow.</b>
     Every implemented idea traces back to the person who thought of it.
   </div>
@@ -312,11 +315,11 @@ body.anon .landing-extra { display: block; }
 </section>
 </main>
 
-<footer>Ideate · a KubeStellar project · creators get credit, agents do the work, projects take the bow</footer>
+<footer>Dibs · a KubeStellar project · creators get credit, agents do the work, projects take the bow</footer>
 
 <script>
-/* All URLs are RELATIVE so the app works at the root (idea.kubestellar.io)
-   or behind any reverse-proxy prefix (IDEATE_BASE_PATH). */
+/* All URLs are RELATIVE so the app works at the root (dibs.kubestellar.io)
+   or behind any reverse-proxy prefix (DIBS_BASE_PATH). */
 (function () {
   'use strict';
   var editingId = null;

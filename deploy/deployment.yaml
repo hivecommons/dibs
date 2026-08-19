@@ -1,10 +1,10 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ideate
-  namespace: ideate
+  name: dibs
+  namespace: dibs
   labels:
-    app: ideate
+    app: dibs
 spec:
   # Single replica: the JSON file store is single-writer (RWO PVC).
   replicas: 1
@@ -12,11 +12,11 @@ spec:
     type: Recreate
   selector:
     matchLabels:
-      app: ideate
+      app: dibs
   template:
     metadata:
       labels:
-        app: ideate
+        app: dibs
     spec:
       securityContext:
         runAsNonRoot: true
@@ -26,17 +26,17 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
-        - name: ideate
+        - name: dibs
           # Pin to a commit sha in production; latest tracks main.
-          image: ghcr.io/kubestellar/ideate:latest
+          image: ghcr.io/kubestellar/dibs:latest
           ports:
             - name: http
               containerPort: 8080
           envFrom:
             - configMapRef:
-                name: ideate-config
+                name: dibs-config
             - secretRef:
-                name: ideate-secrets
+                name: dibs-secrets
                 optional: true
           volumeMounts:
             - name: data
@@ -67,4 +67,4 @@ spec:
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: ideate-data
+            claimName: dibs-data

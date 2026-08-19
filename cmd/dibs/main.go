@@ -1,6 +1,6 @@
-// Command ideate serves the Ideate marketplace: JSON API + embedded static UI
-// in a single process, under IDEATE_BASE_PATH (default "/" — Ideate is served
-// at its own subdomain, idea.kubestellar.io).
+// Command dibs serves the Dibs marketplace: JSON API + embedded static UI
+// in a single process, under DIBS_BASE_PATH (default "/" — Dibs is served
+// at its own subdomain, dibs.kubestellar.io).
 package main
 
 import (
@@ -10,20 +10,21 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
-	"github.com/kubestellar/ideate/pkg/api"
-	"github.com/kubestellar/ideate/pkg/auth"
-	"github.com/kubestellar/ideate/pkg/match"
-	"github.com/kubestellar/ideate/pkg/notify"
-	"github.com/kubestellar/ideate/pkg/registry"
-	"github.com/kubestellar/ideate/pkg/server"
-	"github.com/kubestellar/ideate/pkg/settle"
-	"github.com/kubestellar/ideate/pkg/store"
+	"github.com/kubestellar/dibs/pkg/api"
+	"github.com/kubestellar/dibs/pkg/auth"
+	"github.com/kubestellar/dibs/pkg/match"
+	"github.com/kubestellar/dibs/pkg/notify"
+	"github.com/kubestellar/dibs/pkg/registry"
+	"github.com/kubestellar/dibs/pkg/server"
+	"github.com/kubestellar/dibs/pkg/settle"
+	"github.com/kubestellar/dibs/pkg/store"
 )
 
 // Stamped at build time via -ldflags (see Dockerfile). The freshness probe
-// reads `ideate --version`, so keep the output format stable.
+// reads `dibs --version`, so keep the output format stable.
 var (
 	gitHash  = "unknown"
 	gitShort = "unknown"
@@ -38,9 +39,16 @@ const (
 	hubSyncTimeout       = 30 * time.Second
 )
 
+// envOr reads key, honoring the legacy IDEATE_-prefixed name (the product's
+// pre-rename env prefix) as a fallback before the default.
 func envOr(key, def string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
+	}
+	if after, ok := strings.CutPrefix(key, "DIBS_"); ok {
+		if v := os.Getenv("IDEATE_" + after); v != "" {
+			return v
+		}
 	}
 	return def
 }
@@ -57,12 +65,12 @@ func main() {
 	showVersion := flag.Bool("version", false, "print the embedded commit and exit")
 	flag.Parse()
 	if *showVersion {
-		fmt.Printf("ideate %s (%s)\n", gitShort, gitHash)
+		fmt.Printf("dibs %s (%s)\n", gitShort, gitHash)
 		return
 	}
 
-	addr := envOr("IDEATE_ADDR", defaultAddr)
-	basePath := server.NormalizeBasePath(envOr("IDEATE_BASE_PATH", server.DefaultBasePath))
+	addr := envOr("DIBS_ADDR", defaultAddr)
+	basePath := server.NormalizeBasePath(envOr("DIBS_BASE_PATH", server.DefaultBasePath))
 	hubURL := envOr("HUB_URL", defaultHubURL)
 	dataDir := envOr("DATA_DIR", defaultDataDir)
 
@@ -80,8 +88,8 @@ func main() {
 		log.Fatalf("opening notification store: %v", err)
 	}
 
-	// Match engine: LLM via hive's litellm gateway when IDEATE_LLM_BASE_URL
-	// is set, deterministic keyword fallback otherwise — Ideate fully works
+	// Match engine: LLM via hive's litellm gateway when DIBS_LLM_BASE_URL
+	// is set, deterministic keyword fallback otherwise — Dibs fully works
 	// without a gateway.
 	llm := match.LLMFromEnv()
 	if llm != nil {
@@ -91,7 +99,7 @@ func main() {
 	}
 	engine := &match.Engine{Store: st, Registry: reg, LLM: llm, Notifier: &api.MatchNotifier{Notify: notifications}}
 
-	// Settlement: credited GitHub issues via IDEATE_GITHUB_TOKEN. The hive
+	// Settlement: credited GitHub issues via DIBS_GITHUB_TOKEN. The hive
 	// GitHub App is the tracked follow-up.
 	settler := &settle.Settler{}
 	if gh := settle.FromEnv(); gh != nil {
@@ -134,7 +142,7 @@ func main() {
 		Version:  gitHash,
 	})
 
-	log.Printf("ideate %s listening on %s (base path %s, hub %s, data %s)", gitShort, addr, displayBasePath(basePath), hubURL, dataDir)
+	log.Printf("dibs %s listening on %s (base path %s, hub %s, data %s)", gitShort, addr, displayBasePath(basePath), hubURL, dataDir)
 	srv := &http.Server{
 		Addr:              addr,
 		Handler:           handler,

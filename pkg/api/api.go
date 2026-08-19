@@ -1,4 +1,4 @@
-// Package api implements the Ideate JSON API: author-scoped idea CRUD and
+// Package api implements the Dibs JSON API: author-scoped idea CRUD and
 // the repo-registry endpoints. All handlers assume auth.Middleware has run
 // and an identity is on the context.
 package api
@@ -10,12 +10,12 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/kubestellar/ideate/pkg/auth"
-	"github.com/kubestellar/ideate/pkg/match"
-	"github.com/kubestellar/ideate/pkg/notify"
-	"github.com/kubestellar/ideate/pkg/registry"
-	"github.com/kubestellar/ideate/pkg/settle"
-	"github.com/kubestellar/ideate/pkg/store"
+	"github.com/kubestellar/dibs/pkg/auth"
+	"github.com/kubestellar/dibs/pkg/match"
+	"github.com/kubestellar/dibs/pkg/notify"
+	"github.com/kubestellar/dibs/pkg/registry"
+	"github.com/kubestellar/dibs/pkg/settle"
+	"github.com/kubestellar/dibs/pkg/store"
 )
 
 // timeNow is stubbed in tests.

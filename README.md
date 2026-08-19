@@ -1,11 +1,13 @@
-# Ideate — a marketplace of ideas
+# Dibs — a marketplace of ideas
 
-> **The missing contributor layer for the AI-agent era.**
+> **Your idea, your credit, their code.**
+>
+> The missing contributor layer for the AI-agent era.
 
-Ideate is a two-sided marketplace that connects **ideators** — people with
-great ideas but no time, tooling, or inclination to write code — with
-**hive-managed repositories** whose AI agent swarms are hungry for well-formed
-work.
+Dibs is a two-sided marketplace that connects **ideators** — people who call
+dibs on ideas: great insight, but no time, tooling, or inclination to write
+code — with **hive-managed repositories** whose AI agent swarms are hungry
+for well-formed work.
 
 1. **Ideators post ideas** — public or private — in plain language / markdown.
 2. **Repos opt in** to receive ideas, declaring topics and appetite.
@@ -20,7 +22,7 @@ researchers, operators, designers, power users — people who know exactly what
 a project needs but will never open a pull request. Open source has also
 always known ideas are contributions — the all-contributors spec has a 💡
 "ideas" emoji, and the academic CRediT taxonomy credits "Conceptualization"
-as a first-class role. Ideate makes that credit real, machine-readable, and
+as a first-class role. Dibs makes that credit real, machine-readable, and
 public.
 
 **Creators get credit. Agents do the work. Projects take the bow.**
@@ -32,9 +34,9 @@ whose idea shipped. An idea is a contribution.
 
 ## Architecture
 
-Single Go binary (`cmd/ideate`) serving both the JSON API and an embedded
-static UI, deployed at its own subdomain: **idea.kubestellar.io**. The base
-path is configurable (`IDEATE_BASE_PATH`), so path-prefixed reverse-proxy
+Single Go binary (`cmd/dibs`) serving both the JSON API and an embedded
+static UI, deployed at its own subdomain: **dibs.kubestellar.io**. The base
+path is configurable (`DIBS_BASE_PATH`), so path-prefixed reverse-proxy
 deployments also work.
 
 | Package | Purpose |
@@ -52,28 +54,31 @@ deployments also work.
 
 | Env var | Default | Meaning |
 |---|---|---|
-| `IDEATE_BASE_PATH` | `/` | Base path every route/asset is served under (set e.g. `/ideas` for path-prefixed proxying) |
-| `IDEATE_ADDR` | `:8080` | Listen address |
+| `DIBS_BASE_PATH` | `/` | Base path every route/asset is served under (set e.g. `/ideas` for path-prefixed proxying) |
+| `DIBS_ADDR` | `:8080` | Listen address |
 | `HUB_URL` | `https://hive.kubestellar.io` | Hive hub for session validation & repo sync |
 | `DATA_DIR` | `/data` | JSON store directory |
 | `REPOS_SEED_FILE` | (unset) | Static JSON seed of repo profiles for dev/demo |
-| `IDEATE_LLM_BASE_URL` | (unset) | OpenAI-compatible gateway (hive litellm), e.g. `http://litellm:4000/v1`. Unset → deterministic keyword matcher |
-| `IDEATE_LLM_API_KEY` | (unset) | Bearer token for the LLM gateway |
-| `IDEATE_LLM_MODEL` | `gpt-4o-mini` | Model name routed by the gateway |
-| `IDEATE_GITHUB_TOKEN` | (unset) | GitHub PAT for opening credited issues on accept. Unset → accepts are recorded, issues deferred |
+| `DIBS_LLM_BASE_URL` | (unset) | OpenAI-compatible gateway (hive litellm), e.g. `http://litellm:4000/v1`. Unset → deterministic keyword matcher |
+| `DIBS_LLM_API_KEY` | (unset) | Bearer token for the LLM gateway |
+| `DIBS_LLM_MODEL` | `gpt-4o-mini` | Model name routed by the gateway |
+| `DIBS_GITHUB_TOKEN` | (unset) | GitHub PAT for opening credited issues on accept. Unset → accepts are recorded, issues deferred |
+
+Legacy `IDEATE_*` names (the pre-rename prefix) are still honored as
+fallbacks for every `DIBS_*` variable.
 
 ### Roadmap
 
 - **Wave 1 (done):** scaffold, hub auth bridge, idea CRUD, repo registry.
 - **Wave 2 (done):** LLM matching + TLDRs, swipe UX ("offer" / "pass"), issue settlement (credited GitHub issues), notifications.
-- **Wave 3 (done):** deployment (GHCR image + [`deploy/` manifests](deploy/README.md) for idea.kubestellar.io), public landing page, public credit wall, ideator profile stats.
+- **Wave 3 (done):** deployment (GHCR image + [`deploy/` manifests](deploy/README.md) for dibs.kubestellar.io), public landing page, public credit wall, ideator profile stats.
 - **Later:** hive GitHub App settlement, cookie-domain/hub-OAuth session sharing, non-hive receptor repos, idea economics.
 
 ## Deployment
 
-Every push to `main` publishes `ghcr.io/kubestellar/ideate` (`latest` +
+Every push to `main` publishes `ghcr.io/kubestellar/dibs` (`latest` +
 commit sha) via `.github/workflows/docker.yml`; the image is distroless and
-runs as non-root. Plain Kubernetes manifests for **idea.kubestellar.io**
+runs as non-root. Plain Kubernetes manifests for **dibs.kubestellar.io**
 (Deployment, Service, cert-manager TLS Ingress, PVC, ConfigMap/Secret) live
 in [`deploy/`](deploy/README.md), including the required DNS record and
 hub-cookie prerequisites.
@@ -94,8 +99,8 @@ get `GET /api/me/stats` (ideas posted / offered / accepted / settled).
 ```sh
 go build ./...
 go test -race -count=1 ./...
-go run ./cmd/ideate            # serves on :8080 at /
-./ideate --version             # prints the embedded commit
+go run ./cmd/dibs            # serves on :8080 at /
+./dibs --version             # prints the embedded commit
 ```
 
 ## License

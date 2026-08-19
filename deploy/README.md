@@ -1,4 +1,4 @@
-# Deploying Ideate at idea.kubestellar.io
+# Deploying Dibs at dibs.kubestellar.io
 
 Plain Kubernetes manifests — no helm. Apply in order (or all at once):
 
@@ -14,40 +14,43 @@ kubectl apply -f deploy/ingress.yaml
 
 ## Prerequisites
 
-1. **DNS**: an `idea.kubestellar.io` A/CNAME record pointing at the cluster's
+1. **DNS**: a `dibs.kubestellar.io` A/CNAME record pointing at the cluster's
    ingress load balancer (same target as `hive.kubestellar.io`).
 2. **cert-manager** with a `letsencrypt` ClusterIssuer (the ingress requests
    the TLS cert via the `cert-manager.io/cluster-issuer` annotation; adjust
    the issuer name in `ingress.yaml` if yours differs).
-3. **Image**: `ghcr.io/kubestellar/ideate` is published automatically by the
+3. **Image**: `ghcr.io/kubestellar/dibs` is published automatically by the
    `docker.yml` workflow on every push to `main` (tags `latest` + commit sha).
    Pin the Deployment to a sha for production.
-4. **Hub session sharing**: Ideate authenticates by validating the hub's
+4. **Hub session sharing**: Dibs authenticates by validating the hub's
    `hive_hub_user` session cookie. For the browser to send it to
-   idea.kubestellar.io, the hub must scope the cookie to `.kubestellar.io`
+   dibs.kubestellar.io, the hub must scope the cookie to `.kubestellar.io`
    (hub-side follow-up).
 
 ## Environment variables
 
 | Variable | Source | Default | Purpose |
 | --- | --- | --- | --- |
-| `IDEATE_ADDR` | ConfigMap | `:8080` | Listen address |
-| `IDEATE_BASE_PATH` | ConfigMap | `/` | URL prefix (root on the subdomain) |
+| `DIBS_ADDR` | ConfigMap | `:8080` | Listen address |
+| `DIBS_BASE_PATH` | ConfigMap | `/` | URL prefix (root on the subdomain) |
 | `HUB_URL` | ConfigMap | `https://hive.kubestellar.io` | Hub origin for auth + registry sync |
 | `DATA_DIR` | ConfigMap | `/data` | JSON store root (backed by the PVC) |
-| `IDEATE_LLM_BASE_URL` | Secret (optional) | unset | litellm gateway; unset ⇒ deterministic fallback matcher |
-| `IDEATE_LLM_API_KEY` | Secret (optional) | unset | Gateway API key |
-| `IDEATE_LLM_MODEL` | Secret (optional) | gateway default | Model name |
-| `IDEATE_GITHUB_TOKEN` | Secret (optional) | unset | Token used to open credited settlement issues; unset ⇒ accepts recorded, issues not opened |
+| `DIBS_LLM_BASE_URL` | Secret (optional) | unset | litellm gateway; unset ⇒ deterministic fallback matcher |
+| `DIBS_LLM_API_KEY` | Secret (optional) | unset | Gateway API key |
+| `DIBS_LLM_MODEL` | Secret (optional) | gateway default | Model name |
+| `DIBS_GITHUB_TOKEN` | Secret (optional) | unset | Token used to open credited settlement issues; unset ⇒ accepts recorded, issues not opened |
 | `REPOS_SEED_FILE` | — (optional) | unset | Static repo-registry seed for dev/demo |
+
+The legacy `IDEATE_*` names (the product's pre-rename prefix) are still
+honored as fallbacks for every `DIBS_*` variable.
 
 Create the secret with real values instead of applying the placeholder:
 
 ```sh
-kubectl -n ideate create secret generic ideate-secrets \
-  --from-literal=IDEATE_GITHUB_TOKEN=ghp_... \
-  --from-literal=IDEATE_LLM_BASE_URL=https://... \
-  --from-literal=IDEATE_LLM_API_KEY=sk-...
+kubectl -n dibs create secret generic dibs-secrets \
+  --from-literal=DIBS_GITHUB_TOKEN=ghp_... \
+  --from-literal=DIBS_LLM_BASE_URL=https://... \
+  --from-literal=DIBS_LLM_API_KEY=sk-...
 ```
 
 ## Notes
