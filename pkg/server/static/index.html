@@ -63,6 +63,7 @@ p.page-sub { color: var(--muted); margin-bottom: 20px; }
 .chip.accepted { color: var(--green); border-color: var(--green); }
 .chip.declined { color: var(--red); border-color: var(--red); }
 .chip.settled { color: var(--green); border-color: var(--green); background: rgba(116,223,154,.08); }
+.chip.issue_launched { color: var(--amber); border-color: var(--amber); }
 .chip.private { color: var(--amber); }
 .chip.public { color: var(--green); }
 .chip.on { color: var(--green); border-color: var(--green); }
@@ -127,6 +128,15 @@ section.view.active { display: block; }
 .deck-progress { text-align: center; color: var(--muted); font-size: .75rem; margin-top: 14px; }
 .ok-banner { background: rgba(116,223,154,.1); border: 1px solid var(--green); color: var(--green); padding: 10px 14px; border-radius: 6px; margin-bottom: 14px; display: none; }
 footer { text-align: center; color: var(--muted); font-size: .74rem; padding: 24px; border-top: 1px solid var(--line); }
+/* ── AI refine panel ── */
+.refine-panel { border: 1px dashed var(--purple); border-radius: var(--radius); padding: 16px 18px; margin-top: 16px; display: none; }
+.refine-panel.open { display: block; }
+.refine-panel h4 { color: var(--purple); font-size: .9rem; margin-bottom: 4px; }
+.refine-panel p.hint { color: var(--muted); font-size: .78rem; margin-bottom: 4px; }
+/* ── launch view ── */
+.launch-url-note { color: var(--muted); font-size: .8rem; line-height: 1.5; margin-top: 10px; }
+.trunc-warn { border-left: 3px solid var(--amber); background: var(--panel-2); padding: 10px 14px; border-radius: 0 var(--radius) var(--radius) 0; color: var(--muted); font-size: .8rem; line-height: 1.5; margin-top: 12px; display: none; }
+.confirm-box { border-top: 1px solid var(--line); margin-top: 20px; padding-top: 16px; }
 /* ── logged-out (landing) mode ── */
 body.anon [data-auth] { display: none !important; }
 #signin { display: none; background: var(--amber); color: #080b0f; font-weight: 700; text-decoration: none; padding: 6px 16px; border-radius: 999px; font-size: .8rem; white-space: nowrap; }
@@ -187,8 +197,8 @@ body.anon .landing-extra { display: block; }
     first-class open-source contributors. Call dibs on an idea —
     a well-formed write-up, not code — and you bring the insight. Hive-managed repositories bring
     implementation capacity: AI agent swarms hungry for exactly that kind of work. Dibs matches the
-    two, and when a repo accepts your idea it becomes a GitHub issue <b>credited to you</b>, which
-    the agents then build.</p>
+    two, and when a repo accepts your idea <b>you file the GitHub issue yourself</b> — under your own
+    GitHub account, natively attributed to you — and the agents build it.</p>
     <span data-auth>
       <button class="pill primary" data-goto="mine">Post an idea</button>
       <button class="pill" data-goto="repos" style="margin-left:8px">My repo wants ideas</button>
@@ -222,9 +232,10 @@ body.anon .landing-extra { display: block; }
       <div class="step"><span class="n">2</span><h4>Match &amp; offer</h4>
         <p>Review your matches and offer the idea to the repos you choose — or let repos discover your
         public ideas in their own feeds. Both sides must say yes.</p></div>
-      <div class="step"><span class="n">3</span><h4>Get credited</h4>
-        <p>On acceptance the idea becomes a GitHub issue attributed to you, labeled <code>ideated</code>.
-        Agents implement it; your name stays on it, forever traceable.</p></div>
+      <div class="step"><span class="n">3</span><h4>File it yourself — with your name on it</h4>
+        <p>On acceptance, Dibs hands you a prefilled GitHub issue — you file it yourself, from your own
+        GitHub account, labeled <code>ideated</code>. Your name is on it natively, forever traceable.
+        We're just the matchmaker.</p></div>
     </div>
   </div>
   <div class="credit-note">
@@ -265,7 +276,21 @@ body.anon .landing-extra { display: block; }
     <div class="form-actions">
       <button type="submit" class="pill primary" id="btn-save">Save draft</button>
       <button type="button" class="pill" id="btn-offer">Save &amp; find matches</button>
+      <button type="button" class="pill" id="btn-refine">✨ Refine with AI</button>
       <button type="button" class="pill" id="btn-cancel">Cancel</button>
+    </div>
+    <div class="refine-panel" id="refine-panel">
+      <h4>✨ AI-refined draft</h4>
+      <p class="hint">A suggestion only — edit it below, then decide. Your original stays untouched
+      until you click “Use this version”.</p>
+      <label for="rf-title">Refined title</label>
+      <input type="text" id="rf-title" maxlength="200">
+      <label for="rf-body">Refined body (markdown)</label>
+      <textarea id="rf-body" class="md"></textarea>
+      <div class="form-actions">
+        <button type="button" class="pill primary" id="btn-refine-use">Use this version</button>
+        <button type="button" class="pill" id="btn-refine-keep">Keep mine</button>
+      </div>
     </div>
   </form>
 </section>
@@ -295,6 +320,39 @@ body.anon .landing-extra { display: block; }
   </div>
   <div id="match-tldr" class="tldr-banner"></div>
   <div class="swipe-stage" id="match-stage"></div>
+</section>
+
+<section id="view-launch" class="view">
+  <div class="toolbar">
+    <div>
+      <h2 class="page-title" id="launch-title">🚀 File the issue</h2>
+      <p class="page-sub" style="margin:0">You file it on GitHub yourself — your account, your name,
+      your credit. We're just the matchmaker.</p>
+    </div>
+    <button class="pill" data-goto="mine">← My ideas</button>
+  </div>
+  <form class="panel" id="launch-form">
+    <label for="l-title">Issue title</label>
+    <input type="text" id="l-title" maxlength="200" required>
+    <label for="l-body">Issue body (markdown — the 🐝 Dibs footer is added automatically)</label>
+    <textarea id="l-body" class="md" required></textarea>
+    <div class="form-actions">
+      <button type="button" class="pill" id="btn-expand">✨ Expand with AI for this repo</button>
+      <button type="submit" class="pill primary" id="btn-launch">🚀 Open GitHub’s prefilled issue form ↗</button>
+    </div>
+    <div class="trunc-warn" id="launch-trunc">⚠️ The draft is too long for a prefilled URL, so GitHub will
+      open with a truncated body. <button type="button" class="pill small" id="btn-copy-body">📋 Copy the full
+      body</button> and paste it over the draft before submitting.</div>
+    <p class="launch-url-note">GitHub opens with the title, body, and the <code>ideated</code> label
+    prefilled. Review, submit — then come back and paste the issue link below.</p>
+    <div class="confirm-box">
+      <label for="l-issue-url">I filed it — here's the link</label>
+      <div class="row" style="display:flex;gap:10px">
+        <input type="text" id="l-issue-url" placeholder="https://github.com/org/repo/issues/123" style="flex:1">
+        <button type="button" class="pill primary" id="btn-confirm">✓ Confirm &amp; claim credit</button>
+      </div>
+    </div>
+  </form>
 </section>
 
 <section id="view-feed" class="view">
@@ -356,7 +414,7 @@ body.anon .landing-extra { display: block; }
   }
 
   /* ── navigation ── */
-  var authViews = { mine: 1, browse: 1, repos: 1, edit: 1, match: 1, feed: 1 };
+  var authViews = { mine: 1, browse: 1, repos: 1, edit: 1, match: 1, feed: 1, launch: 1 };
   function show(view) {
     if (anon && authViews[view]) view = 'home';
     showErr(''); showOk('');
@@ -421,23 +479,30 @@ body.anon .landing-extra { display: block; }
   setInterval(loadNotifs, 60000);
 
   /* ── my ideas ── */
+  var statusLabels = { issue_launched: 'issue launched' };
   function ideaCard(idea, mine) {
     var matchable = idea.status === 'draft' || idea.status === 'offered' || idea.status === 'declined';
+    var launchable = idea.status === 'accepted' || idea.status === 'issue_launched';
     var d = document.createElement('div'); d.className = 'card';
     d.innerHTML =
       '<div class="row"><h4>' + esc(idea.title) + '</h4>' +
-      '<span class="chip ' + esc(idea.status) + '">' + esc(idea.status) + '</span>' +
+      '<span class="chip ' + esc(idea.status) + '">' + esc(statusLabels[idea.status] || idea.status) + '</span>' +
       (mine ? '<span class="chip ' + esc(idea.visibility) + '">' + (idea.visibility === 'private' ? '🔒 private' : '🌐 public') + '</span>' : '') +
       '</div>' +
       (idea.tldr ? '<div class="body-preview" style="font-style:italic">💜 ' + esc(idea.tldr) + '</div>' : '') +
       '<div class="body-preview">' + esc(idea.body.length > 280 ? idea.body.slice(0, 280) + '…' : idea.body) + '</div>' +
       '<div class="meta">by ' + esc(idea.authorDisplay || idea.author) + ' · updated ' + new Date(idea.updatedAt).toLocaleString() + '</div>' +
       (idea.issueURL ? '<div class="meta">🎉 settled: <a href="' + esc(idea.issueURL) + '" target="_blank" rel="noopener">' + esc(idea.issueURL) + '</a></div>' : '') +
+      (mine && launchable ? '<div class="meta">🎉 ' + esc(idea.targetRepo || '') + ' accepted this idea — file the GitHub issue to claim your credit.</div>' : '') +
       (mine ? '<div class="row" style="margin-top:10px">' +
+        (launchable ? '<button class="pill small primary" data-act="launch">' +
+          (idea.status === 'issue_launched' ? '🔗 Confirm the issue link' : '🚀 File the GitHub issue') + '</button>' : '') +
         (matchable ? '<button class="pill small primary" data-act="match">🔥 Find matches</button>' : '') +
         (matchable ? '<button class="pill small" data-act="edit">Edit</button>' : '') +
         '<button class="pill small danger" data-act="del">Delete</button></div>' : '');
     if (mine) {
+      var l = d.querySelector('[data-act=launch]');
+      if (l) l.addEventListener('click', function () { openLaunch(idea); });
       var m = d.querySelector('[data-act=match]');
       if (m) m.addEventListener('click', function () { openMatch(idea); });
       var e = d.querySelector('[data-act=edit]');
@@ -536,6 +601,103 @@ body.anon .landing-extra { display: block; }
     saveIdea(true);
   });
 
+  /* ── ✨ Refine with AI (posting-time): the LLM proposes a structured
+     draft; the USER decides — nothing is overwritten silently. ── */
+  $('btn-refine').addEventListener('click', function () {
+    if (!$('idea-form').reportValidity()) return;
+    var btn = $('btn-refine');
+    btn.disabled = true; btn.textContent = '✨ Refining…';
+    api('POST', 'refine', { title: $('f-title').value, body: $('f-body').value })
+      .then(function (res) {
+        btn.disabled = false; btn.textContent = '✨ Refine with AI';
+        if (!res.refined) {
+          showOk('AI refinement isn\u2019t available right now — your draft is unchanged.');
+          return;
+        }
+        $('rf-title').value = res.title;
+        $('rf-body').value = res.body;
+        $('refine-panel').classList.add('open');
+      })
+      .catch(function (e) {
+        btn.disabled = false; btn.textContent = '✨ Refine with AI';
+        showErr(e.message);
+      });
+  });
+  $('btn-refine-use').addEventListener('click', function () {
+    $('f-title').value = $('rf-title').value;
+    $('f-body').value = $('rf-body').value;
+    $('refine-panel').classList.remove('open');
+    showOk('Refined draft applied — keep editing or save.');
+  });
+  $('btn-refine-keep').addEventListener('click', function () {
+    $('refine-panel').classList.remove('open');
+  });
+
+  /* ── 🚀 launch: file the issue yourself via a prefilled GitHub URL.
+     Dibs never calls the GitHub API here — the issue is created by YOU,
+     under your account, so GitHub natively attributes it to you. ── */
+  var launchIdea = null;
+  var launchFullBody = '';
+  function openLaunch(idea) {
+    launchIdea = idea;
+    launchFullBody = '';
+    show('launch');
+    $('launch-title').textContent = '🚀 File “' + idea.title + '” on ' + (idea.targetRepo || '');
+    $('l-title').value = '💡 ' + idea.title;
+    $('l-body').value = idea.body;
+    $('l-issue-url').value = '';
+    $('launch-trunc').style.display = 'none';
+  }
+  $('btn-expand').addEventListener('click', function () {
+    if (!launchIdea) return;
+    var btn = $('btn-expand');
+    btn.disabled = true; btn.textContent = '✨ Expanding…';
+    api('POST', 'refine', { title: $('l-title').value, body: $('l-body').value, repoID: launchIdea.targetRepo })
+      .then(function (res) {
+        btn.disabled = false; btn.textContent = '✨ Expand with AI for this repo';
+        if (!res.refined) {
+          showOk('AI expansion isn\u2019t available right now — edit the draft by hand.');
+          return;
+        }
+        $('l-title').value = res.title;
+        $('l-body').value = res.body;
+        showOk('✨ Expanded for ' + esc(launchIdea.targetRepo) + ' — edit freely, then open the GitHub form.');
+      })
+      .catch(function (e) {
+        btn.disabled = false; btn.textContent = '✨ Expand with AI for this repo';
+        showErr(e.message);
+      });
+  });
+  $('launch-form').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    if (!launchIdea) return;
+    api('POST', 'ideas/' + launchIdea.id + '/launch', { title: $('l-title').value, body: $('l-body').value })
+      .then(function (res) {
+        launchFullBody = res.fullBody;
+        $('launch-trunc').style.display = res.truncated ? 'block' : 'none';
+        window.open(res.url, '_blank', 'noopener');
+        showOk('GitHub opened in a new tab — submit the issue there, then paste its link below.');
+      })
+      .catch(function (e) { showErr(e.message); });
+  });
+  $('btn-copy-body').addEventListener('click', function () {
+    var text = launchFullBody || $('l-body').value;
+    navigator.clipboard.writeText(text).then(function () {
+      showOk('Full issue body copied — paste it over the truncated draft on GitHub.');
+    }, function () { showErr('Copy failed — select the body text manually.'); });
+  });
+  $('btn-confirm').addEventListener('click', function () {
+    if (!launchIdea) return;
+    var url = $('l-issue-url').value.trim();
+    if (!url) { showErr('Paste the GitHub issue link first.'); return; }
+    api('POST', 'ideas/' + launchIdea.id + '/confirm-issue', { issueURL: url })
+      .then(function () {
+        show('mine');
+        showOk('🎉 Settled! Your idea is now a GitHub issue with your name on it — welcome to the credit wall.');
+      })
+      .catch(function (e) { showErr(e.message); });
+  });
+
   /* ── swipe deck (shared by both directions) ── */
   function renderDeck(stage, items, renderCard, emptyMsg) {
     var i = 0;
@@ -612,6 +774,8 @@ body.anon .landing-extra { display: block; }
         showOk('🎉 Idea accepted and settled — credited issue opened: <a href="' + esc(res.issueURL) + '" target="_blank" rel="noopener">' + esc(res.issueURL) + '</a>');
       } else if (res && res.warning) {
         showOk('✅ ' + esc(res.warning));
+      } else if (res && res.result === 'accepted') {
+        showOk('✅ Accepted — the ideator will file the credited GitHub issue themselves (their name goes on it).');
       }
       return res;
     });
@@ -637,7 +801,7 @@ body.anon .landing-extra { display: block; }
         var d = document.createElement('div'); d.className = 'card';
         d.innerHTML = feedIdeaHTML(v) +
           '<div class="row" style="margin-top:10px">' +
-          '<button class="pill small primary" data-act="accept">✓ Accept — open credited issue</button>' +
+          '<button class="pill small primary" data-act="accept">✓ Accept idea</button>' +
           '<button class="pill small danger" data-act="decline">✕ Decline</button></div>';
         d.querySelector('[data-act=accept]').addEventListener('click', function () {
           decide(repo.repoID, v.idea.id, 'accept').then(function () { openFeed(repo); }).catch(function (e) { showErr(e.message); });

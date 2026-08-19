@@ -24,16 +24,22 @@ const (
 
 // Status values for an idea's lifecycle state machine:
 //
-//	draft ──offer──▶ offered ──accept──▶ accepted ──issue──▶ settled
-//	  │                 │
+//	draft ──offer──▶ offered ──accept──▶ accepted ──launch──▶ issue_launched ──confirm──▶ settled
+//	  │                 │                    └────────────direct confirm──────────────────────▲
 //	  │                 └──decline──▶ declined ──re-offer──▶ offered
 //	  └──direct accept (public ideas only)──▶ accepted
+//
+// issue_launched means the ideator opened GitHub's prefilled new-issue form
+// (Dibs is just the matchmaker — the ideator files the issue with their own
+// account); settled means they confirmed the filed issue's URL. The direct
+// accepted → settled edge remains for the legacy token-based settlement.
 const (
-	StatusDraft    = "draft"
-	StatusOffered  = "offered"
-	StatusAccepted = "accepted"
-	StatusDeclined = "declined"
-	StatusSettled  = "settled"
+	StatusDraft         = "draft"
+	StatusOffered       = "offered"
+	StatusAccepted      = "accepted"
+	StatusDeclined      = "declined"
+	StatusIssueLaunched = "issue_launched"
+	StatusSettled       = "settled"
 )
 
 // CanTransition reports whether the idea state machine allows from→to.
@@ -46,6 +52,8 @@ func CanTransition(from, to string) bool {
 	case StatusDeclined:
 		return to == StatusOffered
 	case StatusAccepted:
+		return to == StatusIssueLaunched || to == StatusSettled
+	case StatusIssueLaunched:
 		return to == StatusSettled
 	default:
 		return false
@@ -157,7 +165,7 @@ func Validate(idea *Idea) error {
 		return &ValidationError{`visibility must be "public" or "private"`}
 	}
 	switch idea.Status {
-	case StatusDraft, StatusOffered, StatusAccepted, StatusDeclined, StatusSettled:
+	case StatusDraft, StatusOffered, StatusAccepted, StatusDeclined, StatusIssueLaunched, StatusSettled:
 	default:
 		return &ValidationError{"invalid status"}
 	}

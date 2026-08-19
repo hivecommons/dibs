@@ -1,17 +1,17 @@
-// Wave-2 API: matching, offers, the repo-side feed, decisions (with
-// settlement to a credited GitHub issue), and the notification bell.
+// Wave-2 API: matching, offers, the repo-side feed, decisions, and the
+// notification bell. Settlement itself moved to the matchmaker URL flow in
+// settlement.go; accept only records the acceptance (plus the demoted
+// legacy token-based settlement).
 package api
 
 import (
 	"context"
-	"errors"
 	"log"
 	"net/http"
 	"sort"
 
 	"github.com/kubestellar/dibs/pkg/notify"
 	"github.com/kubestellar/dibs/pkg/registry"
-	"github.com/kubestellar/dibs/pkg/settle"
 	"github.com/kubestellar/dibs/pkg/store"
 )
 
@@ -333,10 +333,12 @@ func (a *API) handleDecide(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// accept records the acceptance (offered/draft → accepted) and settles it:
-// a credited GitHub issue on the accepting repo. If settlement is not
-// configured or fails, the accept still sticks (status accepted) and the
-// response carries a warning — retryable once a token is configured.
+// accept records the acceptance (offered/draft → accepted). Settlement is
+// the IDEATOR's move from here: Dibs is just the matchmaker, so the default
+// flow hands them a prefilled GitHub new-issue URL (see settlement.go) and
+// they file the issue under their own account. Only in the optional legacy
+// mode (DIBS_GITHUB_TOKEN set → Settler.GitHub non-nil) does Dibs still
+// open the issue server-side.
 func (a *API) accept(w http.ResponseWriter, r *http.Request, idea *store.Idea, rp *registry.RepoProfile, offer *store.Offer) {
 	if offer == nil && idea.Status != store.StatusDraft && idea.Status != store.StatusOffered {
 		writeError(w, http.StatusBadRequest, "idea is not available to accept")
@@ -360,22 +362,37 @@ func (a *API) accept(w http.ResponseWriter, r *http.Request, idea *store.Idea, r
 		writeError(w, status, msg)
 		return
 	}
-	a.notifyAdd(updated.Author, notify.KindAccepted,
-		rp.RepoID+" accepted your idea “"+updated.Title+"”! 🎉", updated.ID, rp.RepoID)
-
-	// Settle: open the credited GitHub issue.
 	if a.Engine != nil {
 		if _, err := a.Engine.EnsureTLDR(r.Context(), updated); err != nil {
-			log.Printf("api: ensuring tldr before settlement: %v", err)
+			log.Printf("api: ensuring tldr after accept: %v", err)
 		}
 	}
+
+	if a.Settler != nil && a.Settler.GitHub != nil {
+		a.legacySettle(w, r, updated, rp)
+		return
+	}
+
+	// Default matchmaker flow: the ideator files the issue themselves.
+	a.notifyAdd(updated.Author, notify.KindAccepted,
+		rp.RepoID+" accepted your idea “"+updated.Title+"”! 🎉 File the GitHub issue from My Ideas to claim the credit.",
+		updated.ID, rp.RepoID)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"result": "accepted",
+		"idea":   updated,
+		"next":   "the ideator files the prefilled GitHub issue themselves and confirms its URL",
+	})
+}
+
+// legacySettle is the demoted token-based settlement: Dibs opens the
+// credited issue itself. Reachable only when DIBS_GITHUB_TOKEN is set.
+func (a *API) legacySettle(w http.ResponseWriter, r *http.Request, updated *store.Idea, rp *registry.RepoProfile) {
+	a.notifyAdd(updated.Author, notify.KindAccepted,
+		rp.RepoID+" accepted your idea “"+updated.Title+"”! 🎉", updated.ID, rp.RepoID)
 	issueURL, err := a.Settler.Settle(r.Context(), updated, rp.RepoID)
 	if err != nil {
 		warning := "accepted, but opening the GitHub issue failed: " + err.Error()
-		if errors.Is(err, settle.ErrNoGitHub) {
-			warning = "accepted; GitHub settlement is not configured (set " + settle.EnvGitHubToken + ")"
-		}
-		log.Printf("api: settlement for %s on %s: %v", updated.ID, rp.RepoID, err)
+		log.Printf("api: legacy settlement for %s on %s: %v", updated.ID, rp.RepoID, err)
 		writeJSON(w, http.StatusOK, map[string]any{"result": "accepted", "idea": updated, "warning": warning})
 		return
 	}

@@ -1,10 +1,15 @@
 // Package settle turns an accepted idea into a credited GitHub issue on the
-// accepting repo: attribution line with the ideator's handle, the TLDR, the
-// full idea text, and an `ideated` label (created if missing).
+// accepting repo. Dibs is just the matchmaker, so the DEFAULT flow (see
+// launch.go) never touches the GitHub API: it builds a prefilled
+// github.com/{org}/{repo}/issues/new URL the ideator opens and files with
+// their own GitHub account — native attribution — then validates the issue
+// URL they paste back to complete settlement.
 //
-// GitHub access is abstracted behind the Client interface with a fake for
-// tests. Production uses a PAT from DIBS_GITHUB_TOKEN; settling through
-// the hive GitHub App instead is a tracked follow-up.
+// The token-based path below (Client/HTTPClient/Settler) is a demoted
+// OPTIONAL LEGACY mode: only when DIBS_GITHUB_TOKEN is set does Dibs open
+// the issue server-side on accept, with an attribution line and the
+// `ideated` label. GitHub access is abstracted behind the Client interface
+// with a fake for tests.
 package settle
 
 import (
@@ -22,9 +27,9 @@ import (
 	"github.com/kubestellar/dibs/pkg/store"
 )
 
-// EnvGitHubToken configures the GitHub PAT. Unset disables settlement
-// (accepts still record; the issue is opened once a token is configured
-// and the accept is retried).
+// EnvGitHubToken configures the GitHub PAT for the LEGACY server-side
+// settlement mode. Unset (the default) means the matchmaker URL flow:
+// the ideator files the prefilled issue themselves.
 const EnvGitHubToken = "DIBS_GITHUB_TOKEN"
 
 // Label is applied to every settled issue.

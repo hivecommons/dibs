@@ -12,8 +12,11 @@ for well-formed work.
 1. **Ideators post ideas** — public or private — in plain language / markdown.
 2. **Repos opt in** to receive ideas, declaring topics and appetite.
 3. **An LLM matches** ideas to repos that want them; both sides must say yes.
-4. On **mutual acceptance**, the idea becomes a credited GitHub issue and the
-   hive's AI agents implement it.
+4. On **mutual acceptance**, Dibs hands the ideator a **prefilled GitHub
+   issue** — they file it themselves, under their own GitHub account, so the
+   issue is natively attributed to them (label `ideated`). The hive's AI
+   agents implement it. Dibs is just the matchmaker: it never files the
+   issue for you.
 
 ## Ideators are first-class contributors
 
@@ -46,8 +49,8 @@ deployments also work.
 | `pkg/store` | Idea model + JSON file store (atomic writes, no external DB), offer/settlement state machine |
 | `pkg/api` | Idea CRUD + matching/offer/feed/decide/notification API (author-scoped, private ideas never leak) |
 | `pkg/registry` | Hive-managed repo profiles + "accepting ideas" opt-in |
-| `pkg/match` | LLM idea↔repo scoring via litellm gateway, cached TLDRs, deterministic keyword fallback |
-| `pkg/settle` | Settlement — credited GitHub issue on accept (`ideated` label) |
+| `pkg/match` | LLM idea↔repo scoring via litellm gateway, cached TLDRs, "✨ Refine with AI" draft refinement, deterministic keyword fallback |
+| `pkg/settle` | Settlement — prefilled GitHub new-issue URL the ideator files themselves (`ideated` label, 🐝 Dibs footer, URL-length budget) + issue-URL confirmation; legacy token mode |
 | `pkg/notify` | In-app notification feed (bell): matches, offers, decisions, issues |
 
 ### Configuration
@@ -62,7 +65,7 @@ deployments also work.
 | `DIBS_LLM_BASE_URL` | (unset) | OpenAI-compatible gateway (hive litellm), e.g. `http://litellm:4000/v1`. Unset → deterministic keyword matcher |
 | `DIBS_LLM_API_KEY` | (unset) | Bearer token for the LLM gateway |
 | `DIBS_LLM_MODEL` | `gpt-4o-mini` | Model name routed by the gateway |
-| `DIBS_GITHUB_TOKEN` | (unset) | GitHub PAT for opening credited issues on accept. Unset → accepts are recorded, issues deferred |
+| `DIBS_GITHUB_TOKEN` | (unset) | **Legacy mode only.** When set, Dibs opens the credited issue server-side on accept. Unset (default), the ideator files a prefilled GitHub issue themselves — native attribution |
 
 Legacy `IDEATE_*` names (the pre-rename prefix) are still honored as
 fallbacks for every `DIBS_*` variable.
@@ -72,7 +75,8 @@ fallbacks for every `DIBS_*` variable.
 - **Wave 1 (done):** scaffold, hub auth bridge, idea CRUD, repo registry.
 - **Wave 2 (done):** LLM matching + TLDRs, swipe UX ("offer" / "pass"), issue settlement (credited GitHub issues), notifications.
 - **Wave 3 (done):** deployment (GHCR image + [`deploy/` manifests](deploy/README.md) for dibs.kubestellar.io), public landing page, public credit wall, ideator profile stats.
-- **Later:** hive GitHub App settlement, cookie-domain/hub-OAuth session sharing, non-hive receptor repos, idea economics.
+- **Wave 4 (done):** matchmaker settlement — the ideator files a prefilled GitHub issue themselves (native attribution, `ideated` label) and confirms the issue URL; LLM-assisted idea refinement on posting and repo-tailored expansion on submission; token-based settlement demoted to legacy.
+- **Later:** cookie-domain/hub-OAuth session sharing, non-hive receptor repos, idea economics.
 
 ## Deployment
 

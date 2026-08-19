@@ -52,6 +52,7 @@ func (a *API) Register(mux *http.ServeMux, basePath string) {
 	mux.HandleFunc("GET "+basePath+"/api/repos", a.handleListRepos)
 	mux.HandleFunc("PUT "+basePath+"/api/repos/{org}/{repo}", a.handleUpdateRepo)
 	a.registerWave2(mux, basePath)
+	a.registerSettlement(mux, basePath)
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

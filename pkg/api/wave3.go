@@ -73,7 +73,7 @@ func (a *API) handleMyStats(w http.ResponseWriter, r *http.Request) {
 		if len(idea.Offers) > 0 || idea.Status != store.StatusDraft {
 			st.Offered++
 		}
-		if idea.Status == store.StatusAccepted || idea.Status == store.StatusSettled {
+		if idea.Status == store.StatusAccepted || idea.Status == store.StatusIssueLaunched || idea.Status == store.StatusSettled {
 			st.Accepted++
 		}
 		if idea.Status == store.StatusSettled {

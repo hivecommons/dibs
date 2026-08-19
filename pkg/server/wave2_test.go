@@ -191,8 +191,9 @@ func TestPrivateIdeaNeverSurfacesBeforeOffer(t *testing.T) {
 	}
 }
 
-// TestOfferAcceptSettleFlow: the happy path end to end — match, offer,
-// accept, credited issue, notifications on both sides.
+// TestOfferAcceptSettleFlow: the LEGACY happy path end to end (a GitHub
+// client is configured, so accept still opens the credited issue
+// server-side) — match, offer, accept, credited issue, notifications.
 func TestOfferAcceptSettleFlow(t *testing.T) {
 	f := newWave2Server(t, &settle.Fake{})
 	idea := f.createIdea(t, "bob-session", "Kubernetes marketplace boost",
@@ -373,7 +374,7 @@ func TestRepoFeedCandidatesAndPass(t *testing.T) {
 }
 
 // TestPublicDirectAccept: a repo owner can accept a public candidate that
-// was never offered (draft → accepted → settled).
+// was never offered (draft → accepted → settled, legacy client configured).
 func TestPublicDirectAccept(t *testing.T) {
 	f := newWave2Server(t, &settle.Fake{})
 	idea := f.createIdea(t, "bob-session", "Take me", "kubernetes marketplace body", "public")
@@ -394,8 +395,9 @@ func TestPublicDirectAccept(t *testing.T) {
 	}
 }
 
-// TestAcceptWithoutGitHub: settlement unconfigured → accept sticks with a
-// warning; no issue, status stays accepted (retryable later).
+// TestAcceptWithoutGitHub: the DEFAULT matchmaker mode (no token) — accept
+// records the acceptance and stops; no issue is opened by Dibs, the ideator
+// files it themselves (see settlement_test.go).
 func TestAcceptWithoutGitHub(t *testing.T) {
 	f := newWave2Server(t, nil) // nil Client — DIBS_GITHUB_TOKEN unset
 	idea := f.createIdea(t, "bob-session", "Tokenless", "kubernetes marketplace body", "public")
@@ -405,12 +407,12 @@ func TestAcceptWithoutGitHub(t *testing.T) {
 		t.Fatalf("accept: %d %s", rec.Code, rec.Body.String())
 	}
 	res := decode[map[string]any](t, rec)
-	if res["result"] != "accepted" || res["warning"] == nil {
-		t.Fatalf("want accepted+warning, got %+v", res)
+	if res["result"] != "accepted" {
+		t.Fatalf("want accepted, got %+v", res)
 	}
 	got, _ := f.store.Get(idea.ID)
-	if got.Status != store.StatusAccepted || got.IssueURL != "" {
-		t.Fatalf("after tokenless accept: %+v", got)
+	if got.Status != store.StatusAccepted || got.IssueURL != "" || got.TargetRepo != "kubestellar/dibs" {
+		t.Fatalf("after matchmaker accept: %+v", got)
 	}
 }
 
