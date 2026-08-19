@@ -43,6 +43,7 @@ type API struct {
 // or a normalized "/prefix" (e.g. "/ideas").
 func (a *API) Register(mux *http.ServeMux, basePath string) {
 	mux.HandleFunc("GET "+basePath+"/api/me", a.handleMe)
+	mux.HandleFunc("GET "+basePath+"/api/me/stats", a.handleMyStats)
 	mux.HandleFunc("GET "+basePath+"/api/ideas", a.handleListIdeas)
 	mux.HandleFunc("POST "+basePath+"/api/ideas", a.handleCreateIdea)
 	mux.HandleFunc("GET "+basePath+"/api/ideas/{id}", a.handleGetIdea)

@@ -9,7 +9,9 @@
 package server
 
 import (
+	"bytes"
 	"embed"
+	"html/template"
 	"net/http"
 	"strings"
 
@@ -70,6 +72,10 @@ func New(cfg Config) http.Handler {
 	if err != nil {
 		panic("server: embedded index.html missing: " + err.Error())
 	}
+	// The page is served to UNAUTHENTICATED visitors too (landing + credit
+	// wall), so it needs the hub origin for its sign-in links; substitute it
+	// into the embedded HTML once at startup.
+	indexHTML = bytes.ReplaceAll(indexHTML, []byte("__HUB_URL__"), []byte(template.HTMLEscapeString(cfg.HubURL)))
 
 	mw := &auth.Middleware{
 		Hub:    cfg.Hub,
@@ -81,14 +87,21 @@ func New(cfg Config) http.Handler {
 
 	// Authenticated routes.
 	authed := http.NewServeMux()
-	(&api.API{Store: cfg.Store, Registry: cfg.Repos, Engine: cfg.Engine, Settler: cfg.Settler, Notify: cfg.Notify}).Register(authed, base)
-	authed.HandleFunc("GET "+base+"/{$}", func(w http.ResponseWriter, r *http.Request) {
+	ideateAPI := &api.API{Store: cfg.Store, Registry: cfg.Repos, Engine: cfg.Engine, Settler: cfg.Settler, Notify: cfg.Notify}
+	ideateAPI.Register(authed, base)
+
+	// Public routes + the auth-guarded rest. The UI page itself is public:
+	// logged-out visitors get the landing pitch + credit wall (the page asks
+	// /api/me and downgrades itself); every data API except the credit wall
+	// stays behind the auth middleware.
+	root := http.NewServeMux()
+	root.HandleFunc("GET "+base+"/{$}", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write(indexHTML)
 	})
-
-	// Public routes + the auth-guarded rest.
-	root := http.NewServeMux()
+	// The credit wall is the public proof-of-flywheel: settled ideas only,
+	// facts already public via the credited GitHub issue.
+	root.HandleFunc("GET "+base+"/api/credits", ideateAPI.HandleCredits)
 	root.HandleFunc("GET "+base+"/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"status":"ok","version":"` + cfg.Version + `"}` + "\n"))

@@ -443,6 +443,25 @@ func (s *Store) ListOfferedTo(repoIDs []string) ([]*Idea, error) {
 	return out, nil
 }
 
+// ListSettled returns every SETTLED idea (any visibility), newest first.
+// Settled ideas power the public credit wall: settlement opened a public
+// GitHub issue, so the idea's existence, title, TLDR, author, and issue URL
+// are already public — the credit wall exposes exactly that and nothing
+// more (never the body, never unsettled ideas).
+func (s *Store) ListSettled() ([]*Idea, error) {
+	all, err := s.list(func(indexEntry) bool { return true })
+	if err != nil {
+		return nil, err
+	}
+	out := []*Idea{}
+	for _, idea := range all {
+		if idea.Status == StatusSettled {
+			out = append(out, idea)
+		}
+	}
+	return out, nil
+}
+
 func (s *Store) list(keep func(indexEntry) bool) ([]*Idea, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
