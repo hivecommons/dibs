@@ -178,6 +178,8 @@ body.anon .landing-extra { display: block; }
 /* ── "why not just open an issue?" comparison ── */
 .why-not { margin: 28px 0; }
 .why-not h3 { text-align: center; font-size: 1.15rem; margin-bottom: 14px; }
+.why-hook { text-align: center; color: var(--muted); max-width: 620px; margin: 0 auto 18px; line-height: 1.6; font-size: 1.02rem; }
+.why-hook b { color: var(--amber); }
 .why-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 @media (max-width: 640px) { .why-grid { grid-template-columns: 1fr; } }
 .why-grid .panel h4 { font-size: .98rem; margin-bottom: 6px; color: var(--amber); }
@@ -303,6 +305,9 @@ details.how-details .how-body { padding: 16px 18px; }
     </div>
     <div class="why-not">
       <h3>🤔 Why not just open an issue?</h3>
+      <p class="why-hook">Tired of filing an issue into an open-source queue — and watching it get
+      <b>ignored, misunderstood, or never implemented at all</b>?<br>
+      What if you could <b>raise the odds your idea gets used</b> — without building it yourself?</p>
       <div class="why-grid">
         <div class="panel">
           <h4>🔭 Discovery</h4>

@@ -97,7 +97,8 @@ func TestLandingPagePublic(t *testing.T) {
 	}
 	body := rec.Body.String()
 	for _, want := range []string{"Your <em>idea</em>, your <em>credit</em>, their code", "Credit wall",
-		"Why not just open an issue?", "Accepted = implemented", "not the hours",
+		"Why not just open an issue?", "never implemented at all", "raise the odds your idea gets used",
+		"Accepted = implemented", "not the hours",
 		"https://hive.kubestellar.io"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("landing page missing %q", want)
