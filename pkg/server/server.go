@@ -105,6 +105,13 @@ func New(cfg Config) http.Handler {
 	// The leaderboard is the credit wall's gamified sibling: aggregate
 	// scores/levels/badges for ideators already public via a settled issue.
 	root.HandleFunc("GET "+base+"/api/leaderboard", dibsAPI.HandleLeaderboard)
+	// The market surfaces power the logged-out landing's exchange look:
+	// ticker tape, live-markets board, and aggregate stats. Public by
+	// design — they expose only public ideas, already-public settled
+	// facts, and aggregate counts (see pkg/api/market.go).
+	root.HandleFunc("GET "+base+"/api/ticker", dibsAPI.HandleTicker)
+	root.HandleFunc("GET "+base+"/api/board", dibsAPI.HandleBoard)
+	root.HandleFunc("GET "+base+"/api/stats", dibsAPI.HandleStats)
 	root.HandleFunc("GET "+base+"/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"status":"ok","version":"` + cfg.Version + `"}` + "\n"))
