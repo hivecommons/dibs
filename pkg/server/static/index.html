@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💡</text></svg>">
+<title>Ideate — a marketplace of ideas</title>
+<style>
+:root {
+  --bg: #0d1117; --panel: #1c2128; --panel-2: #22272e; --line: #30363d;
+  --text: #f6f8fb; --muted: #a8b3c2; --amber: #f4c75f;
+  --green: #74df9a; --blue: #80bfff; --red: #ff7e7e; --purple: #c0a6f0;
+  --radius: 8px;
+  --font-ui: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: var(--bg); color: var(--text); font-family: var(--font-ui); font-size: .9rem; }
+a { color: var(--blue); }
+header { display: flex; align-items: center; gap: 16px; padding: 14px 24px; border-bottom: 1px solid var(--line); background: var(--panel); }
+header .logo { font-weight: 800; font-size: 1.05rem; letter-spacing: .02em; }
+header .logo span { color: var(--amber); }
+nav { display: flex; gap: 8px; flex: 1; }
+nav button {
+  background: transparent; color: var(--muted); border: 1px solid transparent;
+  padding: 6px 14px; border-radius: 999px; cursor: pointer; font: inherit; font-weight: 600;
+}
+nav button:hover { color: var(--text); border-color: var(--line); }
+nav button.active { background: var(--panel-2); color: var(--text); border-color: var(--line); }
+#who { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: .8rem; }
+#who img { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--line); }
+main { max-width: 900px; margin: 0 auto; padding: 28px 24px 64px; }
+.hero { text-align: center; padding: 48px 0 36px; }
+.hero h1 { font-size: 2rem; margin-bottom: 10px; }
+.hero h1 em { color: var(--amber); font-style: normal; }
+.hero p.sub { color: var(--muted); font-size: 1.05rem; max-width: 620px; margin: 0 auto 26px; line-height: 1.55; }
+.two-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 24px 0; }
+@media (max-width: 640px) { .two-sides { grid-template-columns: 1fr; } }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; }
+.panel h3 { font-size: 1rem; margin-bottom: 8px; }
+.panel p { color: var(--muted); line-height: 1.5; }
+.credit-note { border-left: 3px solid var(--amber); background: var(--panel); padding: 14px 18px; border-radius: 0 var(--radius) var(--radius) 0; color: var(--muted); line-height: 1.55; margin-top: 8px; }
+.credit-note b { color: var(--text); }
+.pill {
+  display: inline-block; border: 1px solid var(--line); background: var(--panel-2); color: var(--text);
+  padding: 8px 20px; border-radius: 999px; cursor: pointer; font: inherit; font-weight: 700; text-decoration: none;
+}
+.pill.primary { background: var(--amber); border-color: var(--amber); color: #080b0f; }
+.pill.danger { color: var(--red); }
+.pill.small { padding: 4px 12px; font-size: .78rem; }
+h2.page-title { font-size: 1.25rem; margin-bottom: 4px; }
+p.page-sub { color: var(--muted); margin-bottom: 20px; }
+.toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; margin-bottom: 12px; }
+.card .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.card h4 { font-size: .98rem; flex: 1; }
+.card .meta { color: var(--muted); font-size: .76rem; margin-top: 6px; }
+.card .body-preview { color: var(--muted); margin-top: 8px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+.chip { font-size: .68rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+.chip.draft { color: var(--muted); }
+.chip.offered { color: var(--blue); border-color: var(--blue); }
+.chip.matched { color: var(--purple); border-color: var(--purple); }
+.chip.submitted { color: var(--amber); border-color: var(--amber); }
+.chip.accepted, .chip.implemented { color: var(--green); border-color: var(--green); }
+.chip.rejected { color: var(--red); border-color: var(--red); }
+.chip.private { color: var(--amber); }
+.chip.public { color: var(--green); }
+.chip.on { color: var(--green); border-color: var(--green); }
+.chip.off { color: var(--muted); }
+form label { display: block; font-size: .78rem; color: var(--muted); font-weight: 700; margin: 14px 0 5px; }
+input[type=text], textarea {
+  width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--line);
+  border-radius: 6px; padding: 9px 11px; font: inherit;
+}
+textarea.md { font-family: var(--font-mono); font-size: .82rem; min-height: 220px; resize: vertical; }
+.vis-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.vis-toggle label.opt {
+  display: block; border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px;
+  cursor: pointer; margin: 0; font-weight: 400; color: var(--text);
+}
+.vis-toggle label.opt.selected { border-color: var(--amber); background: var(--panel-2); }
+.vis-toggle label.opt b { display: block; margin-bottom: 4px; }
+.vis-toggle label.opt small { color: var(--muted); line-height: 1.4; display: block; }
+.vis-toggle input { margin-right: 6px; }
+.form-actions { display: flex; gap: 10px; margin-top: 20px; }
+.empty { color: var(--muted); text-align: center; padding: 36px 0; }
+.error-banner { background: rgba(255,126,126,.12); border: 1px solid var(--red); color: var(--red); padding: 10px 14px; border-radius: 6px; margin-bottom: 14px; display: none; }
+.topics { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.topics .t { font-size: .7rem; background: var(--panel-2); border: 1px solid var(--line); color: var(--muted); padding: 2px 9px; border-radius: 999px; }
+.switch { position: relative; width: 40px; height: 22px; flex-shrink: 0; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.switch .track { position: absolute; inset: 0; background: var(--line); border-radius: 999px; transition: .15s; cursor: pointer; }
+.switch .track::before { content: ""; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px; background: var(--muted); border-radius: 50%; transition: .15s; }
+.switch input:checked + .track { background: var(--green); }
+.switch input:checked + .track::before { transform: translateX(18px); background: #080b0f; }
+section.view { display: none; }
+section.view.active { display: block; }
+footer { text-align: center; color: var(--muted); font-size: .74rem; padding: 24px; border-top: 1px solid var(--line); }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">💡 Ide<span>ate</span></div>
+  <nav>
+    <button data-view="home" class="active">Home</button>
+    <button data-view="mine">My Ideas</button>
+    <button data-view="browse">Browse</button>
+    <button data-view="repos">For repos</button>
+  </nav>
+  <div id="who"></div>
+</header>
+
+<main>
+<div id="err" class="error-banner"></div>
+
+<section id="view-home" class="view active">
+  <div class="hero">
+    <h1>Have ideas? <em>Repos need them.</em></h1>
+    <p class="sub">Ideate is a marketplace of ideas. Post yours — an LLM matches it with hive-managed
+    repositories whose AI agents are hungry for well-formed work. On a mutual match, your idea becomes a
+    credited GitHub issue and the agents build it.</p>
+    <button class="pill primary" data-goto="mine">Post an idea</button>
+    <button class="pill" data-goto="repos" style="margin-left:8px">My repo wants ideas</button>
+  </div>
+  <div class="two-sides">
+    <div class="panel">
+      <h3>🧠 For ideators</h3>
+      <p>Researchers, operators, designers, power users — you know exactly what a project needs, even if
+      you'll never open a pull request. Write it down. That's the contribution.</p>
+    </div>
+    <div class="panel">
+      <h3>🐝 For repos</h3>
+      <p>Opt your hive-managed repo in, declare your topics and appetite, and receive matched, well-formed
+      ideas ready for your agent swarm to implement.</p>
+    </div>
+  </div>
+  <div class="credit-note">
+    Ideators are a first-class open-source contributor class here:
+    <b>creators get credit, agents do the work, projects take the bow.</b>
+    Every implemented idea traces back to the person who thought of it.
+  </div>
+</section>
+
+<section id="view-mine" class="view">
+  <div class="toolbar">
+    <div>
+      <h2 class="page-title">My Ideas</h2>
+      <p class="page-sub" style="margin:0">Drafts stay yours. Offer an idea to enter matching.</p>
+    </div>
+    <button class="pill primary" id="btn-new">＋ New idea</button>
+  </div>
+  <div id="mine-list"></div>
+</section>
+
+<section id="view-edit" class="view">
+  <h2 class="page-title" id="edit-title">New idea</h2>
+  <form id="idea-form" class="panel" style="margin-top:14px">
+    <label for="f-title">Title</label>
+    <input type="text" id="f-title" maxlength="200" placeholder="One line that sells the idea" required>
+    <label for="f-body">Body (markdown)</label>
+    <textarea id="f-body" class="md" placeholder="What problem does it solve? Who benefits? What would 'done' look like?" required></textarea>
+    <label>Visibility</label>
+    <div class="vis-toggle" id="f-vis">
+      <label class="opt selected"><input type="radio" name="vis" value="public" checked><b>🌐 Public</b>
+        <small>Visible to every signed-in user and eligible for matching with any opted-in repo. Your name stays on it.</small></label>
+      <label class="opt"><input type="radio" name="vis" value="private"><b>🔒 Private</b>
+        <small>Only you can see it — it never appears in anyone else's listing. Ideal for drafts you're not ready to share.</small></label>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="pill primary" id="btn-save">Save draft</button>
+      <button type="button" class="pill" id="btn-offer">Save &amp; offer</button>
+      <button type="button" class="pill" id="btn-cancel">Cancel</button>
+    </div>
+  </form>
+</section>
+
+<section id="view-browse" class="view">
+  <h2 class="page-title">Browse public ideas</h2>
+  <p class="page-sub">Every public idea from the community. Matching (Wave 2) will pair these with repos.</p>
+  <div id="browse-list"></div>
+</section>
+
+<section id="view-repos" class="view">
+  <h2 class="page-title">For repos</h2>
+  <p class="page-sub">Hive-managed repos opt in to receive ideas. Owners can toggle intake and set topics &amp; appetite.</p>
+  <h3 style="margin:18px 0 10px;font-size:.95rem">My repos</h3>
+  <div id="myrepos-list"></div>
+  <h3 style="margin:26px 0 10px;font-size:.95rem">Repos accepting ideas</h3>
+  <div id="repos-list"></div>
+</section>
+</main>
+
+<footer>Ideate · a KubeStellar project · creators get credit, agents do the work, projects take the bow</footer>
+
+<script>
+/* All URLs are RELATIVE so the app works behind any reverse-proxy prefix
+   (it is served at {IDEATE_BASE_PATH}/, default /ideas/). */
+(function () {
+  'use strict';
+  var editingId = null;
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function showErr(msg) {
+    var e = $('err'); e.textContent = msg; e.style.display = msg ? 'block' : 'none';
+  }
+  function api(method, path, body) {
+    return fetch('api/' + path, {
+      method: method,
+      headers: body ? { 'Content-Type': 'application/json' } : {},
+      body: body ? JSON.stringify(body) : undefined,
+      credentials: 'same-origin'
+    }).then(function (r) {
+      if (r.status === 204) return null;
+      return r.json().then(function (j) {
+        if (!r.ok) throw new Error(j && j.error ? j.error : ('HTTP ' + r.status));
+        return j;
+      });
+    });
+  }
+
+  /* ── navigation ── */
+  function show(view) {
+    showErr('');
+    document.querySelectorAll('section.view').forEach(function (s) { s.classList.remove('active'); });
+    $('view-' + view).classList.add('active');
+    document.querySelectorAll('nav button').forEach(function (b) {
+      b.classList.toggle('active', b.dataset.view === view);
+    });
+    if (view === 'mine') loadMine();
+    if (view === 'browse') loadBrowse();
+    if (view === 'repos') loadRepos();
+  }
+  document.querySelectorAll('nav button').forEach(function (b) {
+    b.addEventListener('click', function () { show(b.dataset.view); });
+  });
+  document.querySelectorAll('[data-goto]').forEach(function (b) {
+    b.addEventListener('click', function () { show(b.dataset.goto); });
+  });
+
+  /* ── identity ── */
+  api('GET', 'me').then(function (me) {
+    var w = $('who');
+    w.innerHTML = (me.avatar_url ? '<img src="' + esc(me.avatar_url) + '" alt="">' : '') +
+      '<span>' + esc(me.display_name || me.username) + '</span>';
+  }).catch(function () { /* interstitial handles unauthenticated pages */ });
+
+  /* ── my ideas ── */
+  function ideaCard(idea, mine) {
+    var d = document.createElement('div'); d.className = 'card';
+    d.innerHTML =
+      '<div class="row"><h4>' + esc(idea.title) + '</h4>' +
+      '<span class="chip ' + esc(idea.status) + '">' + esc(idea.status) + '</span>' +
+      (mine ? '<span class="chip ' + esc(idea.visibility) + '">' + (idea.visibility === 'private' ? '🔒 private' : '🌐 public') + '</span>' : '') +
+      '</div>' +
+      '<div class="body-preview">' + esc(idea.body.length > 280 ? idea.body.slice(0, 280) + '…' : idea.body) + '</div>' +
+      '<div class="meta">by ' + esc(idea.authorDisplay || idea.author) + ' · updated ' + new Date(idea.updatedAt).toLocaleString() + '</div>' +
+      (mine ? '<div class="row" style="margin-top:10px">' +
+        '<button class="pill small" data-act="edit">Edit</button>' +
+        (idea.status === 'draft' ? '<button class="pill small" data-act="offer">Offer</button>' : '') +
+        '<button class="pill small danger" data-act="del">Delete</button></div>' : '');
+    if (mine) {
+      d.querySelector('[data-act=edit]').addEventListener('click', function () { openEdit(idea); });
+      var offer = d.querySelector('[data-act=offer]');
+      if (offer) offer.addEventListener('click', function () {
+        api('PUT', 'ideas/' + idea.id, { title: idea.title, body: idea.body, visibility: idea.visibility, status: 'offered' })
+          .then(loadMine).catch(function (e) { showErr(e.message); });
+      });
+      d.querySelector('[data-act=del]').addEventListener('click', function () {
+        if (!confirm('Delete "' + idea.title + '"?')) return;
+        api('DELETE', 'ideas/' + idea.id).then(loadMine).catch(function (e) { showErr(e.message); });
+      });
+    }
+    return d;
+  }
+  function renderList(el, ideas, mine, emptyMsg) {
+    el.innerHTML = '';
+    if (!ideas.length) { el.innerHTML = '<div class="empty">' + emptyMsg + '</div>'; return; }
+    ideas.forEach(function (i) { el.appendChild(ideaCard(i, mine)); });
+  }
+  function loadMine() {
+    api('GET', 'ideas').then(function (ideas) {
+      renderList($('mine-list'), ideas, true, 'No ideas yet — the world is waiting. Hit “New idea”.');
+    }).catch(function (e) { showErr(e.message); });
+  }
+  function loadBrowse() {
+    api('GET', 'ideas?scope=public').then(function (ideas) {
+      renderList($('browse-list'), ideas, false, 'No public ideas yet. Be the first.');
+    }).catch(function (e) { showErr(e.message); });
+  }
+
+  /* ── create / edit form ── */
+  function setVis(v) {
+    document.querySelectorAll('#f-vis label.opt').forEach(function (l) {
+      var input = l.querySelector('input');
+      input.checked = input.value === v;
+      l.classList.toggle('selected', input.value === v);
+    });
+  }
+  document.querySelectorAll('#f-vis input').forEach(function (i) {
+    i.addEventListener('change', function () { setVis(i.value); });
+  });
+  function openEdit(idea) {
+    editingId = idea ? idea.id : null;
+    $('edit-title').textContent = idea ? 'Edit idea' : 'New idea';
+    $('f-title').value = idea ? idea.title : '';
+    $('f-body').value = idea ? idea.body : '';
+    setVis(idea ? idea.visibility : 'public');
+    show('edit');
+  }
+  $('btn-new').addEventListener('click', function () { openEdit(null); });
+  $('btn-cancel').addEventListener('click', function () { show('mine'); });
+  function saveIdea(status) {
+    var payload = {
+      title: $('f-title').value,
+      body: $('f-body').value,
+      visibility: document.querySelector('#f-vis input:checked').value
+    };
+    if (status) payload.status = status;
+    var p = editingId ? api('PUT', 'ideas/' + editingId, payload) : api('POST', 'ideas', payload);
+    p.then(function () { show('mine'); }).catch(function (e) { showErr(e.message); });
+  }
+  $('idea-form').addEventListener('submit', function (ev) { ev.preventDefault(); saveIdea(null); });
+  $('btn-offer').addEventListener('click', function () {
+    if (!$('idea-form').reportValidity()) return;
+    saveIdea('offered');
+  });
+
+  /* ── repos ── */
+  function repoCard(repo, editable) {
+    var d = document.createElement('div'); d.className = 'card';
+    d.innerHTML =
+      '<div class="row"><h4>' + esc(repo.repoID) + '</h4>' +
+      '<span class="chip ' + (repo.acceptingIdeas ? 'on' : 'off') + '">' + (repo.acceptingIdeas ? 'accepting ideas' : 'not accepting') + '</span>' +
+      (editable ? '<label class="switch"><input type="checkbox"' + (repo.acceptingIdeas ? ' checked' : '') + '><span class="track"></span></label>' : '') +
+      '</div>' +
+      (repo.description ? '<div class="body-preview">' + esc(repo.description) + '</div>' : '') +
+      '<div class="topics">' + (repo.topics || []).map(function (t) { return '<span class="t">' + esc(t) + '</span>'; }).join('') + '</div>' +
+      (repo.appetite ? '<div class="meta">appetite: ' + esc(repo.appetite) + '</div>' : '') +
+      '<div class="meta">hive: ' + esc(repo.hiveID) + ' · owner: ' + esc(repo.owner) + '</div>';
+    if (editable) {
+      d.querySelector('.switch input').addEventListener('change', function (ev) {
+        api('PUT', 'repos/' + repo.repoID, { acceptingIdeas: ev.target.checked })
+          .then(loadRepos).catch(function (e) { showErr(e.message); loadRepos(); });
+      });
+      var editRow = document.createElement('div'); editRow.className = 'row'; editRow.style.marginTop = '10px';
+      editRow.innerHTML =
+        '<input type="text" placeholder="topics (comma-separated)" value="' + esc((repo.topics || []).join(', ')) + '" style="flex:1">' +
+        '<input type="text" placeholder="appetite — what ideas are you hungry for?" value="' + esc(repo.appetite || '') + '" style="flex:2">' +
+        '<button class="pill small">Save</button>';
+      editRow.querySelector('button').addEventListener('click', function () {
+        var topics = editRow.querySelectorAll('input')[0].value.split(',').map(function (t) { return t.trim(); }).filter(Boolean);
+        var appetite = editRow.querySelectorAll('input')[1].value;
+        api('PUT', 'repos/' + repo.repoID, { topics: topics, appetite: appetite })
+          .then(loadRepos).catch(function (e) { showErr(e.message); });
+      });
+      d.appendChild(editRow);
+    }
+    return d;
+  }
+  function loadRepos() {
+    api('GET', 'repos?scope=mine').then(function (repos) {
+      var el = $('myrepos-list'); el.innerHTML = '';
+      if (!repos.length) { el.innerHTML = '<div class="empty">No hive-managed repos owned by you (yet).</div>'; return; }
+      repos.forEach(function (r) { el.appendChild(repoCard(r, true)); });
+    }).catch(function (e) { showErr(e.message); });
+    api('GET', 'repos').then(function (repos) {
+      var el = $('repos-list'); el.innerHTML = '';
+      if (!repos.length) { el.innerHTML = '<div class="empty">No repos accepting ideas yet.</div>'; return; }
+      repos.forEach(function (r) { el.appendChild(repoCard(r, false)); });
+    }).catch(function (e) { showErr(e.message); });
+  }
+})();
+</script>
+</body>
+</html>

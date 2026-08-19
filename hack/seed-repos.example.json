@@ -1,0 +1,20 @@
+[
+  {
+    "repoID": "kubestellar/kubestellar",
+    "hiveID": "hive-ks",
+    "owner": "clubanderson",
+    "description": "Multi-cluster configuration management for edge, multi-cloud, and hybrid cloud",
+    "topics": ["kubernetes", "multicluster", "edge"],
+    "acceptingIdeas": true,
+    "appetite": "operator UX improvements, small well-scoped features"
+  },
+  {
+    "repoID": "kubestellar/ideate",
+    "hiveID": "hive-ks",
+    "owner": "clubanderson",
+    "description": "A marketplace of ideas — Tinder for source repos",
+    "topics": ["marketplace", "ai-agents", "ideas"],
+    "acceptingIdeas": true,
+    "appetite": "anything that makes ideators feel like first-class contributors"
+  }
+]

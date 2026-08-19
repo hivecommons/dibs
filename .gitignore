@@ -1,6 +1,7 @@
 /ideate
 /bin/
 /data/
+.e2e-*
 *.test
 *.out
 .DS_Store
