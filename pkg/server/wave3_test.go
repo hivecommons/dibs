@@ -100,7 +100,8 @@ func TestLandingPagePublic(t *testing.T) {
 		"Why not just open an issue?", "never implemented at all", "raise the odds your idea gets used",
 		"Accepted = implemented", "open-source idea exchange", "How the market works",
 		"Innovators invest ideas", "BACKING OPENS SOON", "put idle tokens to work",
-		"Live markets", "New listings", "Trending",
+		"Repo value index chart", "agent activity (est.)",
+		"Live idea board", "New listings", "Trending",
 		"https://hive.kubestellar.io"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("landing page missing %q", want)

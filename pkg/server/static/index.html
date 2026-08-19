@@ -299,6 +299,55 @@ details.how-details .how-body { padding: 16px 18px; }
 .cap-status.soon { color: var(--blue); border: 1px solid rgba(128,191,255,.5); background: rgba(128,191,255,.07); }
 .backing-teaser { text-align: center; margin: 18px auto 0; color: var(--muted); font-size: .9rem; line-height: 1.6; max-width: 560px; }
 .backing-teaser b { color: var(--text); }
+/* ── 📊 the terminal: repo value-index chart ── */
+.hero.compact { padding: 26px 0 18px; }
+.hero.compact h1 { font-size: 1.8rem; }
+.chart-panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px 12px; margin: 18px 0 0; }
+.chart-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.chart-title-wrap { display: flex; align-items: baseline; gap: 10px; }
+.chart-sym { font-family: var(--font-mono); font-weight: 800; font-size: 1.25rem; color: var(--amber); }
+.chart-repo { color: var(--muted); font-size: .85rem; font-family: var(--font-mono); }
+.chart-quote { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 1.25rem; font-weight: 800; }
+.chart-quote .qd { font-size: .85rem; font-weight: 700; margin-left: 6px; }
+.chart-quote .qd.up { color: var(--green); }
+.chart-quote .qd.down { color: var(--red); }
+.chart-quote .ex { color: var(--muted); font-style: italic; font-size: .72rem; font-weight: 400; margin-left: 8px; }
+.chip-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 4px; }
+.chip-row button { font-family: var(--font-mono); font-size: .74rem; font-weight: 700; letter-spacing: .02em; background: var(--panel-2); border: 1px solid var(--line); color: var(--muted); border-radius: 999px; padding: 3px 11px; cursor: pointer; }
+.chip-row button:hover, .chip-row button:focus-visible { color: var(--text); border-color: var(--amber); }
+.chip-row button[aria-selected="true"] { color: #080b0f; background: var(--amber); border-color: var(--amber); }
+#chart-stage svg { display: block; width: 100%; height: auto; }
+#chart-stage .grid-line { stroke: var(--line); stroke-width: 1; stroke-dasharray: 2 4; }
+#chart-stage .axis-label { fill: var(--muted); font-family: var(--font-mono); font-size: 10px; font-variant-numeric: tabular-nums; }
+#chart-stage .idx-line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+#chart-stage .idx-line.up { stroke: var(--green); }
+#chart-stage .idx-line.down { stroke: var(--red); }
+#chart-stage .idx-line.flat { stroke: var(--amber); }
+#chart-stage .bar-ideas { fill: rgba(244,199,95,.55); }
+#chart-stage .bar-agent { fill: rgba(192,166,240,.6); }
+#chart-stage .quote-box { fill: var(--panel-2); stroke: var(--line); }
+#chart-stage .quote-text { fill: var(--text); font-family: var(--font-mono); font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
+#chart-stage .quote-delta.up { fill: var(--green); }
+#chart-stage .quote-delta.down { fill: var(--red); }
+/* blinking live dot at the last point (reduced-motion → static via the
+   global animation kill below) */
+#chart-stage .live-dot { fill: var(--amber); }
+#chart-stage .live-dot.up { fill: var(--green); }
+#chart-stage .live-dot.down { fill: var(--red); }
+#chart-stage .live-pulse { fill: none; stroke-width: 2; opacity: 0; animation: live-pulse 1.8s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+#chart-stage .live-pulse.up { stroke: var(--green); }
+#chart-stage .live-pulse.down { stroke: var(--red); }
+#chart-stage .live-pulse.flat { stroke: var(--amber); }
+@keyframes live-pulse { 0% { opacity: .8; transform: scale(.4); } 100% { opacity: 0; transform: scale(2.4); } }
+.chart-legend { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.legend-chip { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: .7rem; font-weight: 700; background: transparent; border: 1px solid var(--line); color: var(--muted); border-radius: 999px; padding: 3px 10px; cursor: pointer; }
+.legend-chip .sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.legend-chip .sw-ideas { background: rgba(244,199,95,.8); }
+.legend-chip .sw-agent { background: rgba(192,166,240,.85); }
+.legend-chip:not(.on) { opacity: .45; }
+.legend-chip:hover, .legend-chip:focus-visible { border-color: var(--amber); color: var(--text); }
+.chart-note { color: var(--muted); font-size: .7rem; font-style: italic; margin-left: auto; }
+.chart-empty { color: var(--muted); text-align: center; padding: 40px 12px; font-size: .88rem; }
 /* ── reduced motion: kill every animation & transition ── */
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
@@ -352,16 +401,40 @@ details.how-details .how-body { padding: 16px 18px; }
   </div>
   <!-- Logged out: the landing pitch, exchange-style. -->
   <div class="landing-extra">
-    <div class="hero">
+    <div class="hero compact">
       <h1>Your <em>idea</em>, your <em>credit</em>, their code.</h1>
       <p class="tagline">The open-source idea exchange.</p>
       <p class="sub">Repos are the listed companies. Two kinds of capital move the market:
-      <b>ideas</b> and <b>spare AI tokens</b>. List your idea. Repos bid with AI agent capacity.
-      Shipped ideas pay dividends in credit — the GitHub issue is filed
-      <b>by you, under your name</b>, forever.</p>
+      <b>ideas</b> and <b>spare AI tokens</b>. Shipped ideas pay dividends in credit —
+      the GitHub issue is filed <b>by you, under your name</b>, forever.</p>
       <a class="pill primary" href="__HUB_URL__">Sign in with your Hive Hub account</a>
       <button class="pill" data-goto="credits" style="margin-left:8px">📊 See The Board</button>
-      <div class="mkt-stats" id="mkt-stats" aria-label="Exchange statistics"></div>
+    </div>
+    <!-- 📊 the terminal: derived repo value-index chart -->
+    <div class="chart-panel" aria-label="Repo value index chart">
+      <div class="chart-head">
+        <div class="chart-title-wrap">
+          <span class="chart-sym" id="chart-sym"></span>
+          <span class="chart-repo" id="chart-repo"></span>
+        </div>
+        <div class="chart-quote" id="chart-quote" aria-live="polite"></div>
+      </div>
+      <div class="chip-row" id="chart-chips" role="tablist" aria-label="Listed repos"></div>
+      <div id="chart-stage"></div>
+      <div class="chart-legend" id="chart-legend">
+        <button class="legend-chip on" data-series="ideas" aria-pressed="true"><span class="sw sw-ideas"></span>ideas listed/matched</button>
+        <button class="legend-chip on" data-series="agent" aria-pressed="true"><span class="sw sw-agent"></span>agent activity (est.)</button>
+        <span class="chart-note" id="chart-note">index derived from market activity — offers, bids hit, settlements</span>
+      </div>
+    </div>
+    <div class="mkt-stats" id="mkt-stats" aria-label="Exchange statistics"></div>
+    <div class="markets" aria-label="Live markets">
+      <h3>📈 Live idea board</h3>
+      <p class="mkts-sub">Every public idea on the exchange — phase, listing venue, momentum.</p>
+      <h4 id="bt-head">🔥 Trending</h4>
+      <div class="board" id="board-trending" role="list" aria-labelledby="bt-head"></div>
+      <h4 id="bn-head">🆕 New listings</h4>
+      <div class="board" id="board-new" role="list" aria-labelledby="bn-head"></div>
     </div>
     <div class="how-market" aria-label="How the market works">
       <h3>🏛️ How the market works</h3>
@@ -395,14 +468,6 @@ details.how-details .how-body { padding: 16px 18px; }
       <p class="backing-teaser">📈 <b>Backing opens soon</b> — put idle tokens to work on ideas you
       believe in, before they reset. <a href="__HUB_URL__">Join the board now</a> and be ready on
       day one.</p>
-    </div>
-    <div class="markets" aria-label="Live markets">
-      <h3>📈 Live markets</h3>
-      <p class="mkts-sub">Every public idea on the exchange — phase, listing venue, momentum.</p>
-      <h4 id="bt-head">🔥 Trending</h4>
-      <div class="board" id="board-trending" role="list" aria-labelledby="bt-head"></div>
-      <h4 id="bn-head">🆕 New listings</h4>
-      <div class="board" id="board-new" role="list" aria-labelledby="bn-head"></div>
     </div>
     <div class="why-not">
       <h3>🤔 Why not just open an issue?</h3>
@@ -716,16 +781,181 @@ details.how-details .how-body { padding: 16px 18px; }
   function loadTape() {
     api('GET', 'ticker').then(function (res) {
       var entries = res.ticker || [];
-      var isExample = !entries.length;
+      var repos = res.repos || [];
+      var isExample = !entries.length && !repos.length;
       if (isExample) entries = TAPE_EXAMPLES;
-      var html = entries.map(function (e) { return tapeItemHTML(e, isExample); }).join('');
+      // Repo tickers lead the tape (they're the listed securities), then
+      // idea events.
+      var html = repos.map(function (r) { return repoTapeHTML(r); })
+        .concat(entries.map(function (e) { return tapeItemHTML(e, isExample); })).join('');
       var track = $('tape-track');
       // Two copies make the -50% translate loop seamless; the second copy
       // is decoration only.
       track.innerHTML = '<span>' + html + '</span><span aria-hidden="true">' + html + '</span>';
-      track.style.setProperty('--tape-dur', Math.max(24, entries.length * 6) + 's');
-    }).catch(function () { $('tape-track').innerHTML = ''; });
+      track.style.setProperty('--tape-dur', Math.max(24, (entries.length + repos.length) * 6) + 's');
+      initChart(repos);
+    }).catch(function () { $('tape-track').innerHTML = ''; initChart([]); });
   }
+  function fmtDelta(delta) {
+    var s = Math.abs(delta).toFixed(1);
+    if (delta > 0) return { cls: 'up', text: '▲ +' + s };
+    if (delta < 0) return { cls: 'down', text: '▼ −' + s };
+    return { cls: 'flat', text: '· 0.0' };
+  }
+  function repoTapeHTML(r) {
+    var d = fmtDelta(r.delta);
+    return '<span class="tape-item' + (r.delta > 0 ? ' up' : '') + '">📈 ' +
+      '<span class="tsym">$' + esc(r.symbol) + '</span>' +
+      '<span class="venue">' + r.value.toFixed(1) + '</span> ' +
+      '<span class="' + d.cls + '">' + d.text + '</span></span>';
+  }
+
+  /* ── 📊 the terminal: repo value-index chart ──
+     Inline SVG, no libs. Series come from /api/repos/{org}/{repo}/index —
+     a value index DERIVED from market activity (weights documented server-
+     side in pkg/api/index.go). The "agent activity (est.)" bars are an
+     honest proxy until real token metering exists. */
+  var chartRepos = [];        // repo tickers, most active first
+  var chartCache = {};        // repoID → index payload
+  var chartCurrent = null;    // repoID being shown (null = example mode)
+  var seriesOn = { ideas: true, agent: true };
+  var CHART_EXAMPLE = (function () {
+    // Deterministic fake series, clearly labeled — shown only when no
+    // repos are listed yet.
+    var points = [], bars = [], v = 100;
+    for (var i = 0; i < 30; i++) {
+      var bump = (i % 7 === 3) ? 6 : (i % 5 === 1) ? 2 : 0;
+      v += bump;
+      points.push({ t: 'day ' + (i + 1), value: v });
+      bars.push({ t: 'day ' + (i + 1), ideas: i % 5 === 1 ? 1 : 0, agent: i % 7 === 3 ? 1 : 0 });
+    }
+    return { repoID: 'org/example-repo', symbol: 'EXAMPLE', points: points, bars: bars,
+      current: v, delta: 0, example: true };
+  })();
+  function initChart(repos) {
+    chartRepos = repos;
+    var chips = $('chart-chips');
+    if (!repos.length) {
+      chips.innerHTML = '';
+      renderChart(CHART_EXAMPLE);
+      return;
+    }
+    chips.innerHTML = repos.map(function (r, i) {
+      return '<button role="tab" aria-selected="' + (i === 0) + '" data-repo="' + esc(r.repoID) + '">$' + esc(r.symbol) + '</button>';
+    }).join('');
+    chips.querySelectorAll('button').forEach(function (b) {
+      b.addEventListener('click', function () { showChart(b.dataset.repo); });
+    });
+    showChart(repos[0].repoID); // default: the most active repo
+  }
+  function showChart(repoID) {
+    chartCurrent = repoID;
+    $('chart-chips').querySelectorAll('button').forEach(function (b) {
+      b.setAttribute('aria-selected', String(b.dataset.repo === repoID));
+    });
+    if (chartCache[repoID]) { renderChart(chartCache[repoID]); return; }
+    $('chart-stage').innerHTML = '<div class="chart-empty">Loading the tape…</div>';
+    api('GET', 'repos/' + repoID + '/index').then(function (d) {
+      chartCache[repoID] = d;
+      if (chartCurrent === repoID) renderChart(d);
+    }).catch(function () {
+      $('chart-stage').innerHTML = '<div class="chart-empty">Chart unavailable — markets are warming up.</div>';
+    });
+  }
+  var TREND_COLOR = { up: '#74df9a', down: '#ff7e7e', flat: '#f4c75f' };
+  function renderChart(d) {
+    var trend = d.delta > 0 ? 'up' : d.delta < 0 ? 'down' : 'flat';
+    $('chart-sym').textContent = '$' + d.symbol;
+    $('chart-repo').textContent = d.repoID;
+    var qd = fmtDelta(d.delta);
+    $('chart-quote').innerHTML = d.current.toFixed(1) +
+      '<span class="qd ' + qd.cls + '">' + qd.text + ' today</span>' +
+      (d.example ? '<span class="ex">(example data — no repos listed yet)</span>' : '');
+    $('chart-note').textContent = d.example
+      ? 'example data — real charts appear when repos list on the exchange'
+      : 'index derived from market activity — offers, bids hit, settlements';
+
+    var W = 820, H = 300, L = 46, R = 806;
+    var plotTop = 14, plotBot = 192, barTop = 210, barBot = 278;
+    var pts = d.points, n = pts.length;
+    var min = Infinity, max = -Infinity;
+    pts.forEach(function (p) { if (p.value < min) min = p.value; if (p.value > max) max = p.value; });
+    if (max - min < 4) { max += 2; min -= 2; } // keep flat lines mid-plot
+    var pad = (max - min) * 0.08; min -= pad; max += pad;
+    function x(i) { return L + (R - L) * (n === 1 ? 0.5 : i / (n - 1)); }
+    function y(v) { return plotBot - (plotBot - plotTop) * ((v - min) / (max - min)); }
+
+    var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' +
+      esc('$' + d.symbol + ' value index: current ' + d.current.toFixed(1) + ', today ' + qd.text +
+        (d.example ? ' (example data)' : '')) + '">';
+    svg += '<defs><linearGradient id="cgrad" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0%" stop-color="' + TREND_COLOR[trend] + '" stop-opacity=".28"/>' +
+      '<stop offset="100%" stop-color="' + TREND_COLOR[trend] + '" stop-opacity="0"/></linearGradient></defs>';
+
+    // Horizontal gridlines + tabular y labels.
+    for (var g = 0; g <= 4; g++) {
+      var gv = min + (max - min) * g / 4, gy = y(gv);
+      svg += '<line class="grid-line" x1="' + L + '" y1="' + gy + '" x2="' + R + '" y2="' + gy + '"/>' +
+        '<text class="axis-label" x="' + (L - 6) + '" y="' + (gy + 3) + '" text-anchor="end">' + gv.toFixed(0) + '</text>';
+    }
+    // X labels: first, two mids, last.
+    [0, Math.floor(n / 3), Math.floor(2 * n / 3), n - 1].forEach(function (i) {
+      svg += '<text class="axis-label" x="' + x(i) + '" y="' + (H - 6) + '" text-anchor="middle">' + esc(shortDate(pts[i].t)) + '</text>';
+    });
+
+    // Area + line.
+    var line = pts.map(function (p, i) { return (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(p.value).toFixed(1); }).join('');
+    svg += '<path d="' + line + 'L' + R + ' ' + plotBot + 'L' + L + ' ' + plotBot + 'Z" fill="url(#cgrad)"/>' +
+      '<path class="idx-line ' + trend + '" d="' + line + '"/>';
+
+    // Sub-chart bars: ideas + agent activity, toggleable via the legend.
+    var bmax = 1;
+    d.bars.forEach(function (b) { bmax = Math.max(bmax, b.ideas, b.agent); });
+    var bw = Math.max(2, ((R - L) / n - 4) / 2);
+    d.bars.forEach(function (b, i) {
+      var cx = x(i);
+      if (seriesOn.ideas && b.ideas > 0) {
+        var h1 = (barBot - barTop) * b.ideas / bmax;
+        svg += '<rect class="bar-ideas" x="' + (cx - bw - 1) + '" y="' + (barBot - h1) + '" width="' + bw + '" height="' + h1 + '"><title>' + esc(b.t) + ': ' + b.ideas + ' idea event(s)</title></rect>';
+      }
+      if (seriesOn.agent && b.agent > 0) {
+        var h2 = (barBot - barTop) * b.agent / bmax;
+        svg += '<rect class="bar-agent" x="' + (cx + 1) + '" y="' + (barBot - h2) + '" width="' + bw + '" height="' + h2 + '"><title>' + esc(b.t) + ': ' + b.agent + ' agent event(s) (est.)</title></rect>';
+      }
+    });
+    svg += '<line class="grid-line" x1="' + L + '" y1="' + barBot + '" x2="' + R + '" y2="' + barBot + '"/>';
+
+    // Blinking live dot at the last point + floating quote label.
+    var lx = x(n - 1), ly = y(pts[n - 1].value);
+    svg += '<circle class="live-pulse ' + trend + '" cx="' + lx + '" cy="' + ly + '" r="7"/>' +
+      '<circle class="live-dot ' + trend + '" cx="' + lx + '" cy="' + ly + '" r="4"/>';
+    var label = d.current.toFixed(1), dtext = qd.text;
+    var boxW = 12 + (label.length + dtext.length + 1) * 7.2;
+    var bx = Math.min(lx + 12, R - boxW), by = Math.max(plotTop, ly - 26);
+    svg += '<rect class="quote-box" x="' + bx + '" y="' + by + '" width="' + boxW + '" height="18" rx="4"/>' +
+      '<text class="quote-text" x="' + (bx + 6) + '" y="' + (by + 13) + '">' + label +
+      ' <tspan class="quote-delta ' + trend + '">' + dtext + '</tspan></text>';
+    svg += '</svg>';
+    $('chart-stage').innerHTML = svg;
+  }
+  function shortDate(t) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t);
+    if (!m) return t;
+    var MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return MON[+m[2] - 1] + ' ' + (+m[3]);
+  }
+  // Legend chips toggle each bar series and re-render from cache.
+  $('chart-legend').querySelectorAll('.legend-chip').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var s = b.dataset.series;
+      seriesOn[s] = !seriesOn[s];
+      b.classList.toggle('on', seriesOn[s]);
+      b.setAttribute('aria-pressed', String(seriesOn[s]));
+      var d = chartCurrent ? chartCache[chartCurrent] : CHART_EXAMPLE;
+      if (d) renderChart(d);
+    });
+  });
+
   function loadMktStats() {
     api('GET', 'stats').then(function (s) {
       $('mkt-stats').innerHTML = [
