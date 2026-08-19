@@ -1,7 +1,7 @@
 # Multi-stage build mirroring hive's pattern: the git hash is stamped into
 # the binary via ldflags so `dibs --version` prints the running commit
 # (freshness-probe friendly).
-FROM golang:1.24-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS builder
 RUN apk add --no-cache git
 WORKDIR /src
 
@@ -12,10 +12,11 @@ COPY . .
 # CI passes GIT_HASH explicitly (checkouts are often detached); local builds
 # fall back to the working tree.
 ARG GIT_HASH=unknown
+ARG TARGETOS TARGETARCH
 RUN GH="$GIT_HASH" && \
     if [ "$GH" = "unknown" ] || [ -z "$GH" ]; then GH=$(git rev-parse HEAD 2>/dev/null || echo "unknown"); fi && \
     GS=$(echo "$GH" | cut -c1-7) && \
-    CGO_ENABLED=0 go build -ldflags "-X main.gitHash=${GH} -X main.gitShort=${GS}" -o /dibs ./cmd/dibs
+    CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build -ldflags "-X main.gitHash=${GH} -X main.gitShort=${GS}" -o /dibs ./cmd/dibs
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=builder /dibs /usr/local/bin/dibs
