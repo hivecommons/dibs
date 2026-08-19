@@ -1,0 +1,451 @@
+package server
+
+import (
+	"net/http"
+	"strings"
+	"testing"
+
+	"github.com/kubestellar/ideate/pkg/api"
+	"github.com/kubestellar/ideate/pkg/auth"
+	"github.com/kubestellar/ideate/pkg/match"
+	"github.com/kubestellar/ideate/pkg/notify"
+	"github.com/kubestellar/ideate/pkg/registry"
+	"github.com/kubestellar/ideate/pkg/settle"
+	"github.com/kubestellar/ideate/pkg/store"
+)
+
+// wave2Fixture is a full server with the fallback matcher, a fake GitHub,
+// and notifications. Repos: alice owns kubestellar/ideate, charlie owns
+// org/other — both accepting.
+type wave2Fixture struct {
+	h      http.Handler
+	store  *store.Store
+	github *settle.Fake
+	notify *notify.Store
+}
+
+func newWave2Server(t *testing.T, github settle.Client) *wave2Fixture {
+	t.Helper()
+	dir := t.TempDir()
+	st, err := store.New(dir)
+	if err != nil {
+		t.Fatalf("store.New: %v", err)
+	}
+	reg, err := registry.New(dir)
+	if err != nil {
+		t.Fatalf("registry.New: %v", err)
+	}
+	if err := reg.Merge([]registry.RepoProfile{
+		{RepoID: "kubestellar/ideate", HiveID: "hive-ks", Owner: "alice", AcceptingIdeas: true,
+			Description: "marketplace of kubernetes ideas", Topics: []string{"kubernetes", "marketplace"}},
+		{RepoID: "org/other", HiveID: "hive-o", Owner: "charlie", AcceptingIdeas: true,
+			Description: "unrelated widgets", Topics: []string{"widgets"}},
+	}); err != nil {
+		t.Fatalf("registry.Merge: %v", err)
+	}
+	nt, err := notify.New(dir)
+	if err != nil {
+		t.Fatalf("notify.New: %v", err)
+	}
+	fake, _ := github.(*settle.Fake)
+	f := &wave2Fixture{store: st, github: fake, notify: nt}
+	f.h = New(Config{
+		BasePath: "/",
+		HubURL:   "https://hive.kubestellar.io",
+		Hub: &auth.FakeHub{Sessions: map[string]auth.Identity{
+			"alice-session":   {Username: "alice", DisplayName: "Alice A"},
+			"bob-session":     {Username: "bob", DisplayName: "Bob B"},
+			"charlie-session": {Username: "charlie", DisplayName: "Charlie C"},
+		}},
+		Store:   st,
+		Repos:   reg,
+		Engine:  &match.Engine{Store: st, Registry: reg, Notifier: &api.MatchNotifier{Notify: nt}},
+		Settler: &settle.Settler{GitHub: github},
+		Notify:  nt,
+		Version: "test-hash",
+	})
+	return f
+}
+
+type feedResp struct {
+	Offers []struct {
+		Idea  store.Idea `json:"idea"`
+		Score float64    `json:"score"`
+	} `json:"offers"`
+	Candidates []struct {
+		Idea  store.Idea `json:"idea"`
+		Score float64    `json:"score"`
+	} `json:"candidates"`
+}
+
+func (f *wave2Fixture) createIdea(t *testing.T, session, title, body, visibility string) store.Idea {
+	t.Helper()
+	rec := doJSON(t, f.h, "POST", "/api/ideas", session,
+		map[string]string{"title": title, "body": body, "visibility": visibility})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create idea: %d %s", rec.Code, rec.Body.String())
+	}
+	return decode[store.Idea](t, rec)
+}
+
+func (f *wave2Fixture) feed(t *testing.T, session, repoID string) feedResp {
+	t.Helper()
+	rec := doJSON(t, f.h, "GET", "/api/repos/"+repoID+"/feed", session, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("feed %s: %d %s", repoID, rec.Code, rec.Body.String())
+	}
+	return decode[feedResp](t, rec)
+}
+
+func (f *wave2Fixture) feedContains(fr feedResp, id string) (inOffers, inCandidates bool) {
+	for _, o := range fr.Offers {
+		if o.Idea.ID == id {
+			inOffers = true
+		}
+	}
+	for _, c := range fr.Candidates {
+		if c.Idea.ID == id {
+			inCandidates = true
+		}
+	}
+	return
+}
+
+// TestPrivateIdeaNeverSurfacesBeforeOffer is THE Wave-2 invariant: a private
+// idea must not appear in any feed, match list, or API response to anyone
+// but its author until the author explicitly offers it — and then only to
+// the offered repo's owner.
+func TestPrivateIdeaNeverSurfacesBeforeOffer(t *testing.T) {
+	f := newWave2Server(t, &settle.Fake{})
+	// Bob's private idea, deliberately keyword-loaded to match alice's repo.
+	idea := f.createIdea(t, "bob-session", "Kubernetes marketplace idea",
+		"A kubernetes marketplace of ideas for kubestellar ideate.", "private")
+
+	// 1. Repo owner feeds: nowhere.
+	fr := f.feed(t, "alice-session", "kubestellar/ideate")
+	if o, c := f.feedContains(fr, idea.ID); o || c {
+		t.Fatalf("PRIVATE IDEA LEAKED into alice's feed before offer: offers=%v candidates=%v", o, c)
+	}
+	if len(fr.Candidates) != 0 || len(fr.Offers) != 0 {
+		t.Fatalf("feed should be empty, got %+v", fr)
+	}
+
+	// 2. Direct decide (accept/decline/pass) by a repo owner: 404 — even
+	// existence must not leak.
+	for _, decision := range []string{"accept", "decline", "pass"} {
+		rec := doJSON(t, f.h, "POST", "/api/repos/kubestellar/ideate/decide", "alice-session",
+			map[string]string{"ideaID": idea.ID, "decision": decision})
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("decide %s on unoffered private idea: want 404, got %d %s", decision, rec.Code, rec.Body.String())
+		}
+	}
+
+	// 3. Direct fetch and matches: 404 for non-authors.
+	if rec := doJSON(t, f.h, "GET", "/api/ideas/"+idea.ID, "alice-session", nil); rec.Code != http.StatusNotFound {
+		t.Fatalf("fetch private idea: want 404, got %d", rec.Code)
+	}
+	if rec := doJSON(t, f.h, "GET", "/api/ideas/"+idea.ID+"/matches", "alice-session", nil); rec.Code != http.StatusNotFound {
+		t.Fatalf("matches of private idea: want 404, got %d", rec.Code)
+	}
+
+	// 4. Public browse: absent.
+	rec := doJSON(t, f.h, "GET", "/api/ideas?scope=public", "alice-session", nil)
+	if l := decode[[]store.Idea](t, rec); len(l) != 0 {
+		t.Fatalf("private idea in public browse: %+v", l)
+	}
+
+	// 5. Bob offers it to alice's repo — the explicit reveal.
+	rec = doJSON(t, f.h, "POST", "/api/ideas/"+idea.ID+"/offer", "bob-session",
+		map[string]string{"repoID": "kubestellar/ideate"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("offer: %d %s", rec.Code, rec.Body.String())
+	}
+
+	// Now — and only now — alice sees it, as an OFFER (never a candidate).
+	fr = f.feed(t, "alice-session", "kubestellar/ideate")
+	if o, c := f.feedContains(fr, idea.ID); !o || c {
+		t.Fatalf("after offer: offers=%v candidates=%v (want offer only)", o, c)
+	}
+	// Alice can read it directly now.
+	if rec := doJSON(t, f.h, "GET", "/api/ideas/"+idea.ID, "alice-session", nil); rec.Code != http.StatusOK {
+		t.Fatalf("fetch offered private idea as target owner: %d", rec.Code)
+	}
+
+	// 6. Charlie (owner of a DIFFERENT repo) still sees nothing, anywhere.
+	fr = f.feed(t, "charlie-session", "org/other")
+	if o, c := f.feedContains(fr, idea.ID); o || c {
+		t.Fatal("PRIVATE IDEA LEAKED to a repo it was never offered to")
+	}
+	if rec := doJSON(t, f.h, "GET", "/api/ideas/"+idea.ID, "charlie-session", nil); rec.Code != http.StatusNotFound {
+		t.Fatalf("charlie fetching private idea: want 404, got %d", rec.Code)
+	}
+	rec = doJSON(t, f.h, "POST", "/api/repos/org/other/decide", "charlie-session",
+		map[string]string{"ideaID": idea.ID, "decision": "accept"})
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("charlie accepting private idea offered elsewhere: want 404, got %d %s", rec.Code, rec.Body.String())
+	}
+	// Public browse still clean.
+	rec = doJSON(t, f.h, "GET", "/api/ideas?scope=public", "charlie-session", nil)
+	if l := decode[[]store.Idea](t, rec); len(l) != 0 {
+		t.Fatalf("offered private idea leaked into public browse: %+v", l)
+	}
+}
+
+// TestOfferAcceptSettleFlow: the happy path end to end — match, offer,
+// accept, credited issue, notifications on both sides.
+func TestOfferAcceptSettleFlow(t *testing.T) {
+	f := newWave2Server(t, &settle.Fake{})
+	idea := f.createIdea(t, "bob-session", "Kubernetes marketplace boost",
+		"Improve the kubernetes marketplace matching for ideate.", "public")
+
+	// Ideator side: matches include alice's repo (fallback scorer).
+	rec := doJSON(t, f.h, "GET", "/api/ideas/"+idea.ID+"/matches", "bob-session", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("matches: %d %s", rec.Code, rec.Body.String())
+	}
+	type matchesResp struct {
+		TLDR    string `json:"tldr"`
+		Matches []struct {
+			Repo  registry.RepoProfile `json:"repo"`
+			Score float64              `json:"score"`
+		} `json:"matches"`
+	}
+	mres := decode[matchesResp](t, rec)
+	if mres.TLDR == "" {
+		t.Fatal("expected a cached TLDR")
+	}
+	var found bool
+	for _, m := range mres.Matches {
+		if m.Repo.RepoID == "kubestellar/ideate" && m.Score > 0 {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected a scored match with kubestellar/ideate: %+v", mres.Matches)
+	}
+
+	// Offer → status offered, alice notified.
+	rec = doJSON(t, f.h, "POST", "/api/ideas/"+idea.ID+"/offer", "bob-session",
+		map[string]string{"repoID": "kubestellar/ideate"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("offer: %d %s", rec.Code, rec.Body.String())
+	}
+	if got := decode[store.Idea](t, rec); got.Status != store.StatusOffered || got.OfferTo("kubestellar/ideate") == nil {
+		t.Fatalf("after offer: %+v", got)
+	}
+	// Double-offer rejected.
+	rec = doJSON(t, f.h, "POST", "/api/ideas/"+idea.ID+"/offer", "bob-session",
+		map[string]string{"repoID": "kubestellar/ideate"})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("double offer: want 400, got %d", rec.Code)
+	}
+
+	// Alice accepts → settled with a credited issue.
+	rec = doJSON(t, f.h, "POST", "/api/repos/kubestellar/ideate/decide", "alice-session",
+		map[string]string{"ideaID": idea.ID, "decision": "accept"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("accept: %d %s", rec.Code, rec.Body.String())
+	}
+	res := decode[map[string]any](t, rec)
+	if res["result"] != "settled" || res["issueURL"] == "" {
+		t.Fatalf("accept result: %+v", res)
+	}
+	if len(f.github.Issues) != 1 {
+		t.Fatalf("github issues: %+v", f.github.Issues)
+	}
+	issue := f.github.Issues[0]
+	if issue.RepoID != "kubestellar/ideate" || !strings.Contains(issue.Body, "@bob") ||
+		!strings.Contains(issue.Body, "Bob B") || len(issue.Labels) != 1 || issue.Labels[0] != settle.Label {
+		t.Fatalf("credited issue wrong: %+v", issue)
+	}
+	final, err := f.store.Get(idea.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if final.Status != store.StatusSettled || final.IssueURL == "" || final.TargetRepo != "kubestellar/ideate" {
+		t.Fatalf("final idea: %+v", final)
+	}
+
+	// Notifications: alice got the offer; bob got accepted + issue.
+	aliceKinds := kinds(f.notify.ListByUser("alice", false))
+	if !aliceKinds[notify.KindOffer] {
+		t.Fatalf("alice notifications: %+v", f.notify.ListByUser("alice", false))
+	}
+	bobKinds := kinds(f.notify.ListByUser("bob", false))
+	if !bobKinds[notify.KindAccepted] || !bobKinds[notify.KindIssue] {
+		t.Fatalf("bob notifications: %+v", f.notify.ListByUser("bob", false))
+	}
+}
+
+func kinds(ns []notify.Notification) map[string]bool {
+	out := map[string]bool{}
+	for _, n := range ns {
+		out[n.Kind] = true
+	}
+	return out
+}
+
+// TestDeclineAndReoffer: decline moves the offer and idea to declined,
+// notifies the ideator, and a re-offer is allowed.
+func TestDeclineAndReoffer(t *testing.T) {
+	f := newWave2Server(t, &settle.Fake{})
+	idea := f.createIdea(t, "bob-session", "Meh idea", "Body of the meh idea.", "public")
+	rec := doJSON(t, f.h, "POST", "/api/ideas/"+idea.ID+"/offer", "bob-session",
+		map[string]string{"repoID": "kubestellar/ideate"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("offer: %d", rec.Code)
+	}
+	rec = doJSON(t, f.h, "POST", "/api/repos/kubestellar/ideate/decide", "alice-session",
+		map[string]string{"ideaID": idea.ID, "decision": "decline"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("decline: %d %s", rec.Code, rec.Body.String())
+	}
+	got, _ := f.store.Get(idea.ID)
+	if got.Status != store.StatusDeclined || got.OfferTo("kubestellar/ideate").Status != store.OfferDeclined {
+		t.Fatalf("after decline: %+v", got)
+	}
+	if !kinds(f.notify.ListByUser("bob", false))[notify.KindDeclined] {
+		t.Fatal("bob missing the declined notification")
+	}
+	// No pending offer → nothing settles on GitHub.
+	if len(f.github.Issues) != 0 {
+		t.Fatalf("no issue should exist: %+v", f.github.Issues)
+	}
+	// Re-offer after decline is legal (declined → offered).
+	rec = doJSON(t, f.h, "POST", "/api/ideas/"+idea.ID+"/offer", "bob-session",
+		map[string]string{"repoID": "kubestellar/ideate"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("re-offer: %d %s", rec.Code, rec.Body.String())
+	}
+	got, _ = f.store.Get(idea.ID)
+	if got.Status != store.StatusOffered || got.OfferTo("kubestellar/ideate").Status != store.OfferPending {
+		t.Fatalf("after re-offer: %+v", got)
+	}
+}
+
+// TestRepoFeedCandidatesAndPass: public ideas appear as candidates for repo
+// owners; pass hides them for that repo only; ideator pass hides repos.
+func TestRepoFeedCandidatesAndPass(t *testing.T) {
+	f := newWave2Server(t, &settle.Fake{})
+	idea := f.createIdea(t, "bob-session", "Kubernetes widget marketplace",
+		"kubernetes marketplace widgets for everyone", "public")
+
+	fr := f.feed(t, "alice-session", "kubestellar/ideate")
+	if _, c := f.feedContains(fr, idea.ID); !c {
+		t.Fatalf("public idea missing from candidates: %+v", fr)
+	}
+	// Non-owner cannot read a repo's feed or decide for it.
+	if rec := doJSON(t, f.h, "GET", "/api/repos/kubestellar/ideate/feed", "bob-session", nil); rec.Code != http.StatusForbidden {
+		t.Fatalf("non-owner feed: want 403, got %d", rec.Code)
+	}
+	rec := doJSON(t, f.h, "POST", "/api/repos/kubestellar/ideate/decide", "bob-session",
+		map[string]string{"ideaID": idea.ID, "decision": "pass"})
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("non-owner decide: want 403, got %d", rec.Code)
+	}
+
+	// Owner passes → gone from this repo's candidates, still in charlie's.
+	rec = doJSON(t, f.h, "POST", "/api/repos/kubestellar/ideate/decide", "alice-session",
+		map[string]string{"ideaID": idea.ID, "decision": "pass"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("pass: %d %s", rec.Code, rec.Body.String())
+	}
+	fr = f.feed(t, "alice-session", "kubestellar/ideate")
+	if _, c := f.feedContains(fr, idea.ID); c {
+		t.Fatal("passed idea resurfaced")
+	}
+	fr = f.feed(t, "charlie-session", "org/other")
+	if _, c := f.feedContains(fr, idea.ID); !c {
+		t.Fatal("pass must be scoped to one repo")
+	}
+
+	// Ideator pass: repo disappears from the idea's matches.
+	rec = doJSON(t, f.h, "POST", "/api/ideas/"+idea.ID+"/pass", "bob-session",
+		map[string]string{"repoID": "org/other"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("ideator pass: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = doJSON(t, f.h, "GET", "/api/ideas/"+idea.ID+"/matches", "bob-session", nil)
+	body := rec.Body.String()
+	if strings.Contains(body, "org/other") {
+		t.Fatalf("passed repo still in matches: %s", body)
+	}
+}
+
+// TestPublicDirectAccept: a repo owner can accept a public candidate that
+// was never offered (draft → accepted → settled).
+func TestPublicDirectAccept(t *testing.T) {
+	f := newWave2Server(t, &settle.Fake{})
+	idea := f.createIdea(t, "bob-session", "Take me", "kubernetes marketplace body", "public")
+	rec := doJSON(t, f.h, "POST", "/api/repos/kubestellar/ideate/decide", "alice-session",
+		map[string]string{"ideaID": idea.ID, "decision": "accept"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("direct accept: %d %s", rec.Code, rec.Body.String())
+	}
+	got, _ := f.store.Get(idea.ID)
+	if got.Status != store.StatusSettled || got.IssueURL == "" {
+		t.Fatalf("after direct accept: %+v", got)
+	}
+	// A settled idea cannot be accepted again.
+	rec = doJSON(t, f.h, "POST", "/api/repos/org/other/decide", "charlie-session",
+		map[string]string{"ideaID": idea.ID, "decision": "accept"})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("double accept: want 400, got %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestAcceptWithoutGitHub: settlement unconfigured → accept sticks with a
+// warning; no issue, status stays accepted (retryable later).
+func TestAcceptWithoutGitHub(t *testing.T) {
+	f := newWave2Server(t, nil) // nil Client — IDEATE_GITHUB_TOKEN unset
+	idea := f.createIdea(t, "bob-session", "Tokenless", "kubernetes marketplace body", "public")
+	rec := doJSON(t, f.h, "POST", "/api/repos/kubestellar/ideate/decide", "alice-session",
+		map[string]string{"ideaID": idea.ID, "decision": "accept"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("accept: %d %s", rec.Code, rec.Body.String())
+	}
+	res := decode[map[string]any](t, rec)
+	if res["result"] != "accepted" || res["warning"] == nil {
+		t.Fatalf("want accepted+warning, got %+v", res)
+	}
+	got, _ := f.store.Get(idea.ID)
+	if got.Status != store.StatusAccepted || got.IssueURL != "" {
+		t.Fatalf("after tokenless accept: %+v", got)
+	}
+}
+
+// TestNotificationsAPI: bell feed round-trip with mark-as-read.
+func TestNotificationsAPI(t *testing.T) {
+	f := newWave2Server(t, &settle.Fake{})
+	idea := f.createIdea(t, "bob-session", "Notify me", "kubernetes marketplace body", "public")
+	rec := doJSON(t, f.h, "POST", "/api/ideas/"+idea.ID+"/offer", "bob-session",
+		map[string]string{"repoID": "kubestellar/ideate"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("offer: %d", rec.Code)
+	}
+
+	rec = doJSON(t, f.h, "GET", "/api/notifications", "alice-session", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("notifications: %d", rec.Code)
+	}
+	res := decode[struct {
+		Notifications []notify.Notification `json:"notifications"`
+		Unread        int                   `json:"unread"`
+	}](t, rec)
+	if res.Unread == 0 || len(res.Notifications) == 0 {
+		t.Fatalf("alice should have the offer notification: %+v", res)
+	}
+
+	rec = doJSON(t, f.h, "POST", "/api/notifications/read", "alice-session", map[string]any{"all": true})
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("mark read: %d", rec.Code)
+	}
+	rec = doJSON(t, f.h, "GET", "/api/notifications", "alice-session", nil)
+	res = decode[struct {
+		Notifications []notify.Notification `json:"notifications"`
+		Unread        int                   `json:"unread"`
+	}](t, rec)
+	if res.Unread != 0 {
+		t.Fatalf("unread after mark-all-read: %+v", res)
+	}
+}
