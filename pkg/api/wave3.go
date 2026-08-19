@@ -22,6 +22,7 @@ type CreditEntry struct {
 	Author        string    `json:"author"`
 	AuthorDisplay string    `json:"authorDisplay"`
 	Title         string    `json:"title"`
+	Symbol        string    `json:"symbol,omitempty"`
 	TLDR          string    `json:"tldr,omitempty"`
 	RepoID        string    `json:"repoID"`
 	IssueURL      string    `json:"issueURL"`
@@ -43,6 +44,7 @@ func (a *API) HandleCredits(w http.ResponseWriter, r *http.Request) {
 			Author:        idea.Author,
 			AuthorDisplay: idea.AuthorDisplay,
 			Title:         idea.Title,
+			Symbol:        displaySymbol(idea),
 			TLDR:          idea.TLDR,
 			RepoID:        idea.TargetRepo,
 			IssueURL:      idea.IssueURL,

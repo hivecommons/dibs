@@ -232,6 +232,58 @@ details.how-details .how-body { padding: 16px 18px; }
 .credit-row .what .t { font-weight: 700; }
 .credit-row .what .tldr { color: var(--muted); font-size: .84rem; line-height: 1.45; margin-top: 3px; font-style: italic; }
 .credit-row .where { font-size: .82rem; color: var(--muted); white-space: nowrap; }
+/* ── 📈 market landing: ticker tape ── */
+#tape { border-bottom: 1px solid var(--line); background: var(--panel); overflow: hidden; }
+.tape-viewport { overflow: hidden; white-space: nowrap; }
+.tape-track { display: inline-block; white-space: nowrap; padding: 6px 0; animation: tape-scroll var(--tape-dur, 40s) linear infinite; will-change: transform; }
+#tape:hover .tape-track, #tape:focus-within .tape-track { animation-play-state: paused; }
+@keyframes tape-scroll { to { transform: translateX(-50%); } }
+.tape-item { display: inline-block; margin: 0 22px; font-size: .82rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tape-item .tsym { margin-right: 4px; }
+.tape-item .venue { color: var(--text); }
+.tape-item .ex { color: var(--muted); font-style: italic; font-size: .72rem; }
+@media (prefers-reduced-motion: reduce) {
+  .tape-viewport { overflow-x: auto; }
+  .tape-track { animation: none; }
+}
+/* ── ticker symbol chip ── */
+.tsym { font-family: var(--font-mono); font-weight: 700; font-size: .78rem; color: var(--amber); background: rgba(244,199,95,.09); border: 1px solid rgba(244,199,95,.35); border-radius: 4px; padding: 1px 6px; white-space: nowrap; letter-spacing: .02em; }
+.tape-item.up .tsym { color: var(--green); background: rgba(116,223,154,.09); border-color: rgba(116,223,154,.35); }
+/* ── market stats strip ── */
+.mkt-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; margin: 26px auto 0; max-width: 720px; }
+@media (max-width: 640px) { .mkt-stats { grid-template-columns: repeat(2, 1fr); } }
+.mkt-stats .cell { background: var(--panel); padding: 14px 10px; text-align: center; }
+.mkt-stats .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 1.7rem; font-weight: 800; color: var(--text); }
+.mkt-stats .num .up { color: var(--green); font-size: .95rem; vertical-align: 2px; margin-left: 3px; }
+.mkt-stats .lbl { font-size: .68rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-top: 3px; font-variant-caps: all-small-caps; }
+/* ── live markets board ── */
+.markets { margin: 34px 0 6px; }
+.markets h3 { text-align: center; font-size: 1.15rem; margin-bottom: 4px; }
+.markets p.mkts-sub { text-align: center; color: var(--muted); font-size: .9rem; margin-bottom: 18px; }
+.markets h4 { font-size: .95rem; margin: 20px 0 8px; color: var(--muted); letter-spacing: .04em; }
+.board { border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--panel); }
+.board-head, .board-row { display: grid; grid-template-columns: 110px 1fr 100px minmax(90px, 160px) 46px; gap: 10px; align-items: center; padding: 9px 14px; }
+@media (max-width: 640px) { .board-head, .board-row { grid-template-columns: 90px 1fr 86px; } .board .bh-venue, .board .bh-mom, .board .b-venue, .board .b-mom { display: none; } }
+.board-head { background: var(--panel-2); font-size: .68rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--line); }
+.board-row { border-bottom: 1px solid var(--line); text-decoration: none; color: var(--text); font-size: .88rem; }
+.board-row:last-child { border-bottom: none; }
+.board-row:hover, .board-row:focus-visible { background: var(--panel-2); outline: none; }
+.board-row .b-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-row .b-venue { color: var(--muted); font-size: .8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); }
+.board-row .b-mom { text-align: right; font-family: var(--font-mono); font-size: .82rem; }
+.board-row .b-mom.up { color: var(--green); }
+.board-row .b-mom.flat { color: var(--muted); }
+.board-empty { padding: 22px 14px; text-align: center; color: var(--muted); font-size: .86rem; }
+/* phase pills — colorblind-safe on the dark base: each phase pairs a
+   distinct hue WITH its text label, so color never carries meaning alone */
+.phase { font-family: var(--font-mono); font-size: .68rem; font-weight: 700; letter-spacing: .08em; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); text-align: center; white-space: nowrap; }
+.phase.OPEN { color: var(--amber); border-color: rgba(244,199,95,.5); background: rgba(244,199,95,.07); }
+.phase.MATCHED { color: var(--blue); border-color: rgba(128,191,255,.5); background: rgba(128,191,255,.07); }
+.phase.BACKED, .phase.BUILDING { color: var(--purple); border-color: rgba(192,166,240,.5); background: rgba(192,166,240,.07); }
+.phase.SHIPPED { color: var(--green); border-color: rgba(116,223,154,.5); background: rgba(116,223,154,.07); }
+/* market cards (the three contrast cards) */
+.why-grid .panel { background: linear-gradient(rgba(48,54,61,.35) 1px, transparent 1px) 0 0 / 100% 28px, var(--panel); }
+.why-grid .panel h4 .tag { display: block; font-family: var(--font-mono); font-size: .66rem; letter-spacing: .12em; color: var(--muted); font-weight: 700; margin-bottom: 4px; }
 /* ── reduced motion: kill every animation & transition ── */
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
@@ -241,14 +293,18 @@ details.how-details .how-body { padding: 16px 18px; }
 </style>
 </head>
 <body>
+<!-- 📈 ticker tape — logged-out landing only; real market events from /api/ticker -->
+<div id="tape" class="landing-extra" aria-label="Recent market activity ticker">
+  <div class="tape-viewport"><div class="tape-track" id="tape-track" aria-hidden="false"></div></div>
+</div>
 <header>
   <div class="logo">💡 Di<span>bs</span></div>
   <nav aria-label="Main">
     <button data-view="home" class="active">🔥 Match</button>
-    <button data-view="mine" data-auth>💡 My ideas</button>
+    <button data-view="mine" data-auth>💼 Positions</button>
     <button data-view="browse" data-auth>🌍 Browse</button>
     <button data-view="repos" data-auth>🐝 Repos</button>
-    <button data-view="credits">🏆 Leaderboard</button>
+    <button data-view="credits">📊 The Board</button>
   </nav>
   <a id="signin" href="__HUB_URL__">Sign in</a>
   <button id="level-chip" data-auth data-goto="mine" aria-label="Your score and level — open profile"></button>
@@ -274,33 +330,42 @@ details.how-details .how-body { padding: 16px 18px; }
         <h2 class="page-title">🔥 Your matches</h2>
         <p class="page-sub" style="margin:0">One card at a time. Say yes, or pass.</p>
       </div>
-      <button class="pill primary" id="btn-home-new">＋ Post an idea</button>
+      <button class="pill primary" id="btn-home-new">＋ List your idea</button>
     </div>
     <div class="swipe-stage" id="home-stage"><div class="empty">Loading your matches…</div></div>
     <p class="key-hint" id="home-key-hint" style="display:none"><kbd>←</kbd> pass · <kbd>→</kbd> accept</p>
   </div>
-  <!-- Logged out: the landing pitch. -->
+  <!-- Logged out: the landing pitch, exchange-style. -->
   <div class="landing-extra">
     <div class="hero">
       <h1>Your <em>idea</em>, your <em>credit</em>, their code.</h1>
-      <p class="tagline">You have ideas. Repos need ideas. We make the match.</p>
-      <p class="sub"><b>Have ideas but not the hours to build them?</b> That's exactly what AI is
-      for. Match with a repo whose agent swarm has the time you don't — and file the GitHub issue
-      yourself, your name on it forever.</p>
+      <p class="tagline">The open-source idea exchange.</p>
+      <p class="sub">List your idea. Repos bid with AI agent capacity.
+      Shipped ideas pay dividends in credit — the GitHub issue is filed
+      <b>by you, under your name</b>, forever.</p>
       <a class="pill primary" href="__HUB_URL__">Sign in with your Hive Hub account</a>
-      <button class="pill" data-goto="credits" style="margin-left:8px">🏆 See the leaderboard</button>
+      <button class="pill" data-goto="credits" style="margin-left:8px">📊 See The Board</button>
+      <div class="mkt-stats" id="mkt-stats" aria-label="Exchange statistics"></div>
+    </div>
+    <div class="markets" aria-label="Live markets">
+      <h3>📈 Live markets</h3>
+      <p class="mkts-sub">Every public idea on the exchange — phase, venue, momentum.</p>
+      <h4 id="bt-head">🔥 Trending</h4>
+      <div class="board" id="board-trending" role="list" aria-labelledby="bt-head"></div>
+      <h4 id="bn-head">🆕 New listings</h4>
+      <div class="board" id="board-new" role="list" aria-labelledby="bn-head"></div>
     </div>
     <div class="two-sides">
       <div class="panel">
         <h3>🧠 Have ideas?</h3>
         <p><b>Ideas ≠ hours.</b> You know what a project needs — even if you'll never open a PR.
-        Write it down; the hive supplies the implementation time. Earn points, levels, and badges
-        as it ships.</p>
+        List it on the exchange; repos bid for it with agent capacity. Earn points, levels, and
+        badges as your portfolio ships.</p>
       </div>
       <div class="panel">
         <h3>🐝 Need ideas?</h3>
-        <p>Opt your hive-managed repo in and receive matched, well-formed
-        ideas — ready for your agent swarm to implement.</p>
+        <p>Opt your hive-managed repo in and bid on matched, well-formed
+        ideas with the one thing you have to spend: <b>AI agent capacity</b>.</p>
       </div>
     </div>
     <div class="why-not">
@@ -310,17 +375,17 @@ details.how-details .how-body { padding: 16px 18px; }
       What if you could <b>raise the odds your idea gets used</b> — without building it yourself?</p>
       <div class="why-grid">
         <div class="panel">
-          <h4>🔭 Discovery</h4>
-          <p>Dibs finds the projects where your idea can <b>thrive</b> — including ones you didn't
+          <h4><span class="tag">MARKET REACH</span>🔭 Discovery</h4>
+          <p>Dibs finds the venues where your idea can <b>thrive</b> — including ones you didn't
           know existed. No guessing which repo to file against.</p>
         </div>
         <div class="panel">
-          <h4>🚀 Accepted = implemented</h4>
-          <p>A repo that accepts your idea has <b>AI agent capacity ready to build it</b>.
+          <h4><span class="tag">EXECUTION GUARANTEE</span>🚀 Accepted = implemented</h4>
+          <p>A repo that bids on your idea has <b>AI agent capacity ready to build it</b>.
           An ordinary issue can sit stale in a queue for years.</p>
         </div>
         <div class="panel">
-          <h4>🏷️ Credit, in writing</h4>
+          <h4><span class="tag">DIVIDENDS</span>🏷️ Credit, in writing</h4>
           <p>The issue is filed <b>by you, under your name</b> — natively attributed,
           traceable forever.</p>
         </div>
@@ -355,10 +420,10 @@ details.how-details .how-body { padding: 16px 18px; }
 <section id="view-mine" class="view">
   <div class="toolbar">
     <div>
-      <h2 class="page-title">💡 My ideas</h2>
-      <p class="page-sub" style="margin:0">Drafts stay yours. Offer an idea to enter matching.</p>
+      <h2 class="page-title">💼 Your positions</h2>
+      <p class="page-sub" style="margin:0">Your ideas on the exchange. Drafts stay yours. Offer one to enter matching.</p>
     </div>
-    <button class="pill primary" id="btn-new">＋ New idea</button>
+    <button class="pill primary" id="btn-new">＋ List an idea</button>
   </div>
   <div class="level-banner panel" id="level-banner" style="display:none"></div>
   <div class="stats-strip" id="my-stats"></div>
@@ -366,7 +431,7 @@ details.how-details .how-body { padding: 16px 18px; }
 </section>
 
 <section id="view-edit" class="view">
-  <h2 class="page-title" id="edit-title">✍️ New idea</h2>
+  <h2 class="page-title" id="edit-title">✍️ List an idea</h2>
   <form id="idea-form" class="panel" style="margin-top:14px">
     <label for="f-title">Title</label>
     <input type="text" id="f-title" maxlength="200" placeholder="One line that sells the idea" required>
@@ -428,7 +493,7 @@ details.how-details .how-body { padding: 16px 18px; }
       <h2 class="page-title" id="match-title">🔥 Find a home for your idea</h2>
       <p class="page-sub" style="margin:0">Offer it, or pass.</p>
     </div>
-    <button class="pill" data-goto="mine">← My ideas</button>
+    <button class="pill" data-goto="mine">← Your positions</button>
   </div>
   <div id="match-tldr" class="tldr-banner"></div>
   <div class="swipe-stage" id="match-stage"></div>
@@ -441,7 +506,7 @@ details.how-details .how-body { padding: 16px 18px; }
       <h2 class="page-title" id="launch-title">🚀 File the issue</h2>
       <p class="page-sub" style="margin:0">Your account, your name, your credit. We're just the matchmaker.</p>
     </div>
-    <button class="pill" data-goto="mine">← My ideas</button>
+    <button class="pill" data-goto="mine">← Your positions</button>
   </div>
   <form class="panel" id="launch-form">
     <label for="l-title">Issue title</label>
@@ -483,8 +548,8 @@ details.how-details .how-body { padding: 16px 18px; }
 </section>
 
 <section id="view-credits" class="view">
-  <h2 class="page-title">🏆 Leaderboard</h2>
-  <p class="page-sub">The hive's top ideators — ranked by points earned as ideas ship.</p>
+  <h2 class="page-title">📊 The Board</h2>
+  <p class="page-sub">Top ideators by portfolio — ranked by dividends earned as ideas ship.</p>
   <div id="leaderboard-list"></div>
   <h3 style="margin:30px 0 6px;font-size:1.05rem">💡 Credit wall</h3>
   <p class="page-sub" style="font-size:.9rem">Every settled idea, credited to the person who thought of it.</p>
@@ -546,6 +611,10 @@ details.how-details .how-body { padding: 16px 18px; }
         esc(b.emoji) + ' ' + esc(b.name) + '</span>';
     }).join('');
   }
+  // Ticker-symbol chip — shown everywhere an idea appears.
+  function symChip(symbol) {
+    return symbol ? '<span class="tsym">$' + esc(symbol) + '</span> ' : '';
+  }
 
   /* ── navigation ── */
   var authViews = { mine: 1, browse: 1, repos: 1, edit: 1, match: 1, feed: 1, launch: 1 };
@@ -581,11 +650,90 @@ details.how-details .how-body { padding: 16px 18px; }
     loadHomeDeck();
     loadGamebar();
   }).catch(function () {
-    // Not signed in: landing mode. The page stays useful (pitch + public
-    // leaderboard); authed nav and the bell disappear.
+    // Not signed in: landing mode. The page stays useful (exchange landing
+    // + The Board); authed nav and the bell disappear.
     anon = true;
     document.body.classList.add('anon');
+    loadLanding();
   });
+
+  /* ── 📈 market landing (logged out): tape + stats + live markets ── */
+  var HUB_URL = document.getElementById('signin').getAttribute('href');
+  var TICKER_EVENTS = {
+    listed: { emoji: '💡', verb: 'listed', up: false },
+    matched: { emoji: '🤝', verb: 'matched to', up: true },
+    shipped: { emoji: '🚀', verb: 'shipped', up: true }
+  };
+  // Shown when the store has nothing to tick yet — clearly marked examples.
+  var TAPE_EXAMPLES = [
+    { symbol: 'DARKMODE', event: 'listed' },
+    { symbol: 'AUTOSCALE', event: 'matched', repoID: 'org/repo' },
+    { symbol: 'OFFLINESYNC', event: 'shipped', repoID: 'org/repo' }
+  ];
+  function tapeItemHTML(e, isExample) {
+    var ev = TICKER_EVENTS[e.event] || TICKER_EVENTS.listed;
+    return '<span class="tape-item' + (ev.up ? ' up' : '') + '">' + ev.emoji + ' ' +
+      '<span class="tsym">$' + esc(e.symbol) + '</span>' + esc(ev.verb) +
+      (e.repoID ? ' <span class="venue">' + esc(e.repoID) + '</span>' : '') +
+      (isExample ? ' <span class="ex">(example)</span>' : '') + '</span>';
+  }
+  function loadTape() {
+    api('GET', 'ticker').then(function (res) {
+      var entries = res.ticker || [];
+      var isExample = !entries.length;
+      if (isExample) entries = TAPE_EXAMPLES;
+      var html = entries.map(function (e) { return tapeItemHTML(e, isExample); }).join('');
+      var track = $('tape-track');
+      // Two copies make the -50% translate loop seamless; the second copy
+      // is decoration only.
+      track.innerHTML = '<span>' + html + '</span><span aria-hidden="true">' + html + '</span>';
+      track.style.setProperty('--tape-dur', Math.max(24, entries.length * 6) + 's');
+    }).catch(function () { $('tape-track').innerHTML = ''; });
+  }
+  function loadMktStats() {
+    api('GET', 'stats').then(function (s) {
+      $('mkt-stats').innerHTML = [
+        ['Ideas listed', s.listed], ['Matches made', s.matched],
+        ['Ideas shipped', s.shipped], ['Ideators on the board', s.ideators]
+      ].map(function (p) {
+        return '<div class="cell"><div class="num">' + p[1] +
+          (p[1] > 0 ? '<span class="up" aria-hidden="true">▲</span>' : '') +
+          '</div><div class="lbl">' + p[0] + '</div></div>';
+      }).join('');
+    }).catch(function () { $('mkt-stats').innerHTML = ''; });
+  }
+  function boardRowHTML(r) {
+    return '<a class="board-row" role="listitem" href="' + esc(HUB_URL) + '"' +
+      ' aria-label="' + esc('$' + r.symbol + ' — ' + r.title + ', ' + r.phase + (r.repoID ? ' at ' + r.repoID : '') + '. Sign in to trade.') + '">' +
+      '<span class="tsym">$' + esc(r.symbol) + '</span>' +
+      '<span class="b-title">' + esc(r.title) + '</span>' +
+      '<span class="phase ' + esc(r.phase) + '">' + esc(r.phase) + '</span>' +
+      '<span class="b-venue">' + esc(r.repoID || '—') + '</span>' +
+      '<span class="b-mom ' + (r.momentum ? 'up' : 'flat') + '" title="' + (r.momentum ? 'Recent activity' : 'Quiet') + '">' +
+      (r.momentum ? '▲' : '·') + '</span></a>';
+  }
+  var BOARD_HEAD = '<div class="board-head"><span>Symbol</span><span>Idea</span>' +
+    '<span>Phase</span><span class="bh-venue">Venue</span><span class="bh-mom" style="text-align:right">Mom.</span></div>';
+  function renderBoard(el, rows, emptyMsg) {
+    el.innerHTML = rows.length
+      ? BOARD_HEAD + rows.map(boardRowHTML).join('')
+      : '<div class="board-empty">' + emptyMsg + '</div>';
+  }
+  function loadBoard() {
+    api('GET', 'board').then(function (res) {
+      var rows = res.board || [];
+      var trending = rows.filter(function (r) { return r.momentum; })
+        .sort(function (a, b) { return new Date(b.updatedAt) - new Date(a.updatedAt); }).slice(0, 8);
+      var fresh = rows.slice()
+        .sort(function (a, b) { return new Date(b.createdAt) - new Date(a.createdAt); }).slice(0, 8);
+      renderBoard($('board-trending'), trending, 'No movers yet — the first listing starts the market.');
+      renderBoard($('board-new'), fresh, 'No listings yet. Sign in and be the first: $YOURIDEA could open the market.');
+    }).catch(function () {
+      renderBoard($('board-trending'), [], 'Markets are warming up…');
+      renderBoard($('board-new'), [], 'Markets are warming up…');
+    });
+  }
+  function loadLanding() { loadTape(); loadMktStats(); loadBoard(); }
 
   /* ── navbar score/level chip ── */
   function loadGamebar() {
@@ -668,7 +816,7 @@ details.how-details .how-body { padding: 16px 18px; }
     var launchable = idea.status === 'accepted' || idea.status === 'issue_launched';
     var d = document.createElement('div'); d.className = 'card';
     d.innerHTML =
-      '<div class="row"><h4>' + esc(idea.title) + '</h4>' +
+      '<div class="row">' + symChip(idea.symbol) + '<h4>' + esc(idea.title) + '</h4>' +
       '<span class="chip ' + esc(idea.status) + '">' + esc(statusLabels[idea.status] || idea.status) + '</span>' +
       (mine ? '<span class="chip ' + esc(idea.visibility) + '">' + (idea.visibility === 'private' ? '🔒 private' : '🌐 public') + '</span>' : '') +
       '</div>' +
@@ -705,7 +853,7 @@ details.how-details .how-body { padding: 16px 18px; }
   function loadMine() {
     api('GET', 'ideas').then(function (ideas) {
       renderList($('mine-list'), ideas, true,
-        'No ideas yet — post your first and earn the 🥇 First Dibs badge.<br><button class="pill primary" id="mine-empty-new">＋ New idea</button>');
+        'No ideas yet — list your first and earn the 🥇 First Dibs badge.<br><button class="pill primary" id="mine-empty-new">＋ List an idea</button>');
       var b = $('mine-empty-new');
       if (b) b.addEventListener('click', function () { openEdit(null); });
     }).catch(function (e) { showErr(e.message); });
@@ -775,7 +923,7 @@ details.how-details .how-body { padding: 16px 18px; }
         var d = document.createElement('div'); d.className = 'credit-row';
         d.innerHTML =
           '<span class="handle">💡 ' + esc(c.authorDisplay || c.author) + '</span>' +
-          '<span class="what"><span class="t">' + esc(c.title) + '</span>' +
+          '<span class="what"><span class="t">' + symChip(c.symbol) + esc(c.title) + '</span>' +
           (c.tldr ? '<div class="tldr">' + esc(c.tldr) + '</div>' : '') + '</span>' +
           '<span class="where">' + esc(c.repoID) +
           (c.issueURL ? ' · <a href="' + esc(c.issueURL) + '" target="_blank" rel="noopener">issue</a>' : '') +
@@ -822,7 +970,7 @@ details.how-details .how-body { padding: 16px 18px; }
   $('f-body').addEventListener('input', updateMeter);
   function openEdit(idea) {
     editingId = idea ? idea.id : null;
-    $('edit-title').textContent = idea ? '✍️ Edit idea' : '✍️ New idea';
+    $('edit-title').textContent = idea ? '✍️ Edit idea' : '✍️ List an idea';
     $('f-title').value = idea ? idea.title : '';
     $('f-body').value = idea ? idea.body : '';
     setVis(idea ? idea.visibility : 'public');
@@ -1056,8 +1204,8 @@ details.how-details .how-body { padding: 16px 18px; }
           return bs - as;
         });
         var emptyMsg = ideas.length
-          ? '🎉 All caught up! New matches appear as repos opt in.<br><button class="pill" data-new-idea>＋ Post another idea</button>'
-          : 'No ideas yet — post your first and earn the 🥇 First Dibs badge.<br><button class="pill primary" data-new-idea>＋ Post an idea</button>';
+          ? '🎉 All caught up! New matches appear as repos opt in.<br><button class="pill" data-new-idea>＋ List another idea</button>'
+          : 'No ideas yet — list your first and earn the 🥇 First Dibs badge.<br><button class="pill primary" data-new-idea>＋ List your idea</button>';
         $('home-key-hint').style.display = items.length ? 'block' : 'none';
         renderDeck(stage, items, function (card, item) {
           return item.kind === 'repo' ? repoMatchCard(card, item) : ideaMatchCard(card, item);
@@ -1070,7 +1218,7 @@ details.how-details .how-body { padding: 16px 18px; }
     var m = item.m, idea = item.idea;
     card.innerHTML =
       '<h3>🐝 ' + esc(m.repo.repoID) + '</h3>' +
-      '<div class="for-line">for your idea <b>💡 ' + esc(idea.title) + '</b></div>' +
+      '<div class="for-line">for your idea ' + symChip(idea.symbol) + '<b>💡 ' + esc(idea.title) + '</b></div>' +
       scorePill(m.score) +
       (m.repo.description ? '<p style="color:var(--muted);line-height:1.5">' + esc(m.repo.description) + '</p>' : '') +
       '<div class="topics">' + (m.repo.topics || []).map(function (t) { return '<span class="t">' + esc(t) + '</span>'; }).join('') + '</div>' +
@@ -1123,7 +1271,7 @@ details.how-details .how-body { padding: 16px 18px; }
         ' has an idea — let me TLDR it for you:</b><br>' + esc(res.tldr || idea.body.slice(0, 200));
       renderDeck($('match-stage'), res.matches.map(function (m) { return { kind: 'repo', idea: idea, m: m }; }),
         repoMatchCard,
-        '🎉 No more matches for this idea. Check back as repos opt in — or sharpen the idea.<br><button class="pill" data-goto="mine">← My ideas</button>');
+        '🎉 No more matches for this idea. Check back as repos opt in — or sharpen the idea.<br><button class="pill" data-goto="mine">← Your positions</button>');
     }).catch(function (e) { showErr(e.message); });
   }
 
@@ -1142,7 +1290,7 @@ details.how-details .how-body { padding: 16px 18px; }
   }
   function feedIdeaHTML(v) {
     var idea = v.idea;
-    return '<h3>💡 ' + esc(idea.title) + '</h3>' + scorePill(v.score) +
+    return '<h3>💡 ' + symChip(idea.symbol) + esc(idea.title) + '</h3>' + scorePill(v.score) +
       (idea.visibility === 'private' ? ' <span class="chip private">🔒 offered privately</span>' : '') +
       (idea.tldr ? '<p style="color:var(--muted);line-height:1.5;font-style:italic">' + esc(idea.tldr) + '</p>' : '') +
       '<div class="body-preview">' + esc(idea.body.length > 400 ? idea.body.slice(0, 400) + '…' : idea.body) + '</div>' +
