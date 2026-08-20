@@ -103,6 +103,43 @@ func TestMarketEndpointsPrivacy(t *testing.T) {
 	}
 }
 
+func TestExternalTargetsDoNotSurfaceAsMarketRepos(t *testing.T) {
+	f := newWave2Server(t, nil)
+	idea := f.createIdea(t, "bob-session", "External CNCF target", "body", "public")
+	rec := doJSON(t, f.h, "POST", "/api/ideas/"+idea.ID+"/offer", "bob-session", map[string]string{"repoID": "istio/istio"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("external offer: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = doJSON(t, f.h, "POST", "/api/ideas/"+idea.ID+"/launch", "bob-session", map[string]string{})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("external launch: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = doJSON(t, f.h, "POST", "/api/ideas/"+idea.ID+"/confirm-issue", "bob-session",
+		map[string]string{"issueURL": "https://github.com/istio/istio/issues/77"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("external confirm: %d %s", rec.Code, rec.Body.String())
+	}
+
+	rec = doJSON(t, f.h, "GET", "/api/board", "", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("board: %d %s", rec.Code, rec.Body.String())
+	}
+	for _, row := range decode[boardResp](t, rec).Board {
+		if row.ID == idea.ID && row.RepoID != "" {
+			t.Fatalf("external repo leaked onto board: %+v", row)
+		}
+	}
+	rec = doJSON(t, f.h, "GET", "/api/ticker", "", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("ticker: %d %s", rec.Code, rec.Body.String())
+	}
+	for _, entry := range decode[tickerResp](t, rec).Ticker {
+		if entry.Title == "External CNCF target" && entry.RepoID != "" {
+			t.Fatalf("external repo leaked onto ticker: %+v", entry)
+		}
+	}
+}
+
 // TestMarketStats: aggregate counts over all ideas — no content exposed.
 func TestMarketStats(t *testing.T) {
 	f := newWave2Server(t, nil)

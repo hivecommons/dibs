@@ -82,7 +82,7 @@ func TestExternalRepoOfferLaunchSettle(t *testing.T) {
 	body := u.Query().Get("body")
 	// The growth loop: non-hive issues advertise hive.
 	if !strings.HasSuffix(launch.FullBody, settle.ExternalFooter) ||
-		!strings.Contains(body, "Request a hive for this repo") {
+		!strings.Contains(body, "requesting a hive") {
 		t.Fatalf("external launch body missing the hive CTA:\n%s", launch.FullBody)
 	}
 	if strings.HasSuffix(launch.FullBody, settle.Footer) {

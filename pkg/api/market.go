@@ -126,9 +126,9 @@ func (a *API) HandleBoard(w http.ResponseWriter, r *http.Request) {
 			CreatedAt:     idea.CreatedAt,
 			UpdatedAt:     idea.UpdatedAt,
 		}
-		// The venue is public only once a repo has committed (TargetRepo
-		// is set on accept). Pending offers stay between the two parties.
-		if row.Phase == PhaseBuilding || row.Phase == PhaseShipped {
+		// The venue is public only for hive-managed repos. External/CNCF
+		// targets stay out of market surfaces.
+		if (row.Phase == PhaseBuilding || row.Phase == PhaseShipped) && a.hiveManagedRepo(idea.TargetRepo) {
 			row.RepoID = idea.TargetRepo
 		}
 		rows = append(rows, row)
@@ -159,10 +159,14 @@ func (a *API) HandleTicker(w http.ResponseWriter, r *http.Request) {
 		switch MarketPhase(idea.Status) {
 		case PhaseShipped:
 			e.Event = "shipped"
-			e.RepoID = idea.TargetRepo
+			if a.hiveManagedRepo(idea.TargetRepo) {
+				e.RepoID = idea.TargetRepo
+			}
 		case PhaseBuilding:
 			e.Event = "matched"
-			e.RepoID = idea.TargetRepo
+			if a.hiveManagedRepo(idea.TargetRepo) {
+				e.RepoID = idea.TargetRepo
+			}
 		default: // OPEN or MATCHED (pending offer venue stays private)
 			e.Event = "listed"
 			e.At = idea.CreatedAt
@@ -170,6 +174,14 @@ func (a *API) HandleTicker(w http.ResponseWriter, r *http.Request) {
 		entries = append(entries, e)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ticker": entries, "repos": repos})
+}
+
+func (a *API) hiveManagedRepo(repoID string) bool {
+	if a == nil || a.Registry == nil || repoID == "" {
+		return false
+	}
+	_, err := a.Registry.Get(repoID)
+	return err == nil
 }
 
 // MarketStats are the exchange-wide aggregate numbers under the hero.

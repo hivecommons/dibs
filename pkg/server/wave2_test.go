@@ -1,12 +1,15 @@
 package server
 
 import (
+	"encoding/json"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 
 	"github.com/kubestellar/dibs/pkg/api"
 	"github.com/kubestellar/dibs/pkg/auth"
+	"github.com/kubestellar/dibs/pkg/catalog"
 	"github.com/kubestellar/dibs/pkg/match"
 	"github.com/kubestellar/dibs/pkg/notify"
 	"github.com/kubestellar/dibs/pkg/registry"
@@ -24,7 +27,7 @@ type wave2Fixture struct {
 	notify *notify.Store
 }
 
-func newWave2Server(t *testing.T, github settle.Client) *wave2Fixture {
+func newWave2Server(t *testing.T, github settle.Client, cncfProjects ...catalog.Project) *wave2Fixture {
 	t.Helper()
 	dir := t.TempDir()
 	st, err := store.New(dir)
@@ -43,6 +46,20 @@ func newWave2Server(t *testing.T, github settle.Client) *wave2Fixture {
 	}); err != nil {
 		t.Fatalf("registry.Merge: %v", err)
 	}
+	var cncfCatalog *catalog.Store
+	if len(cncfProjects) > 0 {
+		raw, err := json.Marshal(cncfProjects)
+		if err != nil {
+			t.Fatalf("marshal CNCF catalog: %v", err)
+		}
+		if err := os.WriteFile(dir+"/"+catalog.CacheFile, raw, 0o644); err != nil {
+			t.Fatalf("write CNCF catalog: %v", err)
+		}
+		cncfCatalog, err = catalog.New(dir, "")
+		if err != nil {
+			t.Fatalf("catalog.New: %v", err)
+		}
+	}
 	nt, err := notify.New(dir)
 	if err != nil {
 		t.Fatalf("notify.New: %v", err)
@@ -59,7 +76,7 @@ func newWave2Server(t *testing.T, github settle.Client) *wave2Fixture {
 		}},
 		Store:   st,
 		Repos:   reg,
-		Engine:  &match.Engine{Store: st, Registry: reg, Notifier: &api.MatchNotifier{Notify: nt}},
+		Engine:  &match.Engine{Store: st, Registry: reg, Catalog: cncfCatalog, Notifier: &api.MatchNotifier{Notify: nt}},
 		Settler: &settle.Settler{GitHub: github},
 		Notify:  nt,
 		Version: "test-hash",
@@ -221,6 +238,7 @@ func TestOfferAcceptSettleFlow(t *testing.T) {
 			found = true
 		}
 	}
+
 	if !found {
 		t.Fatalf("expected a scored match with kubestellar/dibs: %+v", mres.Matches)
 	}
@@ -321,6 +339,45 @@ func TestDeclineAndReoffer(t *testing.T) {
 	got, _ = f.store.Get(idea.ID)
 	if got.Status != store.StatusOffered || got.OfferTo("kubestellar/dibs").Status != store.OfferPending {
 		t.Fatalf("after re-offer: %+v", got)
+	}
+}
+
+func TestIdeaMatchesReturnOneHiveThenTwoNonHiveCNCF(t *testing.T) {
+	f := newWave2Server(t, nil,
+		catalog.Project{Name: "Hive duplicate", RepoID: "kubestellar/dibs", RepoURL: "https://github.com/kubestellar/dibs", Maturity: "sandbox", Description: "kubernetes marketplace matching"},
+		catalog.Project{Name: "Istio", RepoID: "istio/istio", RepoURL: "https://github.com/istio/istio", Maturity: "graduated", Category: "Service Proxy", Description: "kubernetes service mesh proxy matching"},
+		catalog.Project{Name: "Envoy", RepoID: "envoyproxy/envoy", RepoURL: "https://github.com/envoyproxy/envoy", Maturity: "graduated", Category: "Service Proxy", Description: "kubernetes service proxy matching"},
+		catalog.Project{Name: "Vitess", RepoID: "vitessio/vitess", RepoURL: "https://github.com/vitessio/vitess", Maturity: "graduated", Category: "Database", Description: "kubernetes database matching"},
+	)
+	idea := f.createIdea(t, "bob-session", "Kubernetes marketplace matching",
+		"Improve kubernetes service proxy matching.", "public")
+
+	rec := doJSON(t, f.h, "GET", "/api/ideas/"+idea.ID+"/matches", "bob-session", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("matches: %d %s", rec.Code, rec.Body.String())
+	}
+	var mres struct {
+		Matches []struct {
+			Repo registry.RepoProfile `json:"repo"`
+		} `json:"matches"`
+		CNCF []match.CNCFMatch `json:"cncf"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&mres); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(mres.Matches) != 1 {
+		t.Fatalf("hive matches = %d, want 1: %+v", len(mres.Matches), mres.Matches)
+	}
+	if mres.Matches[0].Repo.RepoID != "kubestellar/dibs" {
+		t.Fatalf("top hive match = %+v", mres.Matches[0].Repo)
+	}
+	if len(mres.CNCF) != 2 {
+		t.Fatalf("cncf matches = %d, want 2: %+v", len(mres.CNCF), mres.CNCF)
+	}
+	for _, m := range mres.CNCF {
+		if m.RepoID == "kubestellar/dibs" {
+			t.Fatalf("hive-managed repo leaked into CNCF section: %+v", mres.CNCF)
+		}
 	}
 }
 

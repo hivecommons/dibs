@@ -12,12 +12,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kubestellar/dibs/pkg/catalog"
 	"github.com/kubestellar/dibs/pkg/registry"
 	"github.com/kubestellar/dibs/pkg/store"
 )
 
 // MaxMatches caps how many candidate repos an idea keeps — LLM cost control.
 const MaxMatches = 10
+
+// MaxCNCFCandidates caps how many BM25-ranked CNCF projects reach the LLM.
+const MaxCNCFCandidates = 15
 
 // NotifyThreshold is the minimum fresh score that triggers a "new match"
 // notification to both sides.
@@ -38,9 +42,22 @@ type Notifier interface {
 type Engine struct {
 	Store    *store.Store
 	Registry *registry.Registry
+	Catalog  *catalog.Store
 	// LLM is nil in fallback-only mode.
 	LLM      *LLM
 	Notifier Notifier
+}
+
+// CNCFMatch is a scored candidate from the separate CNCF catalog.
+type CNCFMatch struct {
+	Name     string  `json:"name"`
+	RepoID   string  `json:"repoID"`
+	RepoURL  string  `json:"repoURL"`
+	Maturity string  `json:"maturity"`
+	Category string  `json:"category"`
+	Score    float64 `json:"score"`
+	Reason   string  `json:"reason"`
+	ByLLM    bool    `json:"byLLM,omitempty"`
 }
 
 // RepoHash fingerprints the score-relevant part of a repo profile; a changed
@@ -194,9 +211,56 @@ func (e *Engine) score(ctx context.Context, idea *store.Idea, rp *registry.RepoP
 		} else {
 			log.Printf("match: llm score failed for %s×%s, using fallback: %v", idea.ID, rp.RepoID, err)
 		}
+
 	}
 	m.Score, m.Reason = FallbackScore(idea, rp)
 	return m
+}
+
+// CNCFMatchesForIdea returns CNCF project candidates from the catalog. BM25
+// selects the top 15; the LLM reranks only those candidates when configured.
+func (e *Engine) CNCFMatchesForIdea(ctx context.Context, idea *store.Idea) ([]CNCFMatch, error) {
+	if e == nil || e.Catalog == nil {
+		return []CNCFMatch{}, nil
+	}
+	candidates := e.Catalog.TopK(idea.Title+" "+idea.Body, MaxCNCFCandidates)
+	if len(candidates) == 0 {
+		return []CNCFMatch{}, nil
+	}
+	topScore := candidates[0].Score
+	out := make([]CNCFMatch, 0, len(candidates))
+	for _, c := range candidates {
+		m := CNCFMatch{
+			Name:     c.Project.Name,
+			RepoID:   c.Project.RepoID,
+			RepoURL:  c.Project.RepoURL,
+			Maturity: c.Project.Maturity,
+			Category: c.Project.Category,
+			Score:    bm25ToScore(c.Score, topScore),
+			Reason:   "BM25 keyword fit across CNCF project metadata",
+		}
+		if e.LLM != nil {
+			if score, reason, err := e.llmScoreCNCF(ctx, idea, c.Project); err == nil {
+				m.Score, m.Reason, m.ByLLM = score, reason, true
+			} else {
+				log.Printf("match: cncf llm score failed for %s×%s, using BM25 fallback: %v", idea.ID, c.Project.RepoID, err)
+			}
+		}
+		out = append(out, m)
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Score > out[j].Score })
+	return out, nil
+}
+
+func bm25ToScore(score, top float64) float64 {
+	if top <= 0 {
+		return 0
+	}
+	scaled := 100 * score / top
+	if scaled > 100 {
+		return 100
+	}
+	return scaled
 }
 
 var llmJSONRe = regexp.MustCompile(`\{[^{}]*\}`)
@@ -205,6 +269,37 @@ func (e *Engine) llmScore(ctx context.Context, idea *store.Idea, rp *registry.Re
 	user := "IDEA\nTitle: " + idea.Title + "\nTLDR: " + idea.TLDR + "\nBody:\n" + truncate(idea.Body, maxPromptBody) +
 		"\n\nREPO\nName: " + rp.RepoID + "\nDescription: " + rp.Description +
 		"\nTopics: " + strings.Join(rp.Topics, ", ") + "\nAppetite: " + rp.Appetite
+	out, err := e.LLM.Chat(ctx,
+		`You score how well an idea fits an open-source repository. Reply with ONLY a JSON object: {"score": <0-100 integer>, "reason": "<one line why>"}.`,
+		user)
+	if err != nil {
+		return 0, "", err
+	}
+	raw := llmJSONRe.FindString(out)
+	if raw == "" {
+		return 0, "", fmt.Errorf("match: no JSON in llm reply: %.80s", out)
+	}
+	var parsed struct {
+		Score  float64 `json:"score"`
+		Reason string  `json:"reason"`
+	}
+	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
+		return 0, "", err
+	}
+	if parsed.Score < 0 {
+		parsed.Score = 0
+	}
+	if parsed.Score > 100 {
+		parsed.Score = 100
+	}
+	return parsed.Score, truncate(parsed.Reason, 200), nil
+}
+
+func (e *Engine) llmScoreCNCF(ctx context.Context, idea *store.Idea, p catalog.Project) (float64, string, error) {
+	user := "IDEA\nTitle: " + idea.Title + "\nTLDR: " + idea.TLDR + "\nBody:\n" + truncate(idea.Body, maxPromptBody) +
+		"\n\nREPO\nName: " + p.RepoID + "\nProject: " + p.Name + "\nDescription: " + p.Description +
+		"\nTopics: " + strings.Join(p.Topics, ", ") + "\nLanguage: " + p.Language +
+		"\nCNCF maturity: " + p.Maturity + "\nCategory: " + p.Category + "\nREADME intro:\n" + truncate(p.Readme, 1200)
 	out, err := e.LLM.Chat(ctx,
 		`You score how well an idea fits an open-source repository. Reply with ONLY a JSON object: {"score": <0-100 integer>, "reason": "<one line why>"}.`,
 		user)
