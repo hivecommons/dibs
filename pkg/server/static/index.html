@@ -148,6 +148,14 @@ body.modal-open { overflow: hidden; }
 .donate-hive .name { font-weight: 800; }
 .donate-hive .meta { color: var(--muted); font-size: .82rem; margin-top: 3px; }
 .donate-code { display: block; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; color: var(--text); font-family: var(--font-mono); font-size: .86rem; line-height: 1.7; white-space: pre-wrap; overflow-x: auto; }
+#modal-donate .modal-card { max-width: 980px; }
+.repo-mark { display: inline-flex; align-items: center; gap: 6px; min-width: 0; vertical-align: middle; }
+.repo-avatar { width: 16px; height: 16px; border-radius: 4px; border: 1px solid var(--line); background: var(--panel-2); flex: 0 0 auto; object-fit: cover; }
+.repo-mark .ticker { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 800; letter-spacing: .02em; color: var(--amber); }
+.watch-symbol .repo-avatar { width: 14px; height: 14px; }
+.chart-sym .repo-avatar { width: 18px; height: 18px; }
+.donate-hive .name { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.donate-hive .name .repo-id { color: var(--text); }
 /* ── notifications bell ── */
 #bell-wrap { position: relative; }
 #bell { background: transparent; border: 1px solid transparent; color: var(--muted); font: inherit; padding: 7px 10px 4px; border-radius: var(--radius); cursor: pointer; position: relative; }
@@ -377,7 +385,7 @@ details.how-details .how-body { padding: 16px 18px; }
 .chart-action.secondary { background: transparent; border: 1px solid var(--line); color: var(--text); }
 .chart-action.secondary:hover, .chart-action.secondary:focus-visible { border-color: var(--amber); color: var(--amber); }
 .chart-action[hidden] { display: none; }
-.chart-sym { font-family: var(--font-mono); font-weight: 800; font-size: 1.25rem; color: var(--amber); }
+.chart-sym { display: inline-flex; align-items: center; gap: 7px; font-family: var(--font-mono); font-weight: 800; font-size: 1.25rem; color: var(--amber); }
 .chart-repo { color: var(--muted); font-size: .85rem; font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chart-quote { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 1.25rem; font-weight: 800; }
 .chart-quote .qd { font-size: .85rem; font-weight: 700; margin-left: 6px; }
@@ -905,7 +913,7 @@ details.how-details .how-body { padding: 16px 18px; }
     <p class="donate-copy">Supply the second kind of market capital. Your AI CLI runs a public hive's agents through ClankeR, the contributor relay. Work lands under your GitHub username on that hive and its leaderboard.</p>
     <div class="donate-fallback">
       Pick a public hive, then connect your CLI. If no hive contribute URL is listed here, use the public hive directory.
-      <div style="margin-top:10px"><a class="pill small" href="https://hive.kubestellar.io/#public-hives" target="_blank" rel="noopener">Pick a hive</a></div>
+      <div style="margin-top:10px"><a class="pill small" href="https://hive.kubestellar.io/#hives" target="_blank" rel="noopener">Pick a hive</a></div>
     </div>
     <h3 style="margin:20px 0 10px;font-size:1rem">Public hives</h3>
     <div id="donate-hives" aria-live="polite"><div class="empty">Loading public hives…</div></div>
@@ -1318,6 +1326,19 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
     }
     return null;
   }
+  function repoOrg(r) {
+    var id = String((r && (r.repoID || r.repo)) || '');
+    return (r && (r.org || r.owner)) || (id.indexOf('/') !== -1 ? id.split('/')[0] : '');
+  }
+  function repoAvatarHTML(r) {
+    var org = repoOrg(r);
+    if (!org) return '';
+    return '<img class="repo-avatar" src="https://github.com/' + esc(org) + '.png?size=48" alt="" loading="lazy" onerror="this.hidden=true">';
+  }
+  function repoMarkHTML(r) {
+    var symbol = r && r.symbol ? '$' + esc(r.symbol) : '';
+    return '<span class="repo-mark">' + repoAvatarHTML(r) + (symbol ? '<span class="ticker">' + symbol + '</span>' : '') + '</span>';
+  }
   function updateChartActions(repo) {
     chartSelectedRepo = repo && !repo.example ? repo : null;
     var offer = $('chart-offer-btn'), contrib = $('chart-contribute-link'), actions = $('chart-actions');
@@ -1382,7 +1403,7 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
       var current = Number(r.value || 0);
       return '<button type="button" class="watch-row" role="option" aria-selected="' +
         String(r.repoID === chartCurrent) + '" data-repo="' + esc(r.repoID) + '">' +
-        '<span class="watch-meta"><span class="watch-symbol">$' + esc(r.symbol) + '</span>' +
+        '<span class="watch-meta"><span class="watch-symbol">' + repoMarkHTML(r) + '</span>' +
         '<span class="watch-name">' + esc(repoDisplayName(r)) + '</span></span>' +
         '<span class="watch-spark" aria-hidden="true"></span>' +
         '<span class="watch-price"><span class="watch-value">' + current.toFixed(1) + '</span>' +
@@ -1565,8 +1586,9 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
   function renderChart(d) {
     chartLastData = d;
     var trend = d.delta > 0 ? 'up' : d.delta < 0 ? 'down' : 'flat';
-    updateChartActions(findChartRepo(d.repoID) || d);
-    $('chart-sym').textContent = '$' + d.symbol;
+    var chartRepo = findChartRepo(d.repoID) || d;
+    updateChartActions(chartRepo);
+    $('chart-sym').innerHTML = repoMarkHTML(chartRepo);
     $('chart-repo').textContent = d.repoID;
     var qd = fmtDelta(d.delta);
     $('chart-quote').innerHTML = d.current.toFixed(1) +
@@ -2079,7 +2101,7 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
     if (anon) { $('signin-overlay').hidden = false; $('so-signin').focus(); }
     else openEdit(null, targetRepo);
   }
-  var HIVE_DIRECTORY_URL = 'https://hive.kubestellar.io/#public-hives';
+  var HIVE_DIRECTORY_URL = 'https://hive.kubestellar.io/#hives';
   function getContributeURL(repo) {
     return repo && repo.contributeURL ? repo.contributeURL : '';
   }
@@ -2097,7 +2119,7 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
       var href = getContributeHref(repo);
       var label = url ? 'Contribute' : 'Pick a hive';
       return '<div class="donate-hive">' +
-        '<div><div class="name">' + esc(repo.repoID) + '</div>' +
+        '<div><div class="name">' + repoMarkHTML(repo) + '<span class="repo-id">' + esc(repo.repoID) + '</span></div>' +
         '<div class="meta">hive: ' + esc(repo.hiveID || 'unknown') +
         (repo.owner ? ' · owner: ' + esc(repo.owner) : '') + '</div>' +
         (repo.description ? '<div class="meta">' + esc(repo.description) + '</div>' : '') +
