@@ -43,6 +43,30 @@ func TestFetchIssueActivityFiltersPRsAndScoresDibsIdeas(t *testing.T) {
 	}
 }
 
+func TestFetchIssueActivityClassifiesHumanIssues(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode([]map[string]any{
+			{"created_at": "2026-08-18T10:00:00Z", "body": "regular", "user": map[string]string{"login": "alice"}},
+			{"created_at": "2026-08-18T11:00:00Z", "body": "automation", "user": map[string]string{"login": "renovate[bot]"}},
+			{"created_at": "2026-08-18T12:00:00Z", "body": "idea\n\n" + settle.Footer, "user": map[string]string{"login": "bob"}},
+			{"created_at": "2026-08-18T13:00:00Z", "body": "bot idea\n\n" + settle.Footer, "user": map[string]string{"login": "kubestellar-hive[bot]"}},
+		})
+	}))
+	defer srv.Close()
+
+	b := &Backfiller{BaseURL: srv.URL, Client: srv.Client(), Now: fixedNow}
+	got, err := b.fetchIssueActivity(context.Background(), "org/repo", windowStart(fixedNow()))
+	if err != nil {
+		t.Fatalf("fetchIssueActivity: %v", err)
+	}
+	if got["2026-08-18"].RegularIssuesCreated != 2 || got["2026-08-18"].IdeasFiled != 2 {
+		t.Fatalf("formula counts changed: %+v", got["2026-08-18"])
+	}
+	if got["2026-08-18"].IssuesHuman != 2 {
+		t.Fatalf("issuesHuman = %d, want regular human + human Dibs idea", got["2026-08-18"].IssuesHuman)
+	}
+}
+
 func TestFetchPullActivityClassifiesClankerPRs(t *testing.T) {
 	mergedRegular := time.Date(2026, 8, 18, 23, 30, 0, 0, time.UTC)
 	mergedClanker := time.Date(2026, 8, 17, 9, 0, 0, 0, time.UTC)
@@ -54,6 +78,7 @@ func TestFetchPullActivityClassifiesClankerPRs(t *testing.T) {
 			{"created_at": "2026-08-16T08:00:00Z", "merged_at": mergedRegular, "body": "human PR", "head": map[string]string{"ref": "feature/human"}, "user": map[string]string{"login": "alice"}},
 			{"created_at": "2026-08-15T08:00:00Z", "merged_at": mergedClanker, "body": "---\n— hive: agent=quality backend=copilot", "head": map[string]string{"ref": "quality/tests"}, "user": map[string]string{"login": "kubestellar-hive[bot]"}},
 			{"created_at": "2026-08-14T08:00:00Z", "merged_at": nil, "body": "— hive: agent=architect backend=copilot", "labels": []map[string]string{{"name": "hold"}}},
+			{"created_at": "2026-08-13T08:00:00Z", "merged_at": nil, "body": "deps", "user": map[string]string{"login": "renovate[bot]"}},
 		})
 	}))
 	defer srv.Close()
@@ -69,7 +94,7 @@ func TestFetchPullActivityClassifiesClankerPRs(t *testing.T) {
 	if got["2026-08-15"].ClankerPRsCreated != 1 || got["2026-08-17"].ClankerPRsMerged != 1 {
 		t.Fatalf("clanker merged buckets = %+v / %+v", got["2026-08-15"], got["2026-08-17"])
 	}
-	if got["2026-08-14"].ClankerPRsCreated != 1 {
+	if got["2026-08-14"].ClankerPRsCreated != 1 || got["2026-08-14"].PRsClanker != 1 {
 		t.Fatalf("clanker created bucket = %+v", got["2026-08-14"])
 	}
 }
@@ -94,6 +119,9 @@ func TestClankerMarkersAreConfigurableAndConservative(t *testing.T) {
 }
 
 func TestBackfillIsIdempotent(t *testing.T) {
+	if BackfillVersion != 3 {
+		t.Fatalf("BackfillVersion = %d, want 3", BackfillVersion)
+	}
 	var issuesCalls, pullsCalls int
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {

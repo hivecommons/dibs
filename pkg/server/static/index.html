@@ -393,8 +393,8 @@ details.how-details .how-body { padding: 16px 18px; }
 #chart-stage .idx-line.up { stroke: var(--green); }
 #chart-stage .idx-line.down { stroke: var(--red); }
 #chart-stage .idx-line.flat { stroke: var(--amber); }
-#chart-stage .bar-ideas { fill: rgba(244,199,95,.55); }
-#chart-stage .bar-agent { fill: rgba(192,166,240,.6); }
+#chart-stage .bar-issues-human { fill: rgba(244,199,95,.62); }
+#chart-stage .bar-prs-clanker { fill: rgba(116,223,154,.72); }
 #chart-stage .quote-box { fill: var(--panel-2); stroke: var(--line); }
 #chart-stage .quote-text { fill: var(--text); font-family: var(--font-mono); font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
 #chart-stage .quote-delta.up { fill: var(--green); }
@@ -412,8 +412,8 @@ details.how-details .how-body { padding: 16px 18px; }
 .chart-legend { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 .legend-chip { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: .7rem; font-weight: 700; background: transparent; border: 1px solid var(--line); color: var(--muted); border-radius: 4px; padding: 3px 10px; cursor: pointer; }
 .legend-chip .sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
-.legend-chip .sw-ideas { background: rgba(244,199,95,.8); }
-.legend-chip .sw-agent { background: rgba(192,166,240,.85); }
+.legend-chip .sw-issues-human { background: rgba(244,199,95,.85); }
+.legend-chip .sw-prs-clanker { background: rgba(116,223,154,.85); }
 .legend-chip:not(.on) { opacity: .45; }
 .legend-chip:hover, .legend-chip:focus-visible { border-color: var(--amber); color: var(--text); }
 .chart-note { color: var(--muted); font-size: .7rem; font-style: italic; margin-left: auto; }
@@ -562,8 +562,8 @@ details.how-details .how-body { padding: 16px 18px; }
       </div>
       <div id="chart-stage"></div>
       <div class="chart-legend" id="chart-legend">
-        <button class="legend-chip on" data-series="ideas" aria-pressed="true"><span class="sw sw-ideas"></span>issues/ideas filed</button>
-        <button class="legend-chip on" data-series="agent" aria-pressed="true"><span class="sw sw-agent"></span>PR activity</button>
+        <button class="legend-chip on" data-series="issuesHuman" aria-pressed="true" title="Issues filed by humans — new innovation entering the market."><span class="sw sw-issues-human"></span>issues (human)</button>
+        <button class="legend-chip on" data-series="prsClanker" aria-pressed="true" title="PRs from donated AI capacity (ClankeR) implementing it."><span class="sw sw-prs-clanker"></span>clanker PRs</button>
         <span class="chart-note" id="chart-note">Index derived from weighted issue and PR activity.</span>
       </div>
       <div class="chart-formula">index = 1·issue + 3·PR merged + 5·clanker PR + 8·idea filed + 10·clanker merged</div>
@@ -1262,7 +1262,7 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
   var chartLastData = null;    // payload last rendered, for responsive redraws
   var chartLastWidth = 0;
   var chartResizeQueued = false;
-  var seriesOn = { ideas: true, agent: true };
+  var seriesOn = { issuesHuman: true, prsClanker: true };
   var CHART_ROTATE_MS = 45000;
   var CHART_RESUME_MS = 120000;
   var chartRotateTimer = null;
@@ -1275,7 +1275,11 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
       var bump = (i % 7 === 3) ? 6 : (i % 5 === 1) ? 2 : 0;
       v += bump;
       points.push({ t: 'day ' + (i + 1), value: v });
-      bars.push({ t: 'day ' + (i + 1), ideas: i % 5 === 1 ? 1 : 0, agent: i % 7 === 3 ? 1 : 0 });
+      bars.push({
+        t: 'day ' + (i + 1),
+        issuesHuman: i % 5 === 1 ? 1 : 0,
+        prsClanker: i % 11 === 4 ? 1 : 0
+      });
     }
     return { repoID: 'org/example-repo', symbol: 'EXAMPLE', points: points, bars: bars,
       current: v, delta: 0, example: true };
@@ -1564,20 +1568,26 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
     svg += '<path d="' + line + 'L' + R + ' ' + plotBot + 'L' + L + ' ' + plotBot + 'Z" fill="url(#cgrad)"/>' +
       '<path class="idx-line ' + trend + '" d="' + line + '"/>';
 
-    // Sub-chart bars: issues/ideas + PR activity, toggleable via the legend.
+    // Sub-chart bars: real classified activity, stacked to stay readable at 30 days wide.
     var bmax = 1;
-    d.bars.forEach(function (b) { bmax = Math.max(bmax, b.ideas, b.agent); });
-    var bw = Math.max(2, ((R - L) / n - 4) / 2);
+    d.bars.forEach(function (b) {
+      var total = (seriesOn.issuesHuman ? (Number(b.issuesHuman) || 0) : 0) +
+        (seriesOn.prsClanker ? (Number(b.prsClanker) || 0) : 0);
+      bmax = Math.max(bmax, total);
+    });
+    var bw = Math.max(3, (R - L) / n - 5);
     d.bars.forEach(function (b, i) {
       var cx = x(i);
-      if (seriesOn.ideas && b.ideas > 0) {
-        var h1 = (barBot - barTop) * b.ideas / bmax;
-        svg += '<rect class="bar-ideas" x="' + (cx - bw - 1) + '" y="' + (barBot - h1) + '" width="' + bw + '" height="' + h1 + '"><title>' + esc(b.t) + ': ' + b.ideas + ' idea event(s)</title></rect>';
-      }
-      if (seriesOn.agent && b.agent > 0) {
-        var h2 = (barBot - barTop) * b.agent / bmax;
-        svg += '<rect class="bar-agent" x="' + (cx + 1) + '" y="' + (barBot - h2) + '" width="' + bw + '" height="' + h2 + '"><title>' + esc(b.t) + ': ' + b.agent + ' agent event(s) (est.)</title></rect>';
-      }
+      var y0 = barBot, x0 = cx - bw / 2;
+      [
+        { on: seriesOn.issuesHuman, n: Number(b.issuesHuman) || 0, cls: 'bar-issues-human', label: 'issue(s) filed by humans — new innovation entering the market' },
+        { on: seriesOn.prsClanker, n: Number(b.prsClanker) || 0, cls: 'bar-prs-clanker', label: 'PR(s) from donated AI capacity (ClankeR) implementing it' }
+      ].forEach(function (seg) {
+        if (!seg.on || seg.n <= 0) return;
+        var h = (barBot - barTop) * seg.n / bmax;
+        y0 -= h;
+        svg += '<rect class="' + seg.cls + '" x="' + x0.toFixed(1) + '" y="' + y0.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + h.toFixed(1) + '"><title>' + esc(b.t) + ': ' + seg.n + ' ' + esc(seg.label) + '</title></rect>';
+      });
     });
     svg += '<line class="grid-line" x1="' + L + '" y1="' + barBot + '" x2="' + R + '" y2="' + barBot + '"/>';
 
