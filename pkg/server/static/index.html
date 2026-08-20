@@ -404,6 +404,7 @@ details.how-details .how-body { padding: 16px 18px; }
 .chart-side { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; margin-left: auto; }
 .chart-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 .chart-action { border-radius: 6px; padding: 6px 11px; font: inherit; font-size: .78rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.2; white-space: nowrap; text-decoration: none; cursor: pointer; }
+.chart-action .qr-glyph { display: block; }
 .chart-action.primary { background: var(--amber); border: 1px solid var(--amber); color: #080b0f; }
 .chart-action.primary:hover, .chart-action.primary:focus-visible { background: #ffd97a; border-color: #ffd97a; }
 .chart-action.secondary { background: transparent; border: 1px solid var(--line); color: var(--text); }
@@ -616,7 +617,7 @@ details.how-details .how-body { padding: 16px 18px; }
           <div class="chart-actions" id="chart-actions" aria-label="Selected repo actions" hidden>
             <button type="button" class="chart-action primary" id="chart-offer-btn"></button>
             <a class="chart-action secondary" id="chart-contribute-link" target="_blank" rel="noopener"></a>
-            <button type="button" class="chart-action secondary" id="chart-qr-btn">QR</button>
+            <button type="button" class="chart-action secondary" id="chart-qr-btn" aria-label="Show QR code" title="Show a QR code for this hive — let someone scan it with their phone to open the contribute page and donate tokens."><svg class="qr-glyph" viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M1 1h6v6H1V1zm2 2v2h2V3H3zM9 1h6v6H9V1zm2 2v2h2V3h-2zM1 9h6v6H1V9zm2 2v2h2v-2H3zM9 9h2v2H9V9zm4 0h2v2h-2V9zm-2 2h2v2h-2v-2zm-2 2h2v2H9v-2zm4 0h2v2h-2v-2z"/></svg></button>
           </div>
         </div>
       </div>
