@@ -190,7 +190,7 @@ func TestRepoIndexEndpoint(t *testing.T) {
 		t.Fatalf("unknown repo: %d %s", rec.Code, rec.Body.String())
 	}
 
-	// Activity moves the index: settle an idea (offer + accept + settle).
+	// Activity moves the index: settle an idea (idea filed).
 	idea := f.createIdea(t, "bob-session", "Index mover", "body", "public")
 	settleViaLaunch(t, f, idea, "kubestellar/dibs", "bob-session", "alice-session")
 
@@ -203,8 +203,8 @@ func TestRepoIndexEndpoint(t *testing.T) {
 		t.Fatalf("busy index should be above base with positive delta: %+v", busy)
 	}
 	last := busy.Bars[len(busy.Bars)-1]
-	if last.Ideas < 1 || last.Agent < 2 { // offer; accept + settle
-		t.Fatalf("today's bars should show the activity: %+v", last)
+	if last.Ideas < 1 || last.Agent != 0 {
+		t.Fatalf("today's bars should show the idea-filed activity only: %+v", last)
 	}
 
 	// Determinism at the HTTP layer: same request, same series.

@@ -100,7 +100,7 @@ func TestLandingPagePublic(t *testing.T) {
 		"Why not just open an issue?", "never implemented at all", "raise the odds your idea gets used",
 		"Accepted = implemented", "How the market works",
 		"Innovators invest ideas", "BACKING OPENS SOON", "Put idle tokens to work",
-		"Repo value index chart", "agent activity (est.)",
+		"Repo value index chart", "PR activity",
 		">Markets</h2>", "New listings", "Trending",
 		"https://hive.kubestellar.io"} {
 		if !strings.Contains(body, want) {

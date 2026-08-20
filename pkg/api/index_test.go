@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/kubestellar/dibs/pkg/history"
+	"github.com/kubestellar/dibs/pkg/indexformula"
 	"github.com/kubestellar/dibs/pkg/registry"
 	"github.com/kubestellar/dibs/pkg/store"
 )
@@ -28,10 +29,10 @@ func TestBuildIndexDeterminism(t *testing.T) {
 	d5b := ts(t, "2026-08-15T18:00:00Z")   // same day
 	today := ts(t, "2026-08-19T01:00:00Z") // last bucket
 	evs := []repoEvent{
-		{at: old, weight: weightSettle, kind: "agent"},
-		{at: d5, weight: weightOffer, kind: "ideas"},
-		{at: d5b, weight: weightAccept, kind: "agent"},
-		{at: today, weight: weightOffer, kind: "ideas"},
+		{at: old, weight: indexformula.Contribution(indexformula.Counts{ClankerPRsMerged: 1}), kind: "agent"},
+		{at: d5, weight: indexformula.Contribution(indexformula.Counts{RegularIssuesCreated: 1}), kind: "ideas"},
+		{at: d5b, weight: indexformula.Contribution(indexformula.Counts{RegularPRsMerged: 1}), kind: "agent"},
+		{at: today, weight: indexformula.Contribution(indexformula.Counts{IdeasFiled: 1}), kind: "ideas"},
 	}
 
 	p1, b1, cur1, delta1, act1 := buildIndex(evs, now)
@@ -44,13 +45,13 @@ func TestBuildIndexDeterminism(t *testing.T) {
 		t.Fatalf("series length: %d points, %d bars, want %d", len(p1), len(b1), indexDays)
 	}
 	// First bucket: only the pre-window settle in the base, smoothed
-	// window of one → base + weightSettle.
-	if want := indexBase + weightSettle; p1[0].Value != want {
+	// window of one → base + clanker-merged weight.
+	if want := indexBase + indexformula.WeightClankerPRMerged; p1[0].Value != want {
 		t.Fatalf("first point %v, want %v", p1[0].Value, want)
 	}
 	// Last bucket raw level: base + settle + offer + accept + offer.
 	// Smoothing (3-day trailing mean) can only pull it down or keep it.
-	rawLast := indexBase + weightSettle + weightOffer + weightAccept + weightOffer
+	rawLast := indexBase + indexformula.WeightClankerPRMerged + indexformula.WeightRegularIssueCreated + indexformula.WeightRegularPRMerged + indexformula.WeightIdeaFiled
 	if cur1 > rawLast || cur1 <= indexBase {
 		t.Fatalf("current %v out of range (base %v, raw %v)", cur1, indexBase, rawLast)
 	}
@@ -140,18 +141,15 @@ func TestRepoEventsWeights(t *testing.T) {
 				CreatedAt: ts(t, "2026-08-11T12:00:00Z")}},
 		},
 	}
-	evs := repoEvents(ideas, "org/repo")
-	if len(evs) != 3 {
-		t.Fatalf("want 3 events (offer, accept, settle), got %d: %+v", len(evs), evs)
+	evs := repoEvents(ideas, "org/repo", nil)
+	if len(evs) != 1 {
+		t.Fatalf("want 1 idea-filed event, got %d: %+v", len(evs), evs)
 	}
-	wantWeights := []float64{weightOffer, weightAccept, weightSettle}
-	wantKinds := []string{"ideas", "agent", "agent"}
-	for i, e := range evs {
-		if e.weight != wantWeights[i] || e.kind != wantKinds[i] {
-			t.Fatalf("event %d: %+v, want weight %v kind %s", i, e, wantWeights[i], wantKinds[i])
-		}
+	wantWeight := indexformula.Contribution(indexformula.Counts{IdeasFiled: 1})
+	if evs[0].weight != wantWeight || evs[0].kind != "ideas" {
+		t.Fatalf("event = %+v, want weight %v kind ideas", evs[0], wantWeight)
 	}
-	if evs := repoEvents(ideas, "org/uninvolved"); len(evs) != 0 {
+	if evs := repoEvents(ideas, "org/uninvolved", nil); len(evs) != 0 {
 		t.Fatalf("uninvolved repo should have no events, got %+v", evs)
 	}
 }
@@ -162,24 +160,53 @@ func TestHistoryEventsUseNativeIndexSemantics(t *testing.T) {
 		t.Fatalf("NewStore: %v", err)
 	}
 	if err := hist.Upsert("org/repo", []history.DayActivity{{
-		Date: "2026-08-18", MergedPRs: 2, Commits: 3,
+		Date: "2026-08-18", RegularIssuesCreated: 2, IdeasFiled: 1, MergedPRs: 3, ClankerPRsCreated: 1, ClankerPRsMerged: 1,
 	}}, ts(t, "2026-08-19T12:00:00Z")); err != nil {
 		t.Fatalf("Upsert: %v", err)
 	}
 	evs := historyEvents(hist, "org/repo")
-	if len(evs) != 1 {
-		t.Fatalf("historyEvents len=%d, want 1", len(evs))
+	if len(evs) != 2 {
+		t.Fatalf("historyEvents len=%d, want 2", len(evs))
 	}
-	wantWeight := 2*weightSettle + 3*weightAccept
-	if evs[0].weight != wantWeight || evs[0].kind != "agent" || evs[0].count != 5 {
-		t.Fatalf("history event = %+v, want weight %v kind agent count 5", evs[0], wantWeight)
+	wantIssueWeight := indexformula.Contribution(indexformula.Counts{RegularIssuesCreated: 2, IdeasFiled: 1})
+	wantPRWeight := indexformula.Contribution(indexformula.Counts{RegularPRsMerged: 3, ClankerPRsCreated: 1, ClankerPRsMerged: 1})
+	if evs[0].weight != wantIssueWeight || evs[0].kind != "ideas" || evs[0].count != 3 {
+		t.Fatalf("history issue event = %+v, want weight %v kind ideas count 3", evs[0], wantIssueWeight)
+	}
+	if evs[1].weight != wantPRWeight || evs[1].kind != "agent" || evs[1].count != 5 {
+		t.Fatalf("history PR event = %+v, want weight %v kind agent count 5", evs[1], wantPRWeight)
 	}
 	_, bars1, cur1, _, act1 := buildIndex(evs, ts(t, "2026-08-19T12:00:00Z"))
 	_, bars2, cur2, _, act2 := buildIndex(historyEvents(hist, "org/repo"), ts(t, "2026-08-19T12:00:00Z"))
 	if cur1 != cur2 || act1 != act2 || !reflect.DeepEqual(bars1, bars2) {
 		t.Fatalf("same persisted backfill should produce same series")
 	}
-	if bars1[len(bars1)-2].Agent != 5 {
-		t.Fatalf("agent bar = %d, want 5", bars1[len(bars1)-2].Agent)
+	if bars1[len(bars1)-2].Ideas != 3 || bars1[len(bars1)-2].Agent != 5 {
+		t.Fatalf("bars = %+v, want ideas 3 agent 5", bars1[len(bars1)-2])
+	}
+}
+
+func TestCombinedRepoEventsDedupesBackfilledIdeas(t *testing.T) {
+	hist, err := history.NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	if err := hist.Upsert("org/repo", []history.DayActivity{
+		{Date: "2026-08-18", IdeasFiled: 1},
+		{Date: "2026-08-19"},
+	}, ts(t, "2026-08-19T12:00:00Z")); err != nil {
+		t.Fatalf("Upsert: %v", err)
+	}
+	ideas := []*store.Idea{{
+		ID: "a", Status: store.StatusSettled, TargetRepo: "org/repo",
+		UpdatedAt: ts(t, "2026-08-19T10:00:00Z"),
+	}}
+	evs := combinedRepoEvents(ideas, hist, "org/repo")
+	if len(evs) != 1 {
+		t.Fatalf("combined events len=%d, want only the backfilled idea despite next-day confirmation: %+v", len(evs), evs)
+	}
+	want := indexformula.Contribution(indexformula.Counts{IdeasFiled: 1})
+	if evs[0].weight != want || evs[0].kind != "ideas" {
+		t.Fatalf("event = %+v, want backfilled idea weight %v", evs[0], want)
 	}
 }

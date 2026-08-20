@@ -1,20 +1,13 @@
 // Repo value index: the derived "stock price" of a hive-managed repo,
 // powering the landing's terminal chart and the repo tickers on the tape.
 //
-// The index is derived ENTIRELY from what Dibs already stores — idea
-// offers, acceptances, and settlements against the repo — so it is
-// deterministic, needs no external API, and leaks nothing: every input is
-// an aggregate count of events whose existence the market surfaces already
-// expose. (A GitHub-stats enrichment can be layered on later; the store-only
-// derivation is the honest baseline and the graceful fallback.)
+// The index is an explicit weighted composite over aggregate daily activity:
+// regular GitHub issues, regular merged PRs, ClankeR-created PRs,
+// Dibs-filed idea issues, and ClankeR-merged PRs. The weights and formula
+// live in pkg/indexformula and are shared by backfilled GitHub history and
+// live Dibs-native idea filing movement.
 //
-// Derivation, documented for the chart's sake:
-//
-//	weight(offer)  = 2   an idea matched/offered to the repo — interest
-//	weight(accept) = 6   the repo committed agent capacity — a bid hit
-//	weight(settle) = 10  credited issue filed — the idea shipped
-//
-//	index(day) = indexBase + Σ weights of all events up to that day,
+//	index(day) = indexBase + Σ daily composite contributions,
 //	then smoothed with a trailing 3-day mean.
 //
 // Buckets are daily over the last indexDays days; events older than the
@@ -30,15 +23,13 @@ import (
 	"time"
 
 	"github.com/kubestellar/dibs/pkg/history"
+	"github.com/kubestellar/dibs/pkg/indexformula"
 	"github.com/kubestellar/dibs/pkg/registry"
 	"github.com/kubestellar/dibs/pkg/store"
 )
 
 // Index derivation constants (see package comment).
 const (
-	weightOffer  = 2.0
-	weightAccept = 6.0
-	weightSettle = 10.0
 	indexBase    = 100.0
 	indexDays    = 30
 	smoothWindow = 3
@@ -71,8 +62,8 @@ type IndexPoint struct {
 // IndexBar is one day's activity bars for the sub-chart.
 type IndexBar struct {
 	T     string `json:"t"`
-	Ideas int    `json:"ideas"` // ideas listed/matched on the repo
-	Agent int    `json:"agent"` // agent activity (est.) — accepts + settlements
+	Ideas int    `json:"ideas"` // regular issues plus Dibs-filed ideas
+	Agent int    `json:"agent"` // regular and ClankeR PR activity
 }
 
 // RepoIndex is the full chart payload for one repo.
@@ -127,32 +118,87 @@ func repoSymbols(repos []registry.RepoProfile) map[string]string {
 	return out
 }
 
-// repoEvents collects the repo's weighted activity events from the store.
+// repoEvents collects live Dibs-native idea filings from the store.
 // Aggregate-only: nothing about any idea's content or visibility leaves
 // this function — just timestamps and weights.
-func repoEvents(ideas []*store.Idea, repoID string) []repoEvent {
+func repoEvents(ideas []*store.Idea, repoID string, coveredIdeas *ideaCoverage) []repoEvent {
+	coveredIdeas = coveredIdeas.clone()
 	var evs []repoEvent
 	for _, idea := range ideas {
-		for _, o := range idea.Offers {
-			if o.RepoID != repoID {
+		if idea.TargetRepo == repoID && idea.Status == store.StatusSettled {
+			date := idea.UpdatedAt.UTC().Format("2006-01-02")
+			if coveredIdeas.covers(date, idea.UpdatedAt) {
 				continue
 			}
-			evs = append(evs, repoEvent{at: o.CreatedAt, weight: weightOffer, kind: "ideas"})
-			if o.Status == store.OfferAccepted && o.DecidedAt != nil {
-				evs = append(evs, repoEvent{at: *o.DecidedAt, weight: weightAccept, kind: "agent"})
-			}
-		}
-		if idea.TargetRepo == repoID && idea.Status == store.StatusSettled {
-			evs = append(evs, repoEvent{at: idea.UpdatedAt, weight: weightSettle, kind: "agent"})
+			evs = append(evs, repoEvent{at: idea.UpdatedAt, weight: indexformula.Contribution(indexformula.Counts{IdeasFiled: 1}), kind: "ideas"})
 		}
 	}
 	sort.Slice(evs, func(i, j int) bool { return evs[i].at.Before(evs[j].at) })
 	return evs
 }
 
-// historyEvents converts backfilled GitHub activity into the same weighted
-// agent-activity semantics as Dibs-native implementation events: merged PRs
-// mirror settlements, and commits mirror accepted implementation work.
+type ideaCoverage struct {
+	byDate    map[string]int
+	total     int
+	startDate string
+	endDate   string
+	fetchedAt time.Time
+}
+
+func (c *ideaCoverage) clone() *ideaCoverage {
+	if c == nil {
+		return nil
+	}
+	out := *c
+	out.byDate = make(map[string]int, len(c.byDate))
+	for date, n := range c.byDate {
+		out.byDate[date] = n
+	}
+	return &out
+}
+
+func (c *ideaCoverage) covers(date string, at time.Time) bool {
+	if c == nil || c.total == 0 || at.After(c.fetchedAt) {
+		return false
+	}
+	if c.byDate[date] > 0 {
+		c.byDate[date]--
+		c.total--
+		return true
+	}
+	if c.startDate != "" && c.startDate <= date && date <= c.endDate {
+		c.total--
+		return true
+	}
+	return false
+}
+
+func historyIdeaCoverage(hist *history.Store, repoID string) *ideaCoverage {
+	if hist == nil {
+		return nil
+	}
+	h, ok := hist.Get(repoID)
+	if !ok || len(h.Days) == 0 {
+		return nil
+	}
+	out := &ideaCoverage{byDate: map[string]int{}, startDate: h.Days[0].Date, endDate: h.Days[len(h.Days)-1].Date, fetchedAt: h.FetchedAt}
+	for _, d := range h.Days {
+		if d.IdeasFiled > 0 {
+			out.byDate[d.Date] += d.IdeasFiled
+			out.total += d.IdeasFiled
+		}
+	}
+	return out
+}
+
+func combinedRepoEvents(ideas []*store.Idea, hist *history.Store, repoID string) []repoEvent {
+	evs := append(repoEvents(ideas, repoID, historyIdeaCoverage(hist, repoID)), historyEvents(hist, repoID)...)
+	sort.Slice(evs, func(i, j int) bool { return evs[i].at.Before(evs[j].at) })
+	return evs
+}
+
+// historyEvents converts backfilled GitHub activity into weighted composite
+// events using the same formula as live Dibs-native movement.
 func historyEvents(hist *history.Store, repoID string) []repoEvent {
 	if hist == nil {
 		return nil
@@ -161,21 +207,24 @@ func historyEvents(hist *history.Store, repoID string) []repoEvent {
 	if !ok {
 		return nil
 	}
-	evs := make([]repoEvent, 0, len(h.Days))
+	evs := make([]repoEvent, 0, len(h.Days)*2)
 	for _, d := range h.Days {
-		if d.MergedPRs == 0 && d.Commits == 0 {
-			continue
-		}
 		at, err := time.Parse("2006-01-02", d.Date)
 		if err != nil {
 			continue
 		}
-		evs = append(evs, repoEvent{
-			at:     at,
-			weight: float64(d.MergedPRs)*weightSettle + float64(d.Commits)*weightAccept,
-			count:  d.MergedPRs + d.Commits,
-			kind:   "agent",
-		})
+		issueCounts := indexformula.Counts{RegularIssuesCreated: d.RegularIssuesCreated, IdeasFiled: d.IdeasFiled}
+		if w := indexformula.Contribution(issueCounts); w != 0 {
+			evs = append(evs, repoEvent{at: at, weight: w, count: indexformula.Activity(issueCounts), kind: "ideas"})
+		}
+		prCounts := indexformula.Counts{
+			RegularPRsMerged:  d.MergedPRs,
+			ClankerPRsCreated: d.ClankerPRsCreated,
+			ClankerPRsMerged:  d.ClankerPRsMerged,
+		}
+		if w := indexformula.Contribution(prCounts); w != 0 {
+			evs = append(evs, repoEvent{at: at, weight: w, count: indexformula.Activity(prCounts), kind: "agent"})
+		}
 	}
 	return evs
 }
@@ -258,7 +307,7 @@ func (a *API) repoTickers() ([]RepoTicker, error) {
 	now := timeNow()
 	out := make([]RepoTicker, 0, len(repos))
 	for _, rp := range repos {
-		evs := append(repoEvents(ideas, rp.RepoID), historyEvents(a.History, rp.RepoID)...)
+		evs := combinedRepoEvents(ideas, a.History, rp.RepoID)
 		_, _, current, delta, activity := buildIndex(evs, now)
 		out = append(out, RepoTicker{
 			RepoID: rp.RepoID, Symbol: syms[rp.RepoID],
@@ -291,7 +340,7 @@ func (a *API) HandleRepoIndex(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	evs := append(repoEvents(ideas, repoID), historyEvents(a.History, repoID)...)
+	evs := combinedRepoEvents(ideas, a.History, repoID)
 	points, bars, current, delta, _ := buildIndex(evs, timeNow())
 	syms := repoSymbols(a.Registry.List(false))
 	writeJSON(w, http.StatusOK, RepoIndex{
