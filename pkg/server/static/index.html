@@ -162,6 +162,7 @@ main section.sheet:first-of-type { border-top: none; margin-top: 0; padding-top:
 .modal-close { position: absolute; top: 12px; right: 12px; width: 32px; height: 32px; background: var(--panel-2); border: 1px solid var(--line); color: var(--muted); border-radius: var(--radius); cursor: pointer; font: inherit; line-height: 1; }
 .modal-close:hover { color: var(--text); border-color: var(--amber); }
 body.modal-open { overflow: hidden; }
+#modal-edit .modal-card { width: min(860px, calc(100vw - 32px)); max-width: 860px; max-height: 90vh; overflow-y: auto; }
 .qr-card { max-width: 430px; text-align: center; }
 .qr-meta { color: var(--muted); font-family: var(--font-mono); font-size: .85rem; margin-bottom: 16px; }
 .qr-matte { display: inline-flex; align-items: center; justify-content: center; background: #fff; border-radius: 6px; padding: 14px; margin: 6px auto 16px; }
@@ -850,7 +851,7 @@ details.how-details .how-body { padding: 16px 18px; }
 <div class="modal" id="modal-edit" hidden role="dialog" aria-modal="true" aria-labelledby="edit-title">
   <div class="modal-card">
     <button class="modal-close" data-close-modal aria-label="Close listing wizard">✕</button>
-    <h2 class="page-title" id="edit-title">List an idea</h2>
+    <h2 class="page-title" id="edit-title">List an idea, spec, or requirement</h2>
   <ol class="stepper" id="wiz-stepper" aria-label="Listing steps">
     <li id="step-tab-1" class="current" aria-current="step"><span class="sn" aria-hidden="true">1</span>Write</li>
     <li class="step-arrow" aria-hidden="true">→</li>
@@ -2474,7 +2475,7 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
     editingId = idea ? idea.id : null;
     wizIdea = idea || null;
     listingTargetRepo = targetRepo && !idea ? targetRepo : null;
-    $('edit-title').textContent = idea ? 'Edit idea' : (listingTargetRepo ? 'Offer idea to $' + (listingTargetRepo.symbol || 'REPO') : 'List an idea');
+    $('edit-title').textContent = idea ? 'Edit idea' : (listingTargetRepo ? 'Offer idea to $' + (listingTargetRepo.symbol || 'REPO') : 'List an idea, spec, or requirement');
     $('f-title').value = idea ? idea.title : '';
     $('f-body').value = idea ? idea.body : '';
     setIntakeStatus('', '');
