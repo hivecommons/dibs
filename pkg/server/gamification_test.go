@@ -25,29 +25,29 @@ func TestStatsGamification(t *testing.T) {
 	}
 
 	s := stats()
-	if s.Score != 0 || s.Level.Name != "Larva" || len(s.Badges) != 0 {
+	if s.Score != 0 || s.Level.Name != "Bronze" || len(s.Badges) != 0 {
 		t.Fatalf("fresh user: %+v", s)
 	}
 
 	// One draft: +10, First Dibs.
 	f.createIdea(t, "bob-session", "Draft", "kubernetes body", "private")
 	s = stats()
-	if s.Score != 10 || s.Level.Name != "Larva" {
+	if s.Score != 10 || s.Level.Name != "Bronze" {
 		t.Fatalf("after draft: %+v", s)
 	}
 	if len(s.Badges) != 1 || s.Badges[0].ID != "first-dibs" {
 		t.Fatalf("first idea should earn first-dibs: %+v", s.Badges)
 	}
 
-	// One settled idea: +10+25+50+100 = 185 → 195 total → Worker, plus
+	// One settled idea: +10+25+50+100 = 185 → 195 total → Silver, plus
 	// Rainmaker.
 	settled := f.createIdea(t, "bob-session", "Ship it", "kubernetes marketplace body", "public")
 	f.settleIdea(t, "bob-session", "alice-session", "kubestellar/dibs", settled)
 	s = stats()
-	if s.Score != 195 || s.Level.Name != "Worker" {
+	if s.Score != 195 || s.Level.Name != "Silver" {
 		t.Fatalf("after settle: %+v", s)
 	}
-	if s.NextLevel == nil || s.NextLevel.Name != "Forager" || s.ToNext != 105 {
+	if s.NextLevel == nil || s.NextLevel.Name != "Gold" || s.ToNext != 105 {
 		t.Fatalf("progress wrong: %+v", s)
 	}
 	ids := map[string]bool{}
@@ -100,7 +100,7 @@ func TestLeaderboardPublic(t *testing.T) {
 	if second.Author != "charlie" || second.Rank != 2 || second.Score != 185 {
 		t.Fatalf("second entry wrong: %+v", second)
 	}
-	if first.Level.Name != "Worker" || first.Level.Emoji != "🐝" {
+	if first.Level.Name != "Silver" || first.Level.Emoji != "" {
 		t.Fatalf("level wrong: %+v", first.Level)
 	}
 	hasRainmaker := false

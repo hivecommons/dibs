@@ -63,14 +63,14 @@ func TestLevelThresholds(t *testing.T) {
 		want     string
 		wantNext string // "" means top level
 	}{
-		{0, "Larva", "Worker"},
-		{99, "Larva", "Worker"},
-		{100, "Worker", "Forager"},
-		{299, "Worker", "Forager"},
-		{300, "Forager", "Queen"},
-		{749, "Forager", "Queen"},
-		{750, "Queen", ""},
-		{10000, "Queen", ""},
+		{0, "Bronze", "Silver"},
+		{99, "Bronze", "Silver"},
+		{100, "Silver", "Gold"},
+		{299, "Silver", "Gold"},
+		{300, "Gold", "Platinum"},
+		{749, "Gold", "Platinum"},
+		{750, "Platinum", ""},
+		{10000, "Platinum", ""},
 	}
 	for _, c := range cases {
 		cur, next := LevelFor(c.score)
@@ -89,15 +89,15 @@ func TestLevelThresholds(t *testing.T) {
 // TestProgressFor pins the progress-bar math.
 func TestProgressFor(t *testing.T) {
 	p := ProgressFor(150)
-	if p.Level.Name != "Worker" || p.NextLevel.Name != "Forager" || p.ToNext != 150 || p.Pct != 25 {
+	if p.Level.Name != "Silver" || p.NextLevel.Name != "Gold" || p.ToNext != 150 || p.Pct != 25 {
 		t.Fatalf("ProgressFor(150) = %+v", p)
 	}
 	p = ProgressFor(750)
-	if p.Level.Name != "Queen" || p.NextLevel != nil || p.ToNext != 0 || p.Pct != 100 {
+	if p.Level.Name != "Platinum" || p.NextLevel != nil || p.ToNext != 0 || p.Pct != 100 {
 		t.Fatalf("ProgressFor(750) = %+v", p)
 	}
 	p = ProgressFor(0)
-	if p.Level.Name != "Larva" || p.Pct != 0 || p.ToNext != 100 {
+	if p.Level.Name != "Bronze" || p.Pct != 0 || p.ToNext != 100 {
 		t.Fatalf("ProgressFor(0) = %+v", p)
 	}
 }
