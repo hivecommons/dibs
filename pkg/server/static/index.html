@@ -403,7 +403,7 @@ details.how-details .how-body { padding: 16px 18px; }
     <button data-view="credits">📊 The Board</button>
   </nav>
   <button id="nav-list-cta" aria-label="List an idea — the guided 3-step listing">＋ List an idea</button>
-  <a id="signin" href="__HUB_URL__">Sign in</a>
+  <a id="signin" href="__HUB_URL__" target="_blank" rel="noopener">Sign in</a>
   <button id="level-chip" data-auth data-goto="mine" aria-label="Your score and level — open profile"></button>
   <div id="bell-wrap" data-auth>
     <button id="bell" title="Notifications" aria-label="Notifications">🔔<span class="badge" id="bell-badge"></span></button>
@@ -772,8 +772,9 @@ details.how-details .how-body { padding: 16px 18px; }
   <div class="mo-card">
     <h2 id="so-title">💡 Ready to list your idea?</h2>
     <p>Listing takes one quick sign-in — your idea goes on the market with
-    <b>your name on it, forever</b>. We'll bring you right back.</p>
-    <a class="pill primary" id="so-signin" href="__HUB_URL__">Sign in with Hive Hub</a>
+    <b>your name on it, forever</b>. Sign in opens in a new tab; this one
+    picks up your session the moment you come back.</p>
+    <a class="pill primary" id="so-signin" href="__HUB_URL__" target="_blank" rel="noopener">Sign in with Hive Hub</a>
     <button class="pill" id="so-close">Maybe later</button>
   </div>
 </div>
@@ -854,19 +855,37 @@ details.how-details .how-body { padding: 16px 18px; }
   });
 
   /* ── identity ── */
-  api('GET', 'me').then(function (me) {
+  function applyIdentity(me) {
     var w = $('who');
     w.innerHTML = (me.avatar_url ? '<img src="' + esc(me.avatar_url) + '" alt="">' : '') +
       '<span>' + esc(me.display_name || me.username) + '</span>';
     loadDesk();
     loadGamebar();
-  }).catch(function () {
+  }
+  api('GET', 'me').then(applyIdentity).catch(function () {
     // Not signed in: landing mode. The page stays useful (exchange landing
     // + The Board); authed nav and the bell disappear.
     anon = true;
     document.body.classList.add('anon');
     loadLanding();
   });
+
+  // 🔑 Stale-tab SSO recovery (#20): a tab that decided "anonymous" at load
+  // never learns the user signed in at the hub (in another tab, or via the
+  // hub's cookie re-scoping). Recheck identity whenever this tab regains
+  // focus while anonymous and upgrade in place — no reload required.
+  function recheckIdentity() {
+    if (!anon || document.hidden) return;
+    api('GET', 'me').then(function (me) {
+      anon = false;
+      document.body.classList.remove('anon');
+      $('signin-overlay').hidden = true;
+      applyIdentity(me);
+      show('home');
+    }).catch(function () { /* still signed out — stay on the landing */ });
+  }
+  document.addEventListener('visibilitychange', recheckIdentity);
+  window.addEventListener('focus', recheckIdentity);
 
   /* ── 📈 market landing (logged out): tape + stats + live markets ── */
   var HUB_URL = document.getElementById('signin').getAttribute('href');
