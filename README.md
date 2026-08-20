@@ -49,8 +49,8 @@ deployments also work.
 | `pkg/store` | Idea model + JSON file store (atomic writes, no external DB), offer/settlement state machine |
 | `pkg/api` | Idea CRUD + matching/offer/feed/decide/notification API (author-scoped, private ideas never leak) |
 | `pkg/registry` | Hive-managed repo profiles + "accepting ideas" opt-in |
-| `pkg/match` | LLM idea↔repo scoring via litellm gateway, cached TLDRs, "✨ Refine with AI" draft refinement, deterministic keyword fallback |
-| `pkg/settle` | Settlement — prefilled GitHub new-issue URL the ideator files themselves (`ideated` label, 🐝 Dibs footer, URL-length budget) + issue-URL confirmation; legacy token mode |
+| `pkg/match` | LLM idea↔repo scoring via litellm gateway, cached TLDRs, "✨ Embellish" draft refinement, deterministic keyword fallback |
+| `pkg/settle` | Settlement — prefilled GitHub new-issue URL the ideator files themselves (`ideated` label, 🐝 Dibs footer, URL-length budget) + issue-URL confirmation; legacy token mode. Ideas can target ANY GitHub repo: non-hive targets skip acceptance and their issues carry a "request a hive" growth CTA |
 | `pkg/notify` | In-app notification feed (bell): matches, offers, decisions, issues |
 
 ### Configuration

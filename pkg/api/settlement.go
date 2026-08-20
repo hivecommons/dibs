@@ -89,12 +89,24 @@ func (a *API) handleLaunch(w http.ResponseWriter, r *http.Request) {
 	if !decodeInput(w, r, &in) {
 		return
 	}
-	if idea.Status != store.StatusAccepted && idea.Status != store.StatusIssueLaunched {
-		writeError(w, http.StatusBadRequest, "idea must be accepted before launching the issue")
-		return
-	}
 	if idea.TargetRepo == "" {
 		writeError(w, http.StatusBadRequest, "idea has no target repo")
+		return
+	}
+	// hiveManaged decides the footer AND the status gate: hive repos must
+	// accept first; external targets have no owner on our side, so an
+	// offered idea launches directly (see offerExternal).
+	_, regErr := a.Registry.Get(idea.TargetRepo)
+	hiveManaged := regErr == nil
+	switch idea.Status {
+	case store.StatusAccepted, store.StatusIssueLaunched:
+	case store.StatusOffered:
+		if hiveManaged {
+			writeError(w, http.StatusBadRequest, "idea must be accepted before launching the issue")
+			return
+		}
+	default:
+		writeError(w, http.StatusBadRequest, "idea must be accepted before launching the issue")
 		return
 	}
 	title := in.Title
@@ -105,10 +117,10 @@ func (a *API) handleLaunch(w http.ResponseWriter, r *http.Request) {
 	if body == "" {
 		body = idea.Body
 	}
-	fullBody := settle.LaunchBody(body)
-	issueURL, truncated := settle.NewIssueURL(idea.TargetRepo, title, fullBody)
+	fullBody := settle.LaunchBody(body, hiveManaged)
+	issueURL, truncated := settle.NewIssueURL(idea.TargetRepo, title, fullBody, hiveManaged)
 
-	if idea.Status == store.StatusAccepted {
+	if idea.Status != store.StatusIssueLaunched {
 		if _, err := a.Store.Transition(idea.ID, store.StatusIssueLaunched); err != nil {
 			status, msg := storeErrStatus(err)
 			writeError(w, status, msg)
