@@ -1,7 +1,7 @@
 # Multi-stage build mirroring hive's pattern: the git hash is stamped into
 # the binary via ldflags so `dibs --version` prints the running commit
 # (freshness-probe friendly).
-FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS builder
 RUN apk add --no-cache git
 WORKDIR /src
 
