@@ -914,6 +914,7 @@ details.how-details .how-body { padding: 16px 18px; }
     new IntersectionObserver(function (entries) {
       entries.forEach(function (e) { if (e.isIntersecting) ensureSection(e.target.id); });
     }, { rootMargin: '240px' }) : null;
+  var chartPanelVisible = !('IntersectionObserver' in window);
   function startSections() {
     sectionLoaded = {};
     document.querySelectorAll('main section.sheet').forEach(function (s) {
@@ -1150,6 +1151,10 @@ details.how-details .how-body { padding: 16px 18px; }
   var chartCache = {};        // repoID → index payload
   var chartCurrent = null;    // repoID being shown (null = example mode)
   var seriesOn = { ideas: true, agent: true };
+  var CHART_ROTATE_MS = 45000;
+  var CHART_RESUME_MS = 120000;
+  var chartRotateTimer = null;
+  var chartPausedUntil = 0;
   var CHART_EXAMPLE = (function () {
     // Deterministic fake series, clearly labeled — shown only when no
     // repos are listed yet.
@@ -1168,13 +1173,16 @@ details.how-details .how-body { padding: 16px 18px; }
     // On a background refresh keep the user's selected repo and cached
     // series — only re-fetch the current one so the live dot stays fresh.
     if (refresh) {
+      scheduleChartRotation();
       if (chartCurrent) { delete chartCache[chartCurrent]; showChart(chartCurrent); }
       return;
     }
     var chips = $('chart-chips');
     if (!repos.length) {
+      chartCurrent = null;
       chips.innerHTML = '';
       renderChart(CHART_EXAMPLE);
+      scheduleChartRotation();
       return;
     }
     chips.innerHTML = repos.map(function (r, i) {
@@ -1184,6 +1192,39 @@ details.how-details .how-body { padding: 16px 18px; }
       b.addEventListener('click', function () { showChart(b.dataset.repo); });
     });
     showChart(repos[0].repoID); // default: the most active repo
+    scheduleChartRotation();
+  }
+  function chartButtons() {
+    return Array.prototype.slice.call($('chart-chips').querySelectorAll('button'));
+  }
+  function stopChartRotation() {
+    if (chartRotateTimer) clearTimeout(chartRotateTimer);
+    chartRotateTimer = null;
+  }
+  function chartCanRotate() {
+    return chartRepos.length > 1 &&
+      chartButtons().length > 1 &&
+      chartPanelVisible &&
+      !document.hidden &&
+      Date.now() >= chartPausedUntil;
+  }
+  function scheduleChartRotation() {
+    stopChartRotation();
+    if (chartRepos.length <= 1 || chartButtons().length <= 1 || !chartPanelVisible || document.hidden) return;
+    chartRotateTimer = setTimeout(rotateChart, Math.max(CHART_ROTATE_MS, chartPausedUntil - Date.now()));
+  }
+  function noteChartInteraction() {
+    chartPausedUntil = Date.now() + CHART_RESUME_MS;
+    scheduleChartRotation();
+  }
+  function rotateChart() {
+    chartRotateTimer = null;
+    if (chartCanRotate()) {
+      var buttons = chartButtons();
+      var current = buttons.findIndex(function (b) { return b.getAttribute('aria-selected') === 'true'; });
+      buttons[(current + 1) % buttons.length].click();
+    }
+    scheduleChartRotation();
   }
   function showChart(repoID) {
     chartCurrent = repoID;
@@ -1292,6 +1333,26 @@ details.how-details .how-body { padding: 16px 18px; }
       if (d) renderChart(d);
     });
   });
+  function wireChartRotation() {
+    var panel = document.querySelector('.chart-panel');
+    if (!panel) return;
+    panel.addEventListener('click', function (ev) { if (ev.isTrusted) noteChartInteraction(); }, true);
+    panel.addEventListener('pointerenter', function (ev) { if (ev.isTrusted) noteChartInteraction(); });
+    panel.addEventListener('pointermove', function (ev) { if (ev.isTrusted) noteChartInteraction(); });
+    panel.addEventListener('pointerleave', function (ev) { if (ev.isTrusted) noteChartInteraction(); });
+    panel.addEventListener('focusin', function (ev) { if (ev.isTrusted) noteChartInteraction(); });
+    panel.addEventListener('keydown', function (ev) { if (ev.isTrusted) noteChartInteraction(); });
+    if ('IntersectionObserver' in window) {
+      new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          chartPanelVisible = e.isIntersecting;
+          scheduleChartRotation();
+        });
+      }, { threshold: 0.01 }).observe(panel);
+    }
+  }
+  wireChartRotation();
+  document.addEventListener('visibilitychange', scheduleChartRotation);
 
   function loadMktStats() {
     api('GET', 'stats').then(function (s) {
