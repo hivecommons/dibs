@@ -93,6 +93,12 @@ const MaxBodyBytes = 64 * 1024
 // MaxTitleLen caps an idea's title.
 const MaxTitleLen = 200
 
+// MaxTags caps the number of idea tags.
+const MaxTags = 20
+
+// MaxTagLen caps a single idea tag.
+const MaxTagLen = 40
+
 // Match is a cached idea↔repo fit score. RepoHash fingerprints the repo
 // profile the score was computed against so repo edits invalidate the cache;
 // idea edits clear Matches wholesale (see Update).
@@ -113,10 +119,11 @@ type Idea struct {
 	Author        string    `json:"author"`        // identity key (github login / provider:sub)
 	AuthorDisplay string    `json:"authorDisplay"` // human name for credit
 	Title         string    `json:"title"`
+	Tags          []string  `json:"tags,omitempty"`
 	Symbol        string    `json:"symbol,omitempty"` // $TICKER-style display symbol, assigned at creation
 	Body          string    `json:"body"`             // markdown
-	TLDR          string    `json:"tldr,omitempty"` // filled by the matching wave
-	Visibility    string    `json:"visibility"`     // public | private
+	TLDR          string    `json:"tldr,omitempty"`   // filled by the matching wave
+	Visibility    string    `json:"visibility"`       // public | private
 	Status        string    `json:"status"`
 	CreatedAt     time.Time `json:"createdAt"`
 	UpdatedAt     time.Time `json:"updatedAt"`
@@ -165,6 +172,17 @@ func Validate(idea *Idea) error {
 	}
 	if len(idea.Title) > MaxTitleLen {
 		return &ValidationError{fmt.Sprintf("title exceeds %d characters", MaxTitleLen)}
+	}
+	if len(idea.Tags) > MaxTags {
+		return &ValidationError{fmt.Sprintf("more than %d tags", MaxTags)}
+	}
+	for _, tag := range idea.Tags {
+		if strings.TrimSpace(tag) == "" {
+			return &ValidationError{"tags cannot be blank"}
+		}
+		if len(tag) > MaxTagLen {
+			return &ValidationError{fmt.Sprintf("tag exceeds %d characters", MaxTagLen)}
+		}
 	}
 	if strings.TrimSpace(idea.Body) == "" {
 		return &ValidationError{"body is required"}
@@ -355,6 +373,7 @@ func (s *Store) Update(idea *Idea) error {
 		return err
 	}
 	idea.Author = existing.Author
+	idea.Tags = existing.Tags
 	idea.Symbol = existing.Symbol
 	idea.CreatedAt = existing.CreatedAt
 	idea.UpdatedAt = time.Now().UTC()

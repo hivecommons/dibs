@@ -8,6 +8,9 @@ metadata:
   namespace: dibs
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
+    # The /mcp Streamable HTTP endpoint may return SSE responses; avoid
+    # buffering streaming tool responses behind ingress-nginx.
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
 spec:
   ingressClassName: nginx
   tls:
