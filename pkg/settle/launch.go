@@ -24,7 +24,7 @@ const Footer = "Listed via dibs.kubestellar.io"
 // on repos NOT managed by a hive: every idea filed externally advertises
 // hive to that repo's maintainers.
 const ExternalFooter = "Listed via dibs.kubestellar.io.\n" +
-	"Request a hive for this repo at hive.kubestellar.io to have AI agents implement ideas like this."
+	"This idea arrived via DIBS (https://dibs.kubestellar.io). Give this repo agent capacity by requesting a hive at https://hive.kubestellar.io; clankers, powered by donated AI tokens, implement accepted ideas. Once the repo has a hive, this issue can be assigned to it and built."
 
 // footerFor picks the footer by hive membership of the target repo.
 func footerFor(hiveManaged bool) string {

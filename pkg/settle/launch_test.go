@@ -138,18 +138,18 @@ func TestLaunchBodyExternal(t *testing.T) {
 	if !strings.HasSuffix(ext, ExternalFooter) {
 		t.Fatalf("external body missing the growth footer: %q", ext)
 	}
-	if !strings.Contains(ext, "Request a hive for this repo") || !strings.Contains(ext, "hive.kubestellar.io") {
+	if !strings.Contains(ext, "requesting a hive") || !strings.Contains(ext, "hive.kubestellar.io") || !strings.Contains(ext, "dibs.kubestellar.io") {
 		t.Fatalf("external footer missing the hive CTA: %q", ext)
 	}
 	// Idempotent: relaunching an already-footered body adds nothing.
 	if again := LaunchBody(ext, false); again != ext {
 		t.Fatalf("external footer must be idempotent:\n%q\nvs\n%q", ext, again)
 	}
-	if strings.Count(LaunchBody(LaunchBody("x", false), false), "Request a hive") != 1 {
+	if strings.Count(LaunchBody(LaunchBody("x", false), false), "requesting a hive") != 1 {
 		t.Fatal("external footer duplicated")
 	}
 	// The hive footer never pitches a hive (they already have one).
-	if hive := LaunchBody("Body.", true); strings.Contains(hive, "Request a hive") {
+	if hive := LaunchBody("Body.", true); strings.Contains(hive, "requesting a hive") {
 		t.Fatalf("hive-managed footer must not carry the pitch: %q", hive)
 	}
 }

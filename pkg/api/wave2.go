@@ -16,8 +16,14 @@ import (
 	"github.com/kubestellar/dibs/pkg/store"
 )
 
-// maxFeedCandidates caps the repo-side candidate feed (LLM cost control).
-const maxFeedCandidates = 25
+const (
+	// maxFeedCandidates caps the repo-side candidate feed (LLM cost control).
+	maxFeedCandidates = 25
+	// maxIdeaHiveMatches keeps idea match results focused: hive capacity first.
+	maxIdeaHiveMatches = 1
+	// maxIdeaCNCFMatches is the CNCF companion count shown after the hive match.
+	maxIdeaCNCFMatches = 2
+)
 
 // registerWave2 mounts the matching/settlement/notification routes.
 func (a *API) registerWave2(mux *http.ServeMux, basePath string) {
@@ -98,13 +104,26 @@ func (a *API) handleIdeaMatches(w http.ResponseWriter, r *http.Request) {
 	}
 	views := []matchView{}
 	for _, m := range matches {
+		if len(views) >= maxIdeaHiveMatches {
+			break
+		}
 		rp, err := a.Registry.Get(m.RepoID)
 		if err != nil {
 			continue // repo vanished from the registry since scoring
 		}
 		views = append(views, matchView{Repo: rp, Score: m.Score, Reason: m.Reason, ByLLM: m.ByLLM})
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"tldr": idea.TLDR, "matches": views, "cncf": cncf})
+	cncfViews := cncf[:0]
+	for _, m := range cncf {
+		if len(cncfViews) >= maxIdeaCNCFMatches {
+			break
+		}
+		if _, err := a.Registry.Get(m.RepoID); err == nil {
+			continue // already hive-managed; keep CNCF section non-hive only
+		}
+		cncfViews = append(cncfViews, m)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"tldr": idea.TLDR, "matches": views, "cncf": cncfViews})
 }
 
 type offerInput struct {
