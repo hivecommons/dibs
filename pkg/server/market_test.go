@@ -160,7 +160,6 @@ type repoIndexResp struct {
 	Bars []struct {
 		T           string `json:"t"`
 		IssuesHuman int    `json:"issuesHuman"`
-		PRsHuman    int    `json:"prsHuman"`
 		PRsClanker  int    `json:"prsClanker"`
 	} `json:"bars"`
 }
@@ -204,7 +203,7 @@ func TestRepoIndexEndpoint(t *testing.T) {
 		t.Fatalf("busy index should be above base with positive delta: %+v", busy)
 	}
 	last := busy.Bars[len(busy.Bars)-1]
-	if last.IssuesHuman < 1 || last.PRsHuman != 0 || last.PRsClanker != 0 {
+	if last.IssuesHuman < 1 || last.PRsClanker != 0 {
 		t.Fatalf("today's bars should show the idea-filed activity only: %+v", last)
 	}
 

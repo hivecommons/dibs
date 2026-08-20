@@ -41,7 +41,6 @@ type repoEvent struct {
 	weight      float64
 	count       int
 	issuesHuman int
-	prsHuman    int
 	prsClanker  int
 }
 
@@ -62,7 +61,6 @@ type IndexPoint struct {
 type IndexBar struct {
 	T           string `json:"t"`
 	IssuesHuman int    `json:"issuesHuman"` // non-bot issues, including human Dibs idea filings
-	PRsHuman    int    `json:"prsHuman"`    // non-bot, non-ClankeR PRs by creation day
 	PRsClanker  int    `json:"prsClanker"`  // ClankeR PRs by creation day
 }
 
@@ -225,12 +223,12 @@ func historyEvents(hist *history.Store, repoID string) []repoEvent {
 			ClankerPRsCreated: d.ClankerPRsCreated,
 			ClankerPRsMerged:  d.ClankerPRsMerged,
 		}
-		if w := indexformula.Contribution(prCounts); w != 0 || d.PRsHuman != 0 || d.PRsClanker != 0 {
+		if w := indexformula.Contribution(prCounts); w != 0 || d.PRsClanker != 0 {
 			count := indexformula.Activity(prCounts)
-			if barCount := d.PRsHuman + d.PRsClanker; barCount > count {
-				count = barCount
+			if d.PRsClanker > count {
+				count = d.PRsClanker
 			}
-			evs = append(evs, repoEvent{at: at, weight: w, count: count, prsHuman: d.PRsHuman, prsClanker: d.PRsClanker})
+			evs = append(evs, repoEvent{at: at, weight: w, count: count, prsClanker: d.PRsClanker})
 		}
 	}
 	return evs
@@ -261,7 +259,6 @@ func buildIndex(evs []repoEvent, now time.Time) ([]IndexPoint, []IndexBar, float
 			daily[i] += e.weight
 			activity += e.barCount()
 			bars[i].IssuesHuman += e.issuesHuman
-			bars[i].PRsHuman += e.prsHuman
 			bars[i].PRsClanker += e.prsClanker
 		}
 	}

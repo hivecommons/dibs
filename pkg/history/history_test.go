@@ -91,17 +91,11 @@ func TestFetchPullActivityClassifiesClankerPRs(t *testing.T) {
 	if got["2026-08-18"].RegularPRsMerged != 1 {
 		t.Fatalf("regular merge bucket = %+v", got["2026-08-18"])
 	}
-	if got["2026-08-16"].PRsHuman != 1 {
-		t.Fatalf("human PR creation bucket = %+v", got["2026-08-16"])
-	}
 	if got["2026-08-15"].ClankerPRsCreated != 1 || got["2026-08-17"].ClankerPRsMerged != 1 {
 		t.Fatalf("clanker merged buckets = %+v / %+v", got["2026-08-15"], got["2026-08-17"])
 	}
 	if got["2026-08-14"].ClankerPRsCreated != 1 || got["2026-08-14"].PRsClanker != 1 {
 		t.Fatalf("clanker created bucket = %+v", got["2026-08-14"])
-	}
-	if got["2026-08-13"].PRsHuman != 0 {
-		t.Fatalf("bot PR should not be human: %+v", got["2026-08-13"])
 	}
 }
 

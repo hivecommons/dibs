@@ -50,7 +50,6 @@ type DayActivity struct {
 	// because Dibs opens a prefilled GitHub URL that the ideator files under
 	// their own account; bot-filed footer issues are excluded here.
 	IssuesHuman int  `json:"issuesHuman"`
-	PRsHuman    int  `json:"prsHuman"`
 	PRsClanker  int  `json:"prsClanker"`
 	Commits     int  `json:"commits,omitempty"` // legacy; ignored by the composite formula
 	Backfilled  bool `json:"backfilled"`
@@ -303,7 +302,6 @@ func (b *Backfiller) Backfill(ctx context.Context, repoID string) error {
 			d.MergedPRs += counts.RegularPRsMerged
 			d.ClankerPRsCreated += counts.ClankerPRsCreated
 			d.ClankerPRsMerged += counts.ClankerPRsMerged
-			d.PRsHuman += counts.PRsHuman
 			d.PRsClanker += counts.PRsClanker
 			days[date] = d
 		}
@@ -354,7 +352,6 @@ func sortedDays(days map[string]DayActivity) []DayActivity {
 type activityCounts struct {
 	indexformula.Counts
 	IssuesHuman int
-	PRsHuman    int
 	PRsClanker  int
 }
 
@@ -443,10 +440,6 @@ func (b *Backfiller) fetchPullActivity(ctx context.Context, repoID string) (map[
 				counts := out[createdDate]
 				counts.ClankerPRsCreated++
 				counts.PRsClanker++
-				out[createdDate] = counts
-			} else if isHumanLogin(pr.User.Login) {
-				counts := out[createdDate]
-				counts.PRsHuman++
 				out[createdDate] = counts
 			}
 			if pr.MergedAt == nil {

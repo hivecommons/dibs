@@ -394,7 +394,6 @@ details.how-details .how-body { padding: 16px 18px; }
 #chart-stage .idx-line.down { stroke: var(--red); }
 #chart-stage .idx-line.flat { stroke: var(--amber); }
 #chart-stage .bar-issues-human { fill: rgba(244,199,95,.62); }
-#chart-stage .bar-prs-human { fill: rgba(192,166,240,.68); }
 #chart-stage .bar-prs-clanker { fill: rgba(116,223,154,.72); }
 #chart-stage .quote-box { fill: var(--panel-2); stroke: var(--line); }
 #chart-stage .quote-text { fill: var(--text); font-family: var(--font-mono); font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -414,7 +413,6 @@ details.how-details .how-body { padding: 16px 18px; }
 .legend-chip { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: .7rem; font-weight: 700; background: transparent; border: 1px solid var(--line); color: var(--muted); border-radius: 4px; padding: 3px 10px; cursor: pointer; }
 .legend-chip .sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
 .legend-chip .sw-issues-human { background: rgba(244,199,95,.85); }
-.legend-chip .sw-prs-human { background: rgba(192,166,240,.85); }
 .legend-chip .sw-prs-clanker { background: rgba(116,223,154,.85); }
 .legend-chip:not(.on) { opacity: .45; }
 .legend-chip:hover, .legend-chip:focus-visible { border-color: var(--amber); color: var(--text); }
@@ -565,7 +563,6 @@ details.how-details .how-body { padding: 16px 18px; }
       <div id="chart-stage"></div>
       <div class="chart-legend" id="chart-legend">
         <button class="legend-chip on" data-series="issuesHuman" aria-pressed="true" title="Non-bot GitHub issues, including Dibs idea issues filed by the ideator through GitHub."><span class="sw sw-issues-human"></span>issues (human)</button>
-        <button class="legend-chip on" data-series="prsHuman" aria-pressed="true" title="Non-bot, non-ClankeR pull requests bucketed by creation date."><span class="sw sw-prs-human"></span>PRs (human)</button>
         <button class="legend-chip on" data-series="prsClanker" aria-pressed="true" title="ClankeR pull requests matched by hive bot, branch, label, or body markers and bucketed by creation date."><span class="sw sw-prs-clanker"></span>clanker PRs</button>
         <span class="chart-note" id="chart-note">Index derived from weighted issue and PR activity.</span>
       </div>
@@ -1265,7 +1262,7 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
   var chartLastData = null;    // payload last rendered, for responsive redraws
   var chartLastWidth = 0;
   var chartResizeQueued = false;
-  var seriesOn = { issuesHuman: true, prsHuman: true, prsClanker: true };
+  var seriesOn = { issuesHuman: true, prsClanker: true };
   var CHART_ROTATE_MS = 45000;
   var CHART_RESUME_MS = 120000;
   var chartRotateTimer = null;
@@ -1281,7 +1278,6 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
       bars.push({
         t: 'day ' + (i + 1),
         issuesHuman: i % 5 === 1 ? 1 : 0,
-        prsHuman: i % 7 === 3 ? 1 : 0,
         prsClanker: i % 11 === 4 ? 1 : 0
       });
     }
@@ -1576,7 +1572,6 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
     var bmax = 1;
     d.bars.forEach(function (b) {
       var total = (seriesOn.issuesHuman ? (Number(b.issuesHuman) || 0) : 0) +
-        (seriesOn.prsHuman ? (Number(b.prsHuman) || 0) : 0) +
         (seriesOn.prsClanker ? (Number(b.prsClanker) || 0) : 0);
       bmax = Math.max(bmax, total);
     });
@@ -1586,7 +1581,6 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
       var y0 = barBot, x0 = cx - bw / 2;
       [
         { on: seriesOn.issuesHuman, n: Number(b.issuesHuman) || 0, cls: 'bar-issues-human', label: 'human issue(s), including human-filed Dibs idea issues' },
-        { on: seriesOn.prsHuman, n: Number(b.prsHuman) || 0, cls: 'bar-prs-human', label: 'human PR(s) created' },
         { on: seriesOn.prsClanker, n: Number(b.prsClanker) || 0, cls: 'bar-prs-clanker', label: 'ClankeR PR(s) created' }
       ].forEach(function (seg) {
         if (!seg.on || seg.n <= 0) return;
