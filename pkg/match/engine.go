@@ -41,6 +41,20 @@ type Notifier interface {
 	NewMatch(ideaAuthor, repoOwner string, idea *store.Idea, repo *registry.RepoProfile, score float64)
 }
 
+// ProgressFunc receives best-effort rematch progress events. Nil disables
+// reporting, keeping the organic matching path allocation-free.
+type ProgressFunc func(ProgressEvent)
+
+// ProgressEvent describes one observable step in the rematch pipeline.
+type ProgressEvent struct {
+	Phase  string  `json:"phase"`
+	RepoID string  `json:"repoID,omitempty"`
+	Symbol string  `json:"symbol,omitempty"`
+	Score  float64 `json:"score,omitempty"`
+	ByLLM  bool    `json:"byLLM,omitempty"`
+	Note   string  `json:"note,omitempty"`
+}
+
 // Engine lazily computes and caches TLDRs and idea↔repo scores.
 type Engine struct {
 	Store    *store.Store
@@ -216,16 +230,27 @@ func (e *Engine) score(ctx context.Context, idea *store.Idea, rp *registry.RepoP
 // CNCFMatchesForIdea returns CNCF project candidates from the catalog. BM25
 // selects the top 15; the LLM reranks only those candidates when configured.
 func (e *Engine) CNCFMatchesForIdea(ctx context.Context, idea *store.Idea) ([]CNCFMatch, error) {
-	return e.cncfMatchesForIdea(ctx, idea, true)
+	return e.cncfMatchesForIdea(ctx, idea, true, nil)
 }
 
-func (e *Engine) cncfMatchesForIdea(ctx context.Context, idea *store.Idea, persist bool) ([]CNCFMatch, error) {
+func (e *Engine) cncfMatchesForIdea(ctx context.Context, idea *store.Idea, persist bool, progress ProgressFunc) ([]CNCFMatch, error) {
 	if e == nil || e.Catalog == nil {
 		return []CNCFMatch{}, nil
 	}
 	candidates := e.Catalog.TopK(idea.Title+" "+idea.Body, MaxCNCFCandidates)
 	if len(candidates) == 0 {
 		return []CNCFMatch{}, nil
+	}
+	if progress != nil {
+		progress(ProgressEvent{Phase: "cncf_bm25_start", Note: fmt.Sprintf("%d candidates", len(candidates))})
+		for _, c := range candidates {
+			progress(ProgressEvent{
+				Phase:  "cncf_bm25",
+				RepoID: c.Project.RepoID,
+				Score:  c.Score,
+				Note:   c.Project.Name,
+			})
+		}
 	}
 	topScore := candidates[0].Score
 	out := make([]CNCFMatch, 0, len(candidates))
@@ -245,6 +270,15 @@ func (e *Engine) cncfMatchesForIdea(ctx context.Context, idea *store.Idea, persi
 			} else {
 				log.Printf("match: cncf llm score failed for %s×%s, using BM25 fallback: %v", idea.ID, c.Project.RepoID, err)
 			}
+		}
+		if progress != nil {
+			progress(ProgressEvent{
+				Phase:  "cncf_score",
+				RepoID: m.RepoID,
+				Score:  m.Score,
+				ByLLM:  m.ByLLM,
+				Note:   firstNonEmpty(m.Name, m.Reason),
+			})
 		}
 		out = append(out, m)
 	}
@@ -281,15 +315,26 @@ func (e *Engine) nonHiveCNCF(matches []CNCFMatch) []CNCFMatch {
 // RematchIdea runs the full idea matching pipeline from fresh inputs. When
 // persist is false it does not update the store or notify; when true it saves
 // the same fields organic matching uses and emits normal fresh-match events.
-func (e *Engine) RematchIdea(ctx context.Context, idea *store.Idea, persist bool) (string, []store.Match, []CNCFMatch, error) {
+func (e *Engine) RematchIdea(ctx context.Context, idea *store.Idea, persist bool, progress ProgressFunc) (string, []store.Match, []CNCFMatch, error) {
 	if e == nil {
 		return "", nil, nil, fmt.Errorf("match: engine is nil")
 	}
 	work := *idea
 	if work.TLDR == "" {
+		if progress != nil {
+			progress(ProgressEvent{Phase: "tldr_start", Note: "Generating TLDR"})
+		}
 		work.TLDR = e.generateTLDR(ctx, &work)
+		if progress != nil {
+			progress(ProgressEvent{Phase: "tldr_done", Note: work.TLDR})
+		}
+	} else if progress != nil {
+		progress(ProgressEvent{Phase: "tldr_done", Note: "Using cached TLDR"})
 	}
 	var matches []store.Match
+	if progress != nil {
+		progress(ProgressEvent{Phase: "hive_start", Note: "Scoring hive repos"})
+	}
 	for _, rp := range e.Registry.List(true) {
 		rp := rp
 		if work.HasPassed(rp.RepoID) || work.OfferTo(rp.RepoID) != nil {
@@ -297,18 +342,34 @@ func (e *Engine) RematchIdea(ctx context.Context, idea *store.Idea, persist bool
 		}
 		m := e.score(ctx, &work, &rp, RepoHash(&rp))
 		matches = append(matches, m)
+		if progress != nil {
+			progress(ProgressEvent{
+				Phase:  "hive_score",
+				RepoID: rp.RepoID,
+				Symbol: rp.Symbol,
+				Score:  m.Score,
+				ByLLM:  m.ByLLM,
+				Note:   m.Reason,
+			})
+		}
 	}
 	sort.SliceStable(matches, func(i, j int) bool { return matches[i].Score > matches[j].Score })
 	if len(matches) > MaxMatches {
 		matches = matches[:MaxMatches]
 	}
-	cncf, err := e.cncfMatchesForIdea(ctx, &work, false)
+	cncf, err := e.cncfMatchesForIdea(ctx, &work, false, progress)
 	if err != nil {
 		return "", nil, nil, err
 	}
 	cncf = e.nonHiveCNCF(cncf)
 	if len(cncf) > MaxMatches {
 		cncf = cncf[:MaxMatches]
+	}
+	if progress != nil {
+		progress(ProgressEvent{
+			Phase: "final_selection",
+			Note:  fmt.Sprintf("%d hive, %d CNCF selected", len(matches), len(cncf)),
+		})
 	}
 	if persist {
 		tldr, persistedMatches, persistedCNCF := work.TLDR, matches, cncf
@@ -335,7 +396,19 @@ func (e *Engine) RematchIdea(ctx context.Context, idea *store.Idea, persist bool
 			}
 		}
 	}
+	if progress != nil {
+		progress(ProgressEvent{Phase: "done", Note: "Rematch complete"})
+	}
 	return work.TLDR, matches, cncf, nil
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func bm25ToScore(score, top float64) float64 {

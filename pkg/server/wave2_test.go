@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -409,8 +410,16 @@ func TestAdminRematchDryApplyAndPayload(t *testing.T) {
 		t.Fatalf("double-start rematch: want 409, got %d %s", rec.Code, rec.Body.String())
 	}
 	var dry struct {
-		Status  string `json:"status"`
-		Dry     bool   `json:"dry"`
+		JobID  string `json:"jobID"`
+		Status string `json:"status"`
+		Dry    bool   `json:"dry"`
+		Events []struct {
+			Seq    int64   `json:"seq"`
+			Phase  string  `json:"phase"`
+			RepoID string  `json:"repoID"`
+			Score  float64 `json:"score"`
+		} `json:"events"`
+		Next    int64 `json:"next"`
 		Matches struct {
 			Count int               `json:"count"`
 			Hive  []store.Match     `json:"hive"`
@@ -433,6 +442,36 @@ func TestAdminRematchDryApplyAndPayload(t *testing.T) {
 	if dry.Status != "done" || !dry.Dry || len(dry.Matches.Hive) == 0 || len(dry.Matches.CNCF) == 0 {
 		t.Fatalf("dry rematch missing output: %+v", dry)
 	}
+	if dry.JobID == "" {
+		t.Fatalf("dry rematch missing jobID: %+v", dry)
+	}
+	if len(dry.Events) == 0 || dry.Next == 0 {
+		t.Fatalf("dry rematch missing progress events: %+v", dry)
+	}
+	for i, ev := range dry.Events {
+		if ev.Seq <= 0 || ev.Phase == "" {
+			t.Fatalf("bad progress event %d: %+v", i, ev)
+		}
+		if i > 0 && ev.Seq <= dry.Events[i-1].Seq {
+			t.Fatalf("progress seqs not increasing: %+v", dry.Events)
+		}
+	}
+	rec = doJSON(t, f.h, "GET", "/api/admin/ideas/"+idea.ID+"/rematch?since="+strconv.FormatInt(dry.Events[0].Seq, 10), "alice-session", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("poll dry rematch since: %d %s", rec.Code, rec.Body.String())
+	}
+	var sliced struct {
+		Events []struct {
+			Seq int64 `json:"seq"`
+		} `json:"events"`
+		Next int64 `json:"next"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&sliced); err != nil {
+		t.Fatalf("decode sliced: %v", err)
+	}
+	if len(sliced.Events) != len(dry.Events)-1 || sliced.Next != dry.Next {
+		t.Fatalf("since slicing mismatch: got %+v from %+v", sliced, dry.Events)
+	}
 	got, _ := f.store.Get(idea.ID)
 	if len(got.Matches) != 0 || len(got.CNCFMatches) != 0 {
 		t.Fatalf("dry rematch persisted suggestions: %+v", got)
@@ -441,6 +480,10 @@ func TestAdminRematchDryApplyAndPayload(t *testing.T) {
 	rec = doJSON(t, f.h, "POST", "/api/admin/ideas/"+idea.ID+"/rematch", "alice-session", nil)
 	if rec.Code != http.StatusAccepted {
 		t.Fatalf("admin apply rematch start: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = doJSON(t, f.h, "GET", "/api/admin/ideas/"+idea.ID+"/rematch?job="+dry.JobID, "alice-session", nil)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("stale rematch job poll: want 409, got %d %s", rec.Code, rec.Body.String())
 	}
 	for i := 0; i < 50; i++ {
 		rec = doJSON(t, f.h, "GET", "/api/admin/ideas/"+idea.ID+"/rematch", "alice-session", nil)
