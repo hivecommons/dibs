@@ -9,6 +9,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
@@ -49,6 +50,7 @@ type API struct {
 
 	rematchMu   sync.Mutex
 	rematchJobs map[string]*adminRematchJob
+	rematchSeq  int64
 }
 
 // Register mounts the API routes onto mux under basePath — "" for the root,
@@ -134,31 +136,51 @@ type adminIdea struct {
 }
 
 type adminRematchJob struct {
+	ID         string
 	Status     string
 	Dry        bool
 	TLDR       string
 	Matches    adminMatchSummary
 	Error      string
 	FinishedAt time.Time
+	Events     []adminRematchEvent
+	Next       int64
+}
+
+type adminRematchEvent struct {
+	Seq int64 `json:"seq"`
+	match.ProgressEvent
 }
 
 type adminRematchResponse struct {
-	Status     string            `json:"status"`
-	Dry        bool              `json:"dry"`
-	TLDR       string            `json:"tldr,omitempty"`
-	Matches    adminMatchSummary `json:"matches,omitempty"`
-	Error      string            `json:"error,omitempty"`
-	FinishedAt time.Time         `json:"finishedAt,omitempty"`
+	JobID      string              `json:"jobID,omitempty"`
+	Status     string              `json:"status"`
+	Dry        bool                `json:"dry"`
+	TLDR       string              `json:"tldr,omitempty"`
+	Matches    adminMatchSummary   `json:"matches,omitempty"`
+	Error      string              `json:"error,omitempty"`
+	FinishedAt time.Time           `json:"finishedAt,omitempty"`
+	Events     []adminRematchEvent `json:"events,omitempty"`
+	Next       int64               `json:"next"`
 }
 
-func (j *adminRematchJob) response() adminRematchResponse {
+func (j *adminRematchJob) responseSince(since int64) adminRematchResponse {
+	events := []adminRematchEvent{}
+	for _, ev := range j.Events {
+		if ev.Seq > since {
+			events = append(events, ev)
+		}
+	}
 	return adminRematchResponse{
 		Status:     j.Status,
+		JobID:      j.ID,
 		Dry:        j.Dry,
 		TLDR:       j.TLDR,
 		Matches:    j.Matches,
 		Error:      j.Error,
 		FinishedAt: j.FinishedAt,
+		Events:     events,
+		Next:       j.Next,
 	}
 }
 
@@ -241,9 +263,10 @@ func (a *API) handleAdminRematch(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "rematch already running")
 		return
 	}
-	job := &adminRematchJob{Status: "running", Dry: dry}
+	a.rematchSeq++
+	job := &adminRematchJob{ID: strconv.FormatInt(a.rematchSeq, 10), Status: "running", Dry: dry}
 	a.rematchJobs[idea.ID] = job
-	res := job.response()
+	res := job.responseSince(0)
 	a.rematchMu.Unlock()
 
 	go a.runAdminRematch(context.WithoutCancel(r.Context()), idea, persist, job)
@@ -253,7 +276,13 @@ func (a *API) handleAdminRematch(w http.ResponseWriter, r *http.Request) {
 func (a *API) runAdminRematch(parent context.Context, idea *store.Idea, persist bool, job *adminRematchJob) {
 	ctx, cancel := context.WithTimeout(parent, adminRematchTimeout)
 	defer cancel()
-	tldr, hive, cncf, err := a.Engine.RematchIdea(ctx, idea, persist)
+	progress := func(ev match.ProgressEvent) {
+		a.rematchMu.Lock()
+		defer a.rematchMu.Unlock()
+		job.Next++
+		job.Events = append(job.Events, adminRematchEvent{Seq: job.Next, ProgressEvent: ev})
+	}
+	tldr, hive, cncf, err := a.Engine.RematchIdea(ctx, idea, persist, progress)
 	a.rematchMu.Lock()
 	defer a.rematchMu.Unlock()
 	job.FinishedAt = timeNow()
@@ -272,15 +301,25 @@ func (a *API) handleAdminRematchStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := r.PathValue("id")
+	since, err := strconv.ParseInt(r.URL.Query().Get("since"), 10, 64)
+	if err != nil && r.URL.Query().Get("since") != "" {
+		writeError(w, http.StatusBadRequest, "invalid since")
+		return
+	}
+	wantJob := r.URL.Query().Get("job")
 	a.rematchMu.Lock()
 	job := a.rematchJobs[id]
 	var res adminRematchResponse
-	if job != nil {
-		res = job.response()
+	if job != nil && (wantJob == "" || job.ID == wantJob) {
+		res = job.responseSince(since)
 	}
 	a.rematchMu.Unlock()
 	if job == nil {
 		writeError(w, http.StatusNotFound, "rematch job not found")
+		return
+	}
+	if wantJob != "" && job.ID != wantJob {
+		writeError(w, http.StatusConflict, "stale rematch job")
 		return
 	}
 	writeJSON(w, http.StatusOK, res)

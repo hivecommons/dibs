@@ -268,6 +268,11 @@ body.admin [data-admin] { display: revert !important; }
 .admin-spinner { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: .82rem; }
 .admin-spinner::before { content: ""; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--amber); animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+.admin-progress { border: 1px solid var(--line); border-radius: 6px; background: rgba(15,20,28,.55); padding: 8px; }
+.admin-progress-log { max-height: 240px; overflow-y: auto; display: grid; gap: 4px; margin-top: 8px; font-family: var(--font-mono); font-size: .78rem; }
+.admin-progress-phase { color: var(--amber); text-transform: uppercase; letter-spacing: .08em; font-size: .68rem; margin-top: 6px; }
+.admin-progress-row { color: var(--muted); border-top: 1px solid rgba(139,148,158,.12); padding-top: 4px; }
+.admin-progress-row b { color: var(--text); }
 .admin-detail-row td { background: rgba(15,20,28,.55); }
 .admin-detail { display: grid; gap: 10px; }
 .admin-detail h4 { margin: 0 0 4px; font-size: .82rem; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; }
@@ -2155,40 +2160,97 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
     if (!out) return;
     out.innerHTML = adminMatchesHTML((res && res.matches) || {});
   }
-  function pollAdminRematch(id, row) {
-    api('GET', 'admin/ideas/' + id + '/rematch').then(function (res) {
+  function progressLabel(phase) {
+    return ({
+      tldr_start: 'TLDR',
+      tldr_done: 'TLDR',
+      hive_start: 'Hive scoring',
+      hive_score: 'Hive scoring',
+      cncf_bm25_start: 'CNCF BM25 shortlist',
+      cncf_bm25: 'CNCF BM25 shortlist',
+      cncf_score: 'CNCF rerank',
+      final_selection: 'Final selection',
+      done: 'Done'
+    })[phase] || phase;
+  }
+  function ensureProgressLog(out) {
+    var log = out.querySelector('.admin-progress-log');
+    if (log) return log;
+    out.innerHTML = '<div class="admin-progress"><div class="admin-spinner">Rematch running…</div><div class="admin-progress-log" aria-live="polite"></div></div>';
+    return out.querySelector('.admin-progress-log');
+  }
+  function appendAdminEvents(out, events) {
+    if (!out || !events || !events.length) return;
+    var log = ensureProgressLog(out);
+    events.forEach(function (ev) {
+      var label = progressLabel(ev.phase);
+      if (label !== log.dataset.lastPhase) {
+        var h = document.createElement('div');
+        h.className = 'admin-progress-phase';
+        h.textContent = label;
+        log.appendChild(h);
+        log.dataset.lastPhase = label;
+      }
+      if (ev.repoID || ev.note) {
+        var d = document.createElement('div');
+        d.className = 'admin-progress-row';
+        var name = ev.repoID || ev.note || '';
+        var symbol = ev.symbol ? ev.symbol + '/' : '';
+        var score = ev.score ? ' · score ' + scoreText(ev.score) : '';
+        var mode = (ev.phase === 'hive_score' || ev.phase === 'cncf_score') ? ' · ' + (ev.byLLM ? 'LLM' : 'fallback') : '';
+        d.innerHTML = '<b>' + esc(symbol + name) + '</b>' + score + mode +
+          (ev.note && ev.repoID ? '<div class="why">' + esc(ev.note) + '</div>' : '');
+        log.appendChild(d);
+      }
+    });
+    log.scrollTop = log.scrollHeight;
+  }
+  function setAdminButtons(detail, disabled) {
+    detail.querySelectorAll('button').forEach(function (b) { b.disabled = disabled; });
+  }
+  function pollAdminRematch(id, row, since, jobID) {
+    var path = 'admin/ideas/' + id + '/rematch?since=' + encodeURIComponent(String(since || 0));
+    if (jobID) path += '&job=' + encodeURIComponent(jobID);
+    api('GET', path).then(function (res) {
       var out = row.nextElementSibling && row.nextElementSibling.querySelector('.admin-output');
+      appendAdminEvents(out, res.events || []);
       if (res.status === 'running') {
-        if (out) out.innerHTML = '<div class="admin-spinner">Rematch running…</div>';
-        setTimeout(function () { pollAdminRematch(id, row); }, 3000);
+        if (out) ensureProgressLog(out);
+        setTimeout(function () { pollAdminRematch(id, row, res.next || since || 0, jobID || res.jobID); }, 1000);
         return;
       }
+      var detail = row.nextElementSibling;
+      if (detail) setAdminButtons(detail, false);
       if (res.status === 'error') {
         if (out) out.innerHTML = '<div class="empty">' + esc(res.error || 'Rematch failed.') + '</div>';
         return;
       }
       renderAdminOutput(row, res);
       if (!res.dry) loadAdminIdeas();
-    }).catch(function (e) { showErr(e.message); });
+    }).catch(function (e) {
+      var detail = row.nextElementSibling;
+      if (detail) setAdminButtons(detail, false);
+      showErr(e.message);
+    });
   }
   function runAdminRematch(id, dry, row) {
     var detail = row.nextElementSibling;
     if (!detail) return;
-    var btns = detail.querySelectorAll('button');
     var out = detail.querySelector('.admin-output');
-    if (out) out.innerHTML = '<div class="admin-spinner">Starting rematch…</div>';
-    btns.forEach(function (b) { b.disabled = true; });
+    if (out) out.innerHTML = '<div class="admin-progress"><div class="admin-spinner">Starting rematch…</div><div class="admin-progress-log" aria-live="polite"></div></div>';
+    setAdminButtons(detail, true);
     api('POST', 'admin/ideas/' + id + '/rematch' + (dry ? '?dry=1' : '')).then(function (res) {
+      appendAdminEvents(out, res.events || []);
       if (res.status === 'running') {
-        pollAdminRematch(id, row);
+        pollAdminRematch(id, row, res.next || 0, res.jobID);
       } else {
         renderAdminOutput(row, res);
+        setAdminButtons(detail, false);
         if (!dry) loadAdminIdeas();
       }
     }).catch(function (e) {
+      setAdminButtons(detail, false);
       showErr(e.message);
-    }).finally(function () {
-      btns.forEach(function (b) { b.disabled = false; });
     });
   }
   function renderAdminIdeas(ideas) {
