@@ -416,6 +416,7 @@ details.how-details .how-body { padding: 16px 18px; }
 .legend-chip:not(.on) { opacity: .45; }
 .legend-chip:hover, .legend-chip:focus-visible { border-color: var(--amber); color: var(--text); }
 .chart-note { color: var(--muted); font-size: .7rem; font-style: italic; margin-left: auto; }
+.chart-formula { color: var(--muted); font-family: var(--font-mono); font-size: .68rem; font-variant-numeric: tabular-nums; margin-top: 6px; }
 .chart-empty { color: var(--muted); text-align: center; padding: 40px 12px; font-size: .88rem; }
 .repo-news { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 12px; }
 .repo-news-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 8px; }
@@ -546,10 +547,11 @@ details.how-details .how-body { padding: 16px 18px; }
       </div>
       <div id="chart-stage"></div>
       <div class="chart-legend" id="chart-legend">
-        <button class="legend-chip on" data-series="ideas" aria-pressed="true"><span class="sw sw-ideas"></span>ideas listed/matched</button>
-        <button class="legend-chip on" data-series="agent" aria-pressed="true"><span class="sw sw-agent"></span>agent activity (est.)</button>
-        <span class="chart-note" id="chart-note">Index derived from offers, acceptances, and settlements.</span>
+        <button class="legend-chip on" data-series="ideas" aria-pressed="true"><span class="sw sw-ideas"></span>issues/ideas filed</button>
+        <button class="legend-chip on" data-series="agent" aria-pressed="true"><span class="sw sw-agent"></span>PR activity</button>
+        <span class="chart-note" id="chart-note">Index derived from weighted issue and PR activity.</span>
       </div>
+      <div class="chart-formula">index = 1·issue + 3·PR merged + 5·clanker PR + 8·idea filed + 10·clanker merged</div>
       <div class="repo-news" id="repo-news" aria-live="polite">
         <div class="repo-news-head"><span class="repo-news-title">News</span></div>
         <div class="repo-news-list" id="repo-news-list"><div class="repo-news-empty">No recent merges.</div></div>
@@ -1235,9 +1237,8 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
 
   /* ── the terminal: repo value-index chart ──
      Inline SVG, no libs. Series come from /api/repos/{org}/{repo}/index —
-     a value index DERIVED from market activity (weights documented server-
-     side in pkg/api/index.go). The "agent activity (est.)" bars are an
-     honest proxy until real token metering exists. */
+     a value index DERIVED from weighted issue, idea, and PR activity
+     (weights documented server-side in pkg/indexformula). */
   var chartRepos = [];        // repo tickers, most active first
   var chartCache = {};        // repoID → index payload
   var repoNewsCache = {};     // repoID → news cards
@@ -1498,7 +1499,7 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
       (d.example ? '<span class="ex">(example data)</span>' : '');
     $('chart-note').textContent = d.example
       ? 'Example data. Real charts appear when repos list.'
-      : 'Index derived from offers, acceptances, and settlements.';
+      : 'Index derived from weighted issue and PR activity.';
 
     var W = 820, H = 300, L = 46, R = 806;
     var plotTop = 14, plotBot = 192, barTop = 210, barBot = 278;
@@ -1533,7 +1534,7 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
     svg += '<path d="' + line + 'L' + R + ' ' + plotBot + 'L' + L + ' ' + plotBot + 'Z" fill="url(#cgrad)"/>' +
       '<path class="idx-line ' + trend + '" d="' + line + '"/>';
 
-    // Sub-chart bars: ideas + agent activity, toggleable via the legend.
+    // Sub-chart bars: issues/ideas + PR activity, toggleable via the legend.
     var bmax = 1;
     d.bars.forEach(function (b) { bmax = Math.max(bmax, b.ideas, b.agent); });
     var bw = Math.max(2, ((R - L) / n - 4) / 2);

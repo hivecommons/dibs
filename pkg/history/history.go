@@ -17,7 +17,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kubestellar/dibs/pkg/indexformula"
 	"github.com/kubestellar/dibs/pkg/registry"
+	"github.com/kubestellar/dibs/pkg/settle"
 )
 
 const (
@@ -28,19 +30,30 @@ const (
 	requestTimeout = 10 * time.Second
 	maxBodyBytes   = 4 << 20
 	maxConcurrent  = 4
+
+	BackfillVersion = 2
+
+	// EnvClankerMarkers optionally overrides the comma-separated, case-insensitive
+	// markers matched against PR branch, labels, body, and author login.
+	EnvClankerMarkers = "DIBS_CLANKER_MARKERS"
 )
 
 // DayActivity is one UTC calendar day's public GitHub activity for a repo.
 type DayActivity struct {
-	Date       string `json:"date"`
-	MergedPRs  int    `json:"mergedPRs"`
-	Commits    int    `json:"commits"`
-	Backfilled bool   `json:"backfilled"`
+	Date                 string `json:"date"`
+	RegularIssuesCreated int    `json:"regularIssuesCreated"`
+	MergedPRs            int    `json:"mergedPRs"` // regular (non-ClankeR) PR merges
+	ClankerPRsCreated    int    `json:"clankerPRsCreated"`
+	ClankerPRsMerged     int    `json:"clankerPRsMerged"`
+	IdeasFiled           int    `json:"ideasFiled"`
+	Commits              int    `json:"commits,omitempty"` // legacy; ignored by the composite formula
+	Backfilled           bool   `json:"backfilled"`
 }
 
 // RepoHistory is the persisted aggregate history for one repo.
 type RepoHistory struct {
 	RepoID    string        `json:"repoID"`
+	Version   int           `json:"version"`
 	Days      []DayActivity `json:"days"`
 	FetchedAt time.Time     `json:"fetchedAt"`
 }
@@ -111,7 +124,7 @@ func (s *Store) Get(repoID string) (RepoHistory, bool) {
 func (s *Store) Upsert(repoID string, days []DayActivity, fetchedAt time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	h := normalizeHistory(RepoHistory{RepoID: repoID, Days: days, FetchedAt: fetchedAt.UTC()})
+	h := normalizeHistory(RepoHistory{RepoID: repoID, Version: BackfillVersion, Days: days, FetchedAt: fetchedAt.UTC()})
 	s.data[repoID] = h
 	return s.persistLocked()
 }
@@ -219,7 +232,7 @@ func (b *Backfiller) RefreshAsync(repos []registry.RepoProfile) {
 
 func (b *Backfiller) needsRefresh(repoID string) bool {
 	h, ok := b.Store.Get(repoID)
-	if !ok || len(h.Days) == 0 {
+	if !ok || len(h.Days) == 0 || h.Version != BackfillVersion {
 		return true
 	}
 	now := b.now().UTC().Truncate(24 * time.Hour)
@@ -249,7 +262,7 @@ func (b *Backfiller) clearActive(repoID string) {
 }
 
 // Backfill fetches trailing GitHub activity for repoID and replaces its stored
-// daily counts. Rate limits and 202 stats responses are graceful skips.
+// daily counts. Rate limits are graceful skips.
 func (b *Backfiller) Backfill(ctx context.Context, repoID string) error {
 	if b == nil || b.Store == nil {
 		return nil
@@ -261,31 +274,32 @@ func (b *Backfiller) Backfill(ctx context.Context, repoID string) error {
 		return ctx.Err()
 	}
 
-	days := zeroDays(b.now())
-	prs, err := b.fetchMergedPRBuckets(ctx, repoID)
+	fetchedAt := b.now()
+	days := zeroDays(fetchedAt)
+	issues, err := b.fetchIssueActivity(ctx, repoID, windowStart(fetchedAt))
 	if err != nil {
 		return err
 	}
-	commits, err := b.fetchCommitActivity(ctx, repoID)
-	if errors.Is(err, errSkipRepo) {
+	prs, err := b.fetchPullActivity(ctx, repoID)
+	if err != nil {
 		return err
 	}
-	if err != nil && !errors.Is(err, errStatsPending) {
-		return err
-	}
-	for date, n := range prs {
+	for date, counts := range issues {
 		if d, ok := days[date]; ok {
-			d.MergedPRs = n
+			d.RegularIssuesCreated = counts.RegularIssuesCreated
+			d.IdeasFiled = counts.IdeasFiled
 			days[date] = d
 		}
 	}
-	for date, n := range commits {
+	for date, counts := range prs {
 		if d, ok := days[date]; ok {
-			d.Commits = n
+			d.MergedPRs += counts.RegularPRsMerged
+			d.ClankerPRsCreated += counts.ClankerPRsCreated
+			d.ClankerPRsMerged += counts.ClankerPRsMerged
 			days[date] = d
 		}
 	}
-	return b.Store.Upsert(repoID, sortedDays(days), b.now())
+	return b.Store.Upsert(repoID, sortedDays(days), fetchedAt)
 }
 
 func (b *Backfiller) semaphore() chan struct{} {
@@ -304,9 +318,13 @@ func (b *Backfiller) now() time.Time {
 	return time.Now().UTC()
 }
 
+func windowStart(now time.Time) time.Time {
+	return now.UTC().Truncate(24*time.Hour).AddDate(0, 0, -(windowDays - 1))
+}
+
 func zeroDays(now time.Time) map[string]DayActivity {
 	out := map[string]DayActivity{}
-	start := now.UTC().Truncate(24*time.Hour).AddDate(0, 0, -(windowDays - 1))
+	start := windowStart(now)
 	for i := 0; i < windowDays; i++ {
 		date := start.AddDate(0, 0, i).Format("2006-01-02")
 		out[date] = DayActivity{Date: date, Backfilled: true}
@@ -324,16 +342,40 @@ func sortedDays(days map[string]DayActivity) []DayActivity {
 	return out
 }
 
-func (b *Backfiller) fetchMergedPRBuckets(ctx context.Context, repoID string) (map[string]int, error) {
-	prs, err := b.FetchMergedPullRequests(ctx, repoID)
-	if err != nil {
-		return nil, err
-	}
-	out := map[string]int{}
-	for _, pr := range prs {
-		out[pr.MergedAt.UTC().Format("2006-01-02")]++
+func (b *Backfiller) fetchIssueActivity(ctx context.Context, repoID string, since time.Time) (map[string]indexformula.Counts, error) {
+	out := map[string]indexformula.Counts{}
+	for page := 1; page <= maxPullPages; page++ {
+		path := fmt.Sprintf("/repos/%s/issues?state=all&since=%s&per_page=%d&page=%d", repoID, since.UTC().Format(time.RFC3339), perPage, page)
+		var issues []struct {
+			CreatedAt   time.Time        `json:"created_at"`
+			Body        string           `json:"body"`
+			PullRequest *json.RawMessage `json:"pull_request"`
+		}
+		if err := b.getJSON(ctx, path, &issues); err != nil {
+			return nil, err
+		}
+		for _, issue := range issues {
+			if issue.PullRequest != nil || issue.CreatedAt.Before(since) {
+				continue
+			}
+			date := issue.CreatedAt.UTC().Format("2006-01-02")
+			counts := out[date]
+			if isDibsFiledIssue(issue.Body) {
+				counts.IdeasFiled++
+			} else {
+				counts.RegularIssuesCreated++
+			}
+			out[date] = counts
+		}
+		if len(issues) < perPage {
+			break
+		}
 	}
 	return out, nil
+}
+
+func isDibsFiledIssue(body string) bool {
+	return strings.Contains(body, settle.Footer) || strings.Contains(body, settle.ExternalFooter)
 }
 
 // FetchMergedPullRequests fetches recent merged PRs for repoID using the same
@@ -342,13 +384,7 @@ func (b *Backfiller) FetchMergedPullRequests(ctx context.Context, repoID string)
 	var out []MergedPullRequest
 	for page := 1; page <= maxPullPages; page++ {
 		path := fmt.Sprintf("/repos/%s/pulls?state=closed&sort=updated&direction=desc&per_page=%d&page=%d", repoID, perPage, page)
-		var pulls []struct {
-			MergedAt *time.Time `json:"merged_at"`
-			Title    string     `json:"title"`
-			User     struct {
-				Login string `json:"login"`
-			} `json:"user"`
-		}
+		var pulls []pullActivity
 		if err := b.getJSON(ctx, path, &pulls); err != nil {
 			return nil, err
 		}
@@ -370,23 +406,88 @@ func (b *Backfiller) FetchMergedPullRequests(ctx context.Context, repoID string)
 	return out, nil
 }
 
-func (b *Backfiller) fetchCommitActivity(ctx context.Context, repoID string) (map[string]int, error) {
-	var weeks []struct {
-		Week int64 `json:"week"`
-		Days []int `json:"days"`
-	}
-	if err := b.getJSON(ctx, fmt.Sprintf("/repos/%s/stats/commit_activity", repoID), &weeks); err != nil {
-		return nil, err
-	}
-	out := map[string]int{}
-	for _, w := range weeks {
-		start := time.Unix(w.Week, 0).UTC()
-		for i, n := range w.Days {
-			date := start.AddDate(0, 0, i).Format("2006-01-02")
-			out[date] += n
+func (b *Backfiller) fetchPullActivity(ctx context.Context, repoID string) (map[string]indexformula.Counts, error) {
+	out := map[string]indexformula.Counts{}
+	for page := 1; page <= maxPullPages; page++ {
+		path := fmt.Sprintf("/repos/%s/pulls?state=all&sort=updated&direction=desc&per_page=%d&page=%d", repoID, perPage, page)
+		var pulls []pullActivity
+		if err := b.getJSON(ctx, path, &pulls); err != nil {
+			return nil, err
+		}
+		for _, pr := range pulls {
+			clanker := isClankerPR(pr, clankerMarkers())
+			createdDate := pr.CreatedAt.UTC().Format("2006-01-02")
+			if clanker {
+				counts := out[createdDate]
+				counts.ClankerPRsCreated++
+				out[createdDate] = counts
+			}
+			if pr.MergedAt == nil {
+				continue
+			}
+			date := pr.MergedAt.UTC().Format("2006-01-02")
+			counts := out[date]
+			if clanker {
+				counts.ClankerPRsMerged++
+			} else {
+				counts.RegularPRsMerged++
+			}
+			out[date] = counts
+		}
+		if len(pulls) < perPage {
+			break
 		}
 	}
 	return out, nil
+}
+
+type pullActivity struct {
+	Title     string     `json:"title"`
+	CreatedAt time.Time  `json:"created_at"`
+	MergedAt  *time.Time `json:"merged_at"`
+	Body      string     `json:"body"`
+	User      struct {
+		Login string `json:"login"`
+	} `json:"user"`
+	Head struct {
+		Ref string `json:"ref"`
+	} `json:"head"`
+	Labels []struct {
+		Name string `json:"name"`
+	} `json:"labels"`
+}
+
+func clankerMarkers() []string {
+	raw := os.Getenv(EnvClankerMarkers)
+	if raw == "" {
+		raw = "hive: agent=,kubestellar-hive[bot]"
+	}
+	parts := strings.Split(raw, ",")
+	markers := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.ToLower(strings.TrimSpace(part))
+		if part != "" {
+			markers = append(markers, part)
+		}
+	}
+	return markers
+}
+
+func isClankerPR(pr pullActivity, markers []string) bool {
+	if len(markers) == 0 {
+		return false
+	}
+	fields := []string{pr.Head.Ref, pr.Body, pr.User.Login}
+	for _, l := range pr.Labels {
+		fields = append(fields, l.Name)
+	}
+	haystack := strings.ToLower(strings.Join(fields, "\n"))
+	for _, marker := range markers {
+		if strings.Contains(haystack, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 var (
