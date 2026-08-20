@@ -38,10 +38,14 @@ const MaxTopics = 20
 
 // RepoProfile is one hive-managed repository's dibs profile.
 type RepoProfile struct {
-	RepoID         string   `json:"repoID"` // org/name
-	HiveID         string   `json:"hiveID"`
-	Owner          string   `json:"owner"` // identity key of the hive owner
-	Description    string   `json:"description,omitempty"`
+	RepoID      string `json:"repoID"` // org/name
+	HiveID      string `json:"hiveID"`
+	Owner       string `json:"owner"` // identity key of the hive owner
+	Description string `json:"description,omitempty"`
+	// ContributeURL is the hive's public /contribute page (ClankeR, the
+	// contributor relay), hub-fed like RepoID/HiveID/Owner. Empty when the
+	// hive has reported no public base.
+	ContributeURL  string   `json:"contributeURL,omitempty"`
 	Topics         []string `json:"topics"`
 	AcceptingIdeas bool     `json:"acceptingIdeas"`
 	// Appetite is the owner's free-text note on what kinds of ideas the repo
