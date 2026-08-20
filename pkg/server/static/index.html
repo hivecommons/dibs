@@ -418,12 +418,12 @@ details.how-details .how-body { padding: 16px 18px; }
   <div class="tape-viewport"><div class="tape-track" id="tape-track" aria-hidden="false"></div></div>
 </div>
 <header>
-  <button class="logo" data-goto="home" aria-label="Dibs — market home">Di<span>bs</span></button>
+  <button class="logo" data-goto="home" aria-label="Dibs home">Di<span>bs</span></button>
   <button id="jump-btn" aria-haspopup="dialog" aria-controls="jump-overlay" title="Jump anywhere">Jump<kbd id="jump-kbd">⌘K</kbd></button>
   <span class="hdr-spacer"></span>
-  <button id="nav-list-cta" aria-label="List an idea — the guided 3-step listing">＋ List an idea</button>
+  <button id="nav-list-cta" aria-label="List an idea">＋ List an idea</button>
   <a id="signin" href="__HUB_URL__" target="_blank" rel="noopener">Sign in</a>
-  <button id="level-chip" data-auth data-goto="mine" aria-label="Your score and level — open profile"></button>
+  <button id="level-chip" data-auth data-goto="mine" aria-label="Score and level. Open profile."></button>
   <div id="bell-wrap" data-auth>
     <button id="bell" title="Notifications" aria-label="Notifications"><svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 16a2 2 0 0 0 1.985-1.75c.017-.137-.097-.25-.235-.25h-3.5c-.138 0-.252.113-.235.25A2 2 0 0 0 8 16ZM3 5a5 5 0 0 1 10 0v2.947c0 .05.015.098.042.139l1.703 2.555A1.519 1.519 0 0 1 13.482 13H2.518a1.516 1.516 0 0 1-1.263-2.36l1.703-2.554A.255.255 0 0 0 3 7.947Z"/></svg><span class="badge" id="bell-badge"></span></button>
     <div id="notif-panel">
@@ -681,7 +681,7 @@ details.how-details .how-body { padding: 16px 18px; }
         <div class="compare-orig-body" id="cmp-orig-body"></div>
       </div>
       <div class="panel polished">
-        <h4>Refined draft — editable</h4>
+        <h4>Refined draft</h4>
         <label for="rf-title">Refined title</label>
         <input type="text" id="rf-title" maxlength="200">
         <label for="rf-body">Refined body (markdown)</label>
@@ -753,7 +753,7 @@ details.how-details .how-body { padding: 16px 18px; }
     <form class="panel" id="launch-form">
     <label for="l-title">Issue title</label>
     <input type="text" id="l-title" maxlength="200" required>
-    <label for="l-body">Issue body (markdown — the Dibs footer is added automatically)</label>
+    <label for="l-body">Issue body (markdown; Dibs footer appended)</label>
     <textarea id="l-body" class="md" required></textarea>
     <div class="form-actions">
       <button type="submit" class="pill primary" id="btn-launch">Open prefilled GitHub issue</button>
@@ -967,7 +967,7 @@ details.how-details .how-body { padding: 16px 18px; }
     if (jumpActive >= jumpMatches.length) jumpActive = 0;
     var list = $('jump-list');
     if (!jumpMatches.length) {
-      list.innerHTML = '<li class="jl-empty" role="option" aria-disabled="true" id="jump-opt-none">No match — try “market” or “list”.</li>';
+      list.innerHTML = '<li class="jl-empty" role="option" aria-disabled="true" id="jump-opt-none">No match.</li>';
       $('jump-input').setAttribute('aria-activedescendant', '');
       return;
     }
@@ -1208,9 +1208,9 @@ details.how-details .how-body { padding: 16px 18px; }
     var qd = fmtDelta(d.delta);
     $('chart-quote').innerHTML = d.current.toFixed(1) +
       '<span class="qd ' + qd.cls + '">' + qd.text + ' today</span>' +
-      (d.example ? '<span class="ex">(example data — no repos listed yet)</span>' : '');
+      (d.example ? '<span class="ex">(example data)</span>' : '');
     $('chart-note').textContent = d.example
-      ? 'example data — real charts appear when repos list on the exchange'
+      ? 'Example data. Real charts appear when repos list.'
       : 'Index derived from offers, acceptances, and settlements.';
 
     var W = 820, H = 300, L = 46, R = 806;
@@ -1380,7 +1380,7 @@ details.how-details .how-body { padding: 16px 18px; }
         ' <span class="pts">' + s.score + '</span></span>' +
         '<span class="lc-bar"><i style="width:' + Math.max(2, s.pct) + '%"></i></span>';
       chip.setAttribute('aria-label', s.level.name + ' level, ' + s.score + ' points' +
-        (s.nextLevel ? ', ' + s.toNext + ' points to ' + s.nextLevel.name : ', top level') + ' — open profile');
+        (s.nextLevel ? ', ' + s.toNext + ' points to ' + s.nextLevel.name : ', top level') + '. Open profile.');
     }).catch(function () { /* chip is best-effort */ });
   }
   $('level-chip').addEventListener('click', function () { show('mine'); });
@@ -1469,8 +1469,8 @@ details.how-details .how-body { padding: 16px 18px; }
       '<div class="meta">by ' + esc(idea.authorDisplay || idea.author) + ' · updated ' + new Date(idea.updatedAt).toLocaleString() + '</div>' +
       (idea.issueURL ? '<div class="meta">Settled: <a href="' + esc(idea.issueURL) + '" target="_blank" rel="noopener">' + esc(idea.issueURL) + '</a></div>' : '') +
       (mine && launchable ? '<div class="meta">' + (extTarget
-        ? 'Aimed at ' + esc(idea.targetRepo) + ' — external repo, no acceptance needed. File the GitHub issue to claim your credit (+100 points).'
-        : esc(idea.targetRepo || '') + ' accepted this idea — file the GitHub issue to claim your credit (+100 points).') + '</div>' : '') +
+        ? 'Aimed at ' + esc(idea.targetRepo) + ' (external). File the GitHub issue to settle (+100 points).'
+        : esc(idea.targetRepo || '') + ' accepted. File the GitHub issue to settle (+100 points).') + '</div>' : '') +
       (mine ? '<div class="row" style="margin-top:10px">' +
         (launchable ? '<button class="pill small primary" data-act="launch">' +
           (idea.status === 'issue_launched' ? 'Confirm the issue link' : 'File the GitHub issue') + '</button>' : '') +
@@ -1557,7 +1557,7 @@ details.how-details .how-body { padding: 16px 18px; }
     api('GET', 'credits').then(function (res) {
       var el = $('credits-list'); el.innerHTML = '';
       if (!res.credits.length) {
-        el.innerHTML = '<div class="empty">No settled ideas yet — the credit wall is waiting for its first name.</div>';
+        el.innerHTML = '<div class="empty">No settled ideas.</div>';
         return;
       }
       res.credits.forEach(function (c) {
@@ -1592,8 +1592,8 @@ details.how-details .how-body { padding: 16px 18px; }
           .then(function (idea) {
             wizIdea = idea;
             showOk(i.value === 'private'
-              ? 'Now private — only repos you offer to can see it.'
-              : 'Now public — any opted-in repo can match it.');
+              ? 'Private. Visible only to repos you offer it to.'
+              : 'Public. Any opted-in repo can match it.');
           })
           .catch(function (e) { showErr(e.message); });
       }
@@ -1794,7 +1794,7 @@ details.how-details .how-body { padding: 16px 18px; }
     if (ev.key === 'Enter') { ev.preventDefault(); $('btn-ext-offer').click(); }
   });
   $('btn-ext-offer').addEventListener('click', function () {
-    if (!wizIdea) { showErr('Save the idea first — go back a step.'); return; }
+    if (!wizIdea) { showErr('Save the idea first.'); return; }
     var repoID = $('ext-repo').value.trim();
     if (!EXT_REPO_RE.test(repoID)) { showErr('Use org/repo format.'); return; }
     var b = $('btn-ext-offer');
@@ -1804,10 +1804,10 @@ details.how-details .how-body { padding: 16px 18px; }
         b.disabled = false;
         wizIdea = idea;
         $('ext-repo').value = '';
-        $('ext-result').innerHTML = 'Aimed at <b>' + esc(repoID) + '</b> — external repos need no acceptance. ' +
-          '<button type="button" class="pill small primary" id="btn-ext-launch">File the issue now</button>';
+        $('ext-result').innerHTML = 'Aimed at <b>' + esc(repoID) + '</b>. No acceptance needed. ' +
+          '<button type="button" class="pill small primary" id="btn-ext-launch">File the issue</button>';
         $('btn-ext-launch').addEventListener('click', function () { openLaunch(idea); });
-        showOk('\u201c' + esc(idea.title) + '\u201d is aimed at ' + esc(repoID) + ' — file the credited GitHub issue whenever you\u2019re ready.');
+        showOk('Aimed at ' + esc(repoID) + '. File the GitHub issue when ready.');
         loadGamebar();
       })
       .catch(function (e) { b.disabled = false; showErr(e.message); });
@@ -1862,12 +1862,12 @@ details.how-details .how-body { padding: 16px 18px; }
       .then(function (res) {
         btn.disabled = false; btn.textContent = 'Expand with AI for this repo';
         if (!res.refined) {
-          showOk('AI expansion isn\u2019t available right now — edit the draft by hand.');
+          showOk('Expansion unavailable. Edit the draft by hand.');
           return;
         }
         $('l-title').value = res.title;
         $('l-body').value = res.body;
-        showOk('Expanded for ' + esc(launchIdea.targetRepo) + ' — edit freely, then open the GitHub form.');
+        showOk('Expanded for ' + esc(launchIdea.targetRepo) + '. Edit, then open the GitHub form.');
       })
       .catch(function (e) {
         btn.disabled = false; btn.textContent = 'Expand with AI for this repo';
@@ -1882,7 +1882,7 @@ details.how-details .how-body { padding: 16px 18px; }
         launchFullBody = res.fullBody;
         $('launch-trunc').style.display = res.truncated ? 'block' : 'none';
         window.open(res.url, '_blank', 'noopener');
-        showOk('GitHub opened in a new tab — submit the issue there, then paste its link below.');
+        showOk('GitHub opened in a new tab. Submit the issue, then paste its link below.');
       })
       .catch(function (e) { showErr(e.message); });
   });
@@ -2215,7 +2215,7 @@ details.how-details .how-body { padding: 16px 18px; }
       var editRow = document.createElement('div'); editRow.className = 'row'; editRow.style.marginTop = '10px';
       editRow.innerHTML =
         '<input type="text" placeholder="topics (comma-separated)" aria-label="Topics" value="' + esc((repo.topics || []).join(', ')) + '" style="flex:1">' +
-        '<input type="text" placeholder="appetite — what ideas are you hungry for?" aria-label="Appetite" value="' + esc(repo.appetite || '') + '" style="flex:2">' +
+        '<input type="text" placeholder="appetite: topics this repo wants" aria-label="Appetite" value="' + esc(repo.appetite || '') + '" style="flex:2">' +
         '<button class="pill small">Save</button>';
       editRow.querySelector('button').addEventListener('click', function () {
         var topics = editRow.querySelectorAll('input')[0].value.split(',').map(function (t) { return t.trim(); }).filter(Boolean);

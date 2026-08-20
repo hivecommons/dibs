@@ -56,9 +56,9 @@ func (n *MatchNotifier) NewMatch(ideaAuthor, repoOwner string, idea *store.Idea,
 			log.Printf("api: adding match notification: %v", err)
 		}
 	}
-	add(ideaAuthor, "New match: your idea “"+idea.Title+"” looks like a fit for "+repo.RepoID+".")
+	add(ideaAuthor, "Match: “"+idea.Title+"” fits "+repo.RepoID+".")
 	if idea.Visibility == store.VisibilityPublic && repoOwner != ideaAuthor {
-		add(repoOwner, "New match: the idea “"+idea.Title+"” looks like a fit for "+repo.RepoID+".")
+		add(repoOwner, "Match: “"+idea.Title+"” fits "+repo.RepoID+".")
 	}
 }
 
@@ -198,7 +198,7 @@ func (a *API) offerExternal(w http.ResponseWriter, idea *store.Idea, repoID stri
 		return
 	}
 	a.notifyAdd(updated.Author, notify.KindOffer,
-		"“"+updated.Title+"” is aimed at "+repoID+" (external repo) — file the credited GitHub issue whenever you're ready.",
+		"“"+updated.Title+"” aimed at "+repoID+" (external). File the GitHub issue when ready.",
 		updated.ID, repoID)
 	writeJSON(w, http.StatusOK, updated)
 }
@@ -423,7 +423,7 @@ func (a *API) accept(w http.ResponseWriter, r *http.Request, idea *store.Idea, r
 
 	// Default matchmaker flow: the ideator files the issue themselves.
 	a.notifyAdd(updated.Author, notify.KindAccepted,
-		rp.RepoID+" accepted your idea “"+updated.Title+"”! 🎉 File the GitHub issue from My Ideas to claim the credit.",
+		rp.RepoID+" accepted “"+updated.Title+"”. File the GitHub issue to settle.",
 		updated.ID, rp.RepoID)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"result": "accepted",
@@ -436,7 +436,7 @@ func (a *API) accept(w http.ResponseWriter, r *http.Request, idea *store.Idea, r
 // credited issue itself. Reachable only when DIBS_GITHUB_TOKEN is set.
 func (a *API) legacySettle(w http.ResponseWriter, r *http.Request, updated *store.Idea, rp *registry.RepoProfile) {
 	a.notifyAdd(updated.Author, notify.KindAccepted,
-		rp.RepoID+" accepted your idea “"+updated.Title+"”! 🎉", updated.ID, rp.RepoID)
+		rp.RepoID+" accepted “"+updated.Title+"”.", updated.ID, rp.RepoID)
 	issueURL, err := a.Settler.Settle(r.Context(), updated, rp.RepoID)
 	if err != nil {
 		warning := "accepted, but opening the GitHub issue failed: " + err.Error()
@@ -458,7 +458,7 @@ func (a *API) legacySettle(w http.ResponseWriter, r *http.Request, updated *stor
 		return
 	}
 	a.notifyAdd(settled.Author, notify.KindIssue,
-		"Your idea “"+settled.Title+"” is now a GitHub issue on "+rp.RepoID+": "+issueURL, settled.ID, rp.RepoID)
+		"“"+settled.Title+"” is now a GitHub issue on "+rp.RepoID+": "+issueURL, settled.ID, rp.RepoID)
 	writeJSON(w, http.StatusOK, map[string]any{"result": "settled", "idea": settled, "issueURL": issueURL})
 }
 
