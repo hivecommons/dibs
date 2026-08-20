@@ -57,6 +57,7 @@ kubectl -n dibs create secret generic dibs-secrets \
 
 - The container runs as non-root (distroless `nonroot`, uid 65532) with a
   read-only root filesystem; only `/data` (the PVC) is writable.
-- Single replica: the JSON file store is single-writer by design
-  (`ReadWriteOnce` PVC, `Recreate` strategy).
+- Single replica: the JSON file store is single-writer by design. The PVC is
+  `ReadWriteMany` (OCI FSS) so `RollingUpdate` (maxSurge=1, maxUnavailable=0)
+  can overlap the old and new pods — rollouts are zero-downtime.
 - Health/readiness: `GET /healthz` returns `{"status":"ok","version":"<git sha>"}`.
