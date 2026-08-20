@@ -367,8 +367,16 @@ details.how-details .how-body { padding: 16px 18px; }
 .watch-delta.flat { color: var(--muted); background: rgba(168,179,194,.08); }
 .watch-empty { padding: 26px 10px; text-align: center; color: var(--muted); font-size: .82rem; }
 .chart-panel { padding: 16px 18px 12px; margin: 0; min-width: 0; }
-.chart-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.chart-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
 .chart-title-wrap { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.chart-side { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; margin-left: auto; }
+.chart-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.chart-action { border-radius: 6px; padding: 6px 11px; font: inherit; font-size: .78rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.2; white-space: nowrap; text-decoration: none; cursor: pointer; }
+.chart-action.primary { background: var(--amber); border: 1px solid var(--amber); color: #080b0f; }
+.chart-action.primary:hover, .chart-action.primary:focus-visible { background: #ffd97a; border-color: #ffd97a; }
+.chart-action.secondary { background: transparent; border: 1px solid var(--line); color: var(--text); }
+.chart-action.secondary:hover, .chart-action.secondary:focus-visible { border-color: var(--amber); color: var(--amber); }
+.chart-action[hidden] { display: none; }
 .chart-sym { font-family: var(--font-mono); font-weight: 800; font-size: 1.25rem; color: var(--amber); }
 .chart-repo { color: var(--muted); font-size: .85rem; font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chart-quote { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 1.25rem; font-weight: 800; }
@@ -376,6 +384,13 @@ details.how-details .how-body { padding: 16px 18px; }
 .chart-quote .qd.up { color: var(--green); }
 .chart-quote .qd.down { color: var(--red); }
 .chart-quote .ex { color: var(--muted); font-style: italic; font-size: .72rem; font-weight: 400; margin-left: 8px; }
+@media (max-width: 800px) {
+  .chart-head { align-items: flex-start; }
+  .chart-side { width: 100%; justify-content: space-between; }
+}
+@media (max-width: 520px) {
+  .chart-side, .chart-actions { justify-content: flex-start; }
+}
 @media (max-width: 800px) {
   .market-layout { grid-template-columns: 1fr; }
   .watchlist-panel { height: auto; max-height: none; }
@@ -558,7 +573,13 @@ details.how-details .how-body { padding: 16px 18px; }
           <span class="chart-sym" id="chart-sym"></span>
           <span class="chart-repo" id="chart-repo"></span>
         </div>
-        <div class="chart-quote" id="chart-quote" aria-live="polite"></div>
+        <div class="chart-side">
+          <div class="chart-quote" id="chart-quote" aria-live="polite"></div>
+          <div class="chart-actions" id="chart-actions" aria-label="Selected repo actions" hidden>
+            <button type="button" class="chart-action primary" id="chart-offer-btn"></button>
+            <a class="chart-action secondary" id="chart-contribute-link" target="_blank" rel="noopener"></a>
+          </div>
+        </div>
       </div>
       <div id="chart-stage"></div>
       <div class="chart-legend" id="chart-legend">
@@ -1259,6 +1280,7 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
   var repoNewsCache = {};     // repoID → news cards
   var repoNewsLoading = {};   // repoID → in-flight news fetch
   var chartCurrent = null;    // repoID being shown (null = example mode)
+  var chartSelectedRepo = null;
   var chartLastData = null;    // payload last rendered, for responsive redraws
   var chartLastWidth = 0;
   var chartResizeQueued = false;
@@ -1289,6 +1311,25 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
   var watchlistSparkLoading = {};
   function repoDisplayName(r) {
     return r.name || r.title || r.repo || r.repoID || r.symbol || '';
+  }
+  function findChartRepo(repoID) {
+    for (var i = 0; i < chartRepos.length; i++) {
+      if (chartRepos[i].repoID === repoID) return chartRepos[i];
+    }
+    return null;
+  }
+  function updateChartActions(repo) {
+    chartSelectedRepo = repo && !repo.example ? repo : null;
+    var offer = $('chart-offer-btn'), contrib = $('chart-contribute-link'), actions = $('chart-actions');
+    if (!offer || !contrib || !actions) return;
+    if (!chartSelectedRepo) { actions.hidden = true; return; }
+    var symbol = chartSelectedRepo.symbol || 'REPO';
+    actions.hidden = false;
+    offer.textContent = 'Offer idea to $' + symbol;
+    offer.setAttribute('aria-label', 'Offer idea to $' + symbol);
+    contrib.textContent = 'Contribute to $' + symbol;
+    contrib.setAttribute('aria-label', 'Contribute to $' + symbol);
+    contrib.href = getContributeHref(chartSelectedRepo);
   }
   function filteredChartRepos() {
     var q = chartFilter.trim().toLowerCase();
@@ -1456,6 +1497,7 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
   }
   function showChart(repoID) {
     chartCurrent = repoID;
+    updateChartActions(findChartRepo(repoID));
     syncWatchlistSelection();
     ensureRepoNews(repoID);
     if (chartCache[repoID]) { renderChart(chartCache[repoID]); renderWatchlistSpark(repoID); ensureRepoNews(repoID); return; }
@@ -1523,6 +1565,7 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
   function renderChart(d) {
     chartLastData = d;
     var trend = d.delta > 0 ? 'up' : d.delta < 0 ? 'down' : 'flat';
+    updateChartActions(findChartRepo(d.repoID) || d);
     $('chart-sym').textContent = '$' + d.symbol;
     $('chart-repo').textContent = d.repoID;
     var qd = fmtDelta(d.delta);
@@ -1958,6 +2001,7 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
 
   /* ── guided listing wizard: ① Write → ② Refine → ③ Match ── */
   var wizIdea = null; // the saved idea once step ③ is reached
+  var listingTargetRepo = null;
   function setVis(v) {
     document.querySelectorAll('#f-vis label.opt').forEach(function (l) {
       var input = l.querySelector('input');
@@ -2017,10 +2061,11 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
     $('wiz-step-2').hidden = n !== 2;
     $('wiz-step-3').hidden = n !== 3;
   }
-  function openEdit(idea) {
+  function openEdit(idea, targetRepo) {
     editingId = idea ? idea.id : null;
     wizIdea = idea || null;
-    $('edit-title').textContent = idea ? 'Edit idea' : 'List an idea';
+    listingTargetRepo = targetRepo && !idea ? targetRepo : null;
+    $('edit-title').textContent = idea ? 'Edit idea' : (listingTargetRepo ? 'Offer idea to $' + (listingTargetRepo.symbol || 'REPO') : 'List an idea');
     $('f-title').value = idea ? idea.title : '';
     $('f-body').value = idea ? idea.body : '';
     setVis(idea ? idea.visibility : 'public');
@@ -2029,12 +2074,17 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
     show('edit');
     $('f-title').focus();
   }
-  function startListing() {
+  function startListing(targetRepo) {
+    if (!targetRepo || !targetRepo.repoID) targetRepo = null;
     if (anon) { $('signin-overlay').hidden = false; $('so-signin').focus(); }
-    else openEdit(null);
+    else openEdit(null, targetRepo);
   }
+  var HIVE_DIRECTORY_URL = 'https://hive.kubestellar.io/#public-hives';
   function getContributeURL(repo) {
     return repo && repo.contributeURL ? repo.contributeURL : '';
+  }
+  function getContributeHref(repo) {
+    return getContributeURL(repo) || HIVE_DIRECTORY_URL;
   }
   function renderDonateHives(repos) {
     var el = $('donate-hives');
@@ -2044,7 +2094,7 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
     }
     el.innerHTML = '<div class="donate-hives">' + repos.map(function (repo) {
       var url = getContributeURL(repo);
-      var href = url || 'https://hive.kubestellar.io/#public-hives';
+      var href = getContributeHref(repo);
       var label = url ? 'Contribute' : 'Pick a hive';
       return '<div class="donate-hive">' +
         '<div><div class="name">' + esc(repo.repoID) + '</div>' +
@@ -2074,6 +2124,7 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
   // The ever-present navbar CTA — THE action of the site. Signed out, it
   // routes to a friendly sign-in interstitial instead of a dead end.
   $('nav-list-cta').addEventListener('click', startListing);
+  $('chart-offer-btn').addEventListener('click', function () { startListing(chartSelectedRepo); });
   $('so-close').addEventListener('click', function () {
     $('signin-overlay').hidden = true;
     $('nav-list-cta').focus();
@@ -2158,19 +2209,25 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
     setWizStep(3);
     $('wiz-saved-note').textContent = '';
     $('ext-result').textContent = '';
-    $('wiz-matches').innerHTML = '<div class="empty">Scoring repos…</div>';
+    $('wiz-matches').innerHTML = listingTargetRepo
+      ? '<div class="empty">Preparing selected repo…</div>'
+      : '<div class="empty">Scoring repos…</div>';
     saveIdea().then(function (idea) {
       $('wiz-saved-note').innerHTML = 'Saved ' + symChip(idea.symbol) + '<b>' + esc(idea.title) +
         '</b>. Offer it to a repo below. Both sides must accept.';
       return api('GET', 'ideas/' + idea.id + '/matches').then(function (res) {
-        renderWizMatches(idea, res.matches || []);
+        renderWizMatches(idea, res.matches || [], listingTargetRepo);
       });
     }).catch(function (e) { showErr(e.message); setWizStep(1); });
   }
-  function renderWizMatches(idea, matches) {
+  function renderWizMatches(idea, matches, targetRepo) {
     var el = $('wiz-matches');
     el.innerHTML = '';
-    if (!matches.length) {
+    if (targetRepo) {
+      renderTargetOffer(el, idea, targetRepo);
+      matches = matches.filter(function (m) { return !m.repo || m.repo.repoID !== targetRepo.repoID; });
+    }
+    if (!matches.length && !targetRepo) {
       el.innerHTML = '<div class="empty">No repos listed yet. Matches appear as repos join.</div>';
       return;
     }
@@ -2199,6 +2256,28 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
       });
       el.appendChild(d);
     });
+  }
+  function renderTargetOffer(el, idea, repo) {
+    var d = document.createElement('div'); d.className = 'card';
+    var symbol = repo.symbol || 'REPO';
+    d.innerHTML =
+      '<div class="row"><h4>Selected repo: $' + esc(symbol) + '</h4>' +
+      '<span class="badge-chip mini">' + esc(repo.repoID) + '</span></div>' +
+      (repo.description ? '<div class="body-preview">' + esc(repo.description) + '</div>' : '') +
+      '<div class="row" style="margin-top:10px"><button class="pill small primary" aria-label="Offer this idea to ' +
+      esc(repo.repoID) + '">Offer to $' + esc(symbol) + '</button></div>';
+    var b = d.querySelector('button');
+    b.addEventListener('click', function () {
+      b.disabled = true;
+      api('POST', 'ideas/' + idea.id + '/offer', { repoID: repo.repoID })
+        .then(function () {
+          b.textContent = 'Offered';
+          showOk('Offered to ' + esc(repo.repoID) + '. +25 points.');
+          loadGamebar();
+        })
+        .catch(function (e) { b.disabled = false; showErr(e.message); });
+    });
+    el.appendChild(d);
   }
   $('btn-wiz-finish').addEventListener('click', function () {
     if (wizIdea) openIdeaDetail(wizIdea.id); else show('home');
