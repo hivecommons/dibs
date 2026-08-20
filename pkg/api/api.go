@@ -13,6 +13,7 @@ import (
 	"github.com/kubestellar/dibs/pkg/auth"
 	"github.com/kubestellar/dibs/pkg/history"
 	"github.com/kubestellar/dibs/pkg/match"
+	"github.com/kubestellar/dibs/pkg/news"
 	"github.com/kubestellar/dibs/pkg/notify"
 	"github.com/kubestellar/dibs/pkg/registry"
 	"github.com/kubestellar/dibs/pkg/settle"
@@ -32,6 +33,7 @@ type API struct {
 	Store    *store.Store
 	Registry *registry.Registry
 	History  *history.Store
+	News     *news.Store
 	// Engine is nil when matching is disabled (Wave-2 features degrade).
 	Engine *match.Engine
 	// Settler opens credited GitHub issues; a nil-GitHub settler records

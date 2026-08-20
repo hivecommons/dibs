@@ -45,6 +45,14 @@ type RepoHistory struct {
 	FetchedAt time.Time     `json:"fetchedAt"`
 }
 
+// MergedPullRequest is the public subset of a merged GitHub PR needed by
+// higher-level enrichments such as repo news.
+type MergedPullRequest struct {
+	Title    string    `json:"title"`
+	MergedAt time.Time `json:"mergedAt"`
+	Author   string    `json:"author,omitempty"`
+}
+
 // Store persists repo histories under DATA_DIR with atomic writes.
 type Store struct {
 	mu   sync.RWMutex
@@ -254,7 +262,7 @@ func (b *Backfiller) Backfill(ctx context.Context, repoID string) error {
 	}
 
 	days := zeroDays(b.now())
-	prs, err := b.fetchMergedPRs(ctx, repoID)
+	prs, err := b.fetchMergedPRBuckets(ctx, repoID)
 	if err != nil {
 		return err
 	}
@@ -316,12 +324,30 @@ func sortedDays(days map[string]DayActivity) []DayActivity {
 	return out
 }
 
-func (b *Backfiller) fetchMergedPRs(ctx context.Context, repoID string) (map[string]int, error) {
+func (b *Backfiller) fetchMergedPRBuckets(ctx context.Context, repoID string) (map[string]int, error) {
+	prs, err := b.FetchMergedPullRequests(ctx, repoID)
+	if err != nil {
+		return nil, err
+	}
 	out := map[string]int{}
+	for _, pr := range prs {
+		out[pr.MergedAt.UTC().Format("2006-01-02")]++
+	}
+	return out, nil
+}
+
+// FetchMergedPullRequests fetches recent merged PRs for repoID using the same
+// GitHub client, auth, timeout, pagination, and skip semantics as Backfill.
+func (b *Backfiller) FetchMergedPullRequests(ctx context.Context, repoID string) ([]MergedPullRequest, error) {
+	var out []MergedPullRequest
 	for page := 1; page <= maxPullPages; page++ {
 		path := fmt.Sprintf("/repos/%s/pulls?state=closed&sort=updated&direction=desc&per_page=%d&page=%d", repoID, perPage, page)
 		var pulls []struct {
 			MergedAt *time.Time `json:"merged_at"`
+			Title    string     `json:"title"`
+			User     struct {
+				Login string `json:"login"`
+			} `json:"user"`
 		}
 		if err := b.getJSON(ctx, path, &pulls); err != nil {
 			return nil, err
@@ -330,12 +356,17 @@ func (b *Backfiller) fetchMergedPRs(ctx context.Context, repoID string) (map[str
 			if pr.MergedAt == nil {
 				continue
 			}
-			out[pr.MergedAt.UTC().Format("2006-01-02")]++
+			out = append(out, MergedPullRequest{
+				Title:    strings.TrimSpace(pr.Title),
+				MergedAt: pr.MergedAt.UTC(),
+				Author:   strings.TrimSpace(pr.User.Login),
+			})
 		}
 		if len(pulls) < perPage {
 			break
 		}
 	}
+	sort.Slice(out, func(i, j int) bool { return out[i].MergedAt.After(out[j].MergedAt) })
 	return out, nil
 }
 

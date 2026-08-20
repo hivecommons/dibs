@@ -32,9 +32,9 @@ func TestFetchMergedPRsBucketsByMergedDate(t *testing.T) {
 	defer srv.Close()
 
 	b := &Backfiller{BaseURL: srv.URL, Token: "test-token", Client: srv.Client(), Now: fixedNow}
-	got, err := b.fetchMergedPRs(context.Background(), "org/repo")
+	got, err := b.fetchMergedPRBuckets(context.Background(), "org/repo")
 	if err != nil {
-		t.Fatalf("fetchMergedPRs: %v", err)
+		t.Fatalf("fetchMergedPRBuckets: %v", err)
 	}
 	want := map[string]int{"2026-08-18": 2, "2026-08-17": 1}
 	if !reflect.DeepEqual(got, want) {
