@@ -1,8 +1,26 @@
 # Backing storage for the JSON file store (ideas, repo profiles,
-# notifications). ReadWriteMany (OCI FSS/NFS) so rollouts can overlap
-# old and new pods (RollingUpdate, zero downtime). The store remains
-# single-writer by design; the only concurrent access is the brief
-# handoff during a rollout.
+# notifications). ReadWriteMany (OCI FSS/NFS, same mount target the hub
+# uses, dibs/ subdirectory) so rollouts can overlap old and new pods
+# (RollingUpdate, zero downtime). The store remains single-writer by
+# design; the only concurrent access is the brief handoff during a
+# rollout.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: dibs-fss-pv
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  nfs:
+    server: 10.0.10.30
+    path: /hive-hub/dibs
+  claimRef:
+    name: dibs-data-rwx
+    namespace: dibs
+---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -11,7 +29,8 @@ metadata:
 spec:
   accessModes:
     - ReadWriteMany
-  storageClassName: oci-fss
+  storageClassName: ""
+  volumeName: dibs-fss-pv
   resources:
     requests:
-      storage: 50Gi
+      storage: 10Gi
