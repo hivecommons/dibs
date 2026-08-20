@@ -15,6 +15,7 @@ import (
 
 	"github.com/kubestellar/dibs/pkg/api"
 	"github.com/kubestellar/dibs/pkg/auth"
+	"github.com/kubestellar/dibs/pkg/catalog"
 	"github.com/kubestellar/dibs/pkg/history"
 	"github.com/kubestellar/dibs/pkg/match"
 	"github.com/kubestellar/dibs/pkg/news"
@@ -92,6 +93,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("opening repo news store: %v", err)
 	}
+	cncfCatalog, err := catalog.New(dataDir, envOr(settle.EnvGitHubToken, ""))
+	if err != nil {
+		log.Fatalf("opening CNCF catalog: %v", err)
+	}
+	cncfCatalog.RefreshAsync()
 
 	notifications, err := notify.New(dataDir)
 	if err != nil {
@@ -107,7 +113,7 @@ func main() {
 	} else {
 		log.Printf("match engine: %s unset — deterministic fallback matcher", match.EnvLLMBaseURL)
 	}
-	engine := &match.Engine{Store: st, Registry: reg, LLM: llm, Notifier: &api.MatchNotifier{Notify: notifications}}
+	engine := &match.Engine{Store: st, Registry: reg, Catalog: cncfCatalog, LLM: llm, Notifier: &api.MatchNotifier{Notify: notifications}}
 
 	// Settlement: by default Dibs is just the matchmaker — the ideator
 	// files the credited issue via a prefilled GitHub URL. Setting

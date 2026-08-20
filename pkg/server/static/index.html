@@ -508,6 +508,11 @@ details.how-details .how-body { padding: 16px 18px; }
 .embellish-wait { text-align: center; color: var(--purple); padding: 42px 12px; font-size: 1.05rem; font-weight: 700; }
 .embellish-note { border-left: 3px solid var(--purple); background: var(--panel); padding: 14px 18px; border-radius: 0 var(--radius) var(--radius) 0; color: var(--muted); line-height: 1.55; margin-top: 14px; }
 .wiz-offer-note { color: var(--muted); font-size: .85rem; margin: 10px 0 14px; line-height: 1.5; }
+.match-section-title { margin: 18px 0 10px; color: var(--amber); font-size: .9rem; letter-spacing: .08em; text-transform: uppercase; }
+.cncf-card { border-left: 3px solid var(--amber); }
+.chip.maturity-graduated { color: var(--green); border-color: var(--green); }
+.chip.maturity-incubating { color: var(--blue); border-color: var(--blue); }
+.chip.maturity-sandbox { color: var(--muted); border-color: var(--line); }
 /* ── market desk tabs ── */
 .desk-tabs { display: flex; gap: 8px; margin: 4px 0 18px; flex-wrap: wrap; }
 /* slim signed-in summary strip above the terminal on home */
@@ -2425,22 +2430,29 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
       : '<div class="empty">Scoring repos…</div>';
     saveIdea().then(function (idea) {
       $('wiz-saved-note').innerHTML = 'Saved ' + symChip(idea.symbol) + '<b>' + esc(idea.title) +
-        '</b>. Offer it to a repo below. Both sides must accept.';
+        '</b>. Offer it to a hive repo, or open a prefilled issue for a CNCF project.';
       return api('GET', 'ideas/' + idea.id + '/matches').then(function (res) {
-        renderWizMatches(idea, res.matches || [], listingTargetRepo);
+        renderWizMatches(idea, res.matches || [], listingTargetRepo, res.cncf || []);
       });
     }).catch(function (e) { showErr(e.message); setWizStep(1); });
   }
-  function renderWizMatches(idea, matches, targetRepo) {
+  function renderWizMatches(idea, matches, targetRepo, cncf) {
     var el = $('wiz-matches');
+    cncf = cncf || [];
     el.innerHTML = '';
     if (targetRepo) {
       renderTargetOffer(el, idea, targetRepo);
       matches = matches.filter(function (m) { return !m.repo || m.repo.repoID !== targetRepo.repoID; });
     }
-    if (!matches.length && !targetRepo) {
+    if (!matches.length && !targetRepo && !cncf.length) {
       el.innerHTML = '<div class="empty">No repos listed yet. Matches appear as repos join.</div>';
       return;
+    }
+    if (matches.length || targetRepo) {
+      var hiveTitle = document.createElement('h3');
+      hiveTitle.className = 'match-section-title';
+      hiveTitle.textContent = 'Hive repos (agent capacity)';
+      el.appendChild(hiveTitle);
     }
     matches.forEach(function (m) {
       var d = document.createElement('div'); d.className = 'card';
@@ -2467,6 +2479,37 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
       });
       el.appendChild(d);
     });
+    if (cncf.length) {
+      renderCNCFMatches(el, idea, cncf);
+    }
+  }
+  function maturityChip(maturity) {
+    var m = String(maturity || '').toLowerCase();
+    var cls = m === 'graduated' || m === 'incubating' || m === 'sandbox' ? m : 'sandbox';
+    return '<span class="chip maturity-' + cls + '">' + esc(m || 'cncf') + '</span>';
+  }
+  function renderCNCFMatches(el, idea, cncf) {
+    var title = document.createElement('h3');
+    title.className = 'match-section-title';
+    title.textContent = 'CNCF projects';
+    el.appendChild(title);
+    cncf.forEach(function (m) {
+      var d = document.createElement('div'); d.className = 'card cncf-card';
+      d.innerHTML =
+        '<div class="row"><h4>' + esc(m.name || m.repoID) + '</h4>' +
+        maturityChip(m.maturity) + scorePill(m.score) + '</div>' +
+        '<div class="meta"><a href="' + esc(m.repoURL || ('https://github.com/' + m.repoID)) + '" target="_blank" rel="noopener">' + esc(m.repoID) + '</a>' +
+        (m.category ? ' · ' + esc(m.category) : '') + '</div>' +
+        (m.reason ? '<div class="why">' + esc(m.reason) + (m.byLLM ? ' · scored by LLM' : ' · BM25 match') + '</div>' : '') +
+        '<div class="row" style="margin-top:10px"><button class="pill small primary">Open prefilled issue</button></div>';
+      d.querySelector('button').addEventListener('click', function () { prefillExternalIssue(idea, m.repoID); });
+      el.appendChild(d);
+    });
+  }
+  function prefillExternalIssue(idea, repoID) {
+    api('POST', 'ideas/' + idea.id + '/offer', { repoID: repoID })
+      .then(function (updated) { openLaunch(updated); })
+      .catch(function (e) { showErr(e.message); });
   }
   function renderTargetOffer(el, idea, repo) {
     var d = document.createElement('div'); d.className = 'card';

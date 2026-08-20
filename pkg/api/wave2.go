@@ -91,6 +91,11 @@ func (a *API) handleIdeaMatches(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	cncf, err := a.Engine.CNCFMatchesForIdea(r.Context(), idea)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
 	views := []matchView{}
 	for _, m := range matches {
 		rp, err := a.Registry.Get(m.RepoID)
@@ -99,7 +104,7 @@ func (a *API) handleIdeaMatches(w http.ResponseWriter, r *http.Request) {
 		}
 		views = append(views, matchView{Repo: rp, Score: m.Score, Reason: m.Reason, ByLLM: m.ByLLM})
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"tldr": idea.TLDR, "matches": views})
+	writeJSON(w, http.StatusOK, map[string]any{"tldr": idea.TLDR, "matches": views, "cncf": cncf})
 }
 
 type offerInput struct {
