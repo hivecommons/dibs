@@ -112,8 +112,8 @@ func TestRepoSymbols(t *testing.T) {
 	}
 	seen := map[string]bool{}
 	for id, sym := range s1 {
-		if len(sym) > store.MaxSymbolLen {
-			t.Fatalf("%s symbol %q exceeds %d chars", id, sym, store.MaxSymbolLen)
+		if len(sym) != 4 {
+			t.Fatalf("%s symbol %q should be 4 letters", id, sym)
 		}
 		if seen[sym] {
 			t.Fatalf("duplicate symbol %q", sym)

@@ -2,8 +2,9 @@
 // "accepting ideas" opt-in. Profiles are synced from the hub (via a HubClient
 // interface with a fake for tests — the hub-side endpoint is a small
 // follow-up, contract below) and/or seeded from a static JSON file
-// (REPOS_SEED_FILE) for dev/demo. Owner-editable fields (acceptingIdeas,
-// topics, appetite) persist locally in DATA_DIR and survive syncs.
+// (REPOS_SEED_FILE) for dev/demo. Locally assigned ticker symbols and
+// owner-editable fields (acceptingIdeas, topics, appetite) persist locally
+// in DATA_DIR and survive syncs.
 //
 // Hub contract (follow-up):
 //
@@ -42,6 +43,9 @@ type RepoProfile struct {
 	HiveID      string `json:"hiveID"`
 	Owner       string `json:"owner"` // identity key of the hive owner
 	Description string `json:"description,omitempty"`
+	// Symbol is the locally assigned, stable 4-letter exchange ticker for
+	// the repo. It is assigned once and preserved across hub syncs.
+	Symbol string `json:"symbol,omitempty"`
 	// ContributeURL is the hive's public /contribute page (ClankeR, the
 	// contributor relay), hub-fed like RepoID/HiveID/Owner. Empty when the
 	// hive has reported no public base.
@@ -153,6 +157,11 @@ func New(dir string) (*Registry, error) {
 			r.repos[rp.RepoID] = &rp
 		}
 	}
+	if r.ensureRepoSymbolsLocked() {
+		if err := r.persistLocked(); err != nil {
+			return nil, err
+		}
+	}
 	return r, nil
 }
 
@@ -195,10 +204,12 @@ func (r *Registry) Merge(incoming []RepoProfile) error {
 	defer r.mu.Unlock()
 	for i := range incoming {
 		in := incoming[i]
+		in.Symbol = "" // symbols are assigned locally, never accepted from hub input
 		if in.Topics == nil {
 			in.Topics = []string{}
 		}
 		if existing, ok := r.repos[in.RepoID]; ok {
+			in.Symbol = existing.Symbol
 			in.AcceptingIdeas = existing.AcceptingIdeas
 			in.Topics = existing.Topics
 			in.Appetite = existing.Appetite
@@ -206,6 +217,7 @@ func (r *Registry) Merge(incoming []RepoProfile) error {
 		}
 		r.repos[in.RepoID] = &in
 	}
+	r.ensureRepoSymbolsLocked()
 	return r.persistLocked()
 }
 
@@ -234,6 +246,7 @@ func (r *Registry) LoadSeedFile(path string) error {
 	defer r.mu.Unlock()
 	for i := range repos {
 		in := repos[i]
+		in.Symbol = "" // seed files cannot reserve or override ticker symbols
 		if in.Topics == nil {
 			in.Topics = []string{}
 		}
@@ -242,6 +255,7 @@ func (r *Registry) LoadSeedFile(path string) error {
 		}
 		r.repos[in.RepoID] = &in
 	}
+	r.ensureRepoSymbolsLocked()
 	return r.persistLocked()
 }
 
