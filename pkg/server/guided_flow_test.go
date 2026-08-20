@@ -26,23 +26,22 @@ func TestGuidedFlowUIStrings(t *testing.T) {
 			"＋ List an idea",
 			"Ready to list your idea?",
 			// 2. the 3-step wizard stepper
-			"✍️ Write",
-			"✨ Embellish",
-			"🎯 Match",
+			`id="wiz-stepper"`,
 			"Polishing your idea with AI",
 			"AI polish unavailable — your draft is ready",
-			// 3. the signed-in market desk zones
-			"Your market desk",
-			"💡 My ideas",
-			"🎯 Matches to review",
-			"🔔 Activity",
+			// 3. the desk (its own view since the terminal redesign) zones
+			`id="view-desk"`,
+			"Your desk",
+			"My ideas",
+			"Matches to review",
+			`id="zone-activity"`,
 			// 4. the explicit per-idea match action
 			"Find repos for this idea",
 			// step-3 honest empty state
 			"No repos are listed yet — your idea is on the market; matches appear as repos join.",
 			// external (non-hive) targeting in step 3
 			"…or send it to any repo",
-			"🐝 hive-powered — agent capacity ready",
+			"hive-powered — agent capacity ready",
 			"not hive-managed — implementation not guaranteed… yet",
 		} {
 			if !strings.Contains(body, want) {
