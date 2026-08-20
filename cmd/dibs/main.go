@@ -15,6 +15,7 @@ import (
 
 	"github.com/kubestellar/dibs/pkg/api"
 	"github.com/kubestellar/dibs/pkg/auth"
+	"github.com/kubestellar/dibs/pkg/history"
 	"github.com/kubestellar/dibs/pkg/match"
 	"github.com/kubestellar/dibs/pkg/notify"
 	"github.com/kubestellar/dibs/pkg/registry"
@@ -82,6 +83,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("opening repo registry: %v", err)
 	}
+	hist, err := history.NewStore(dataDir)
+	if err != nil {
+		log.Fatalf("opening repo history store: %v", err)
+	}
 
 	notifications, err := notify.New(dataDir)
 	if err != nil {
@@ -110,6 +115,7 @@ func main() {
 	} else {
 		log.Printf("settlement: matchmaker mode — ideators file issues via prefilled GitHub URLs")
 	}
+	backfiller := history.NewBackfiller(hist, envOr(settle.EnvGitHubToken, ""))
 
 	if seed := os.Getenv("REPOS_SEED_FILE"); seed != "" {
 		if err := reg.LoadSeedFile(seed); err != nil {
@@ -126,6 +132,8 @@ func main() {
 			ctx, cancel := context.WithTimeout(context.Background(), hubSyncTimeout)
 			if err := reg.Sync(ctx, hubRepos); err != nil {
 				log.Printf("registry sync: %v", err)
+			} else {
+				backfiller.RefreshAsync(reg.List(false))
 			}
 			cancel()
 			time.Sleep(registrySyncInterval)
@@ -138,6 +146,7 @@ func main() {
 		Hub:      &auth.HTTPHubClient{BaseURL: hubURL},
 		Store:    st,
 		Repos:    reg,
+		History:  hist,
 		Engine:   engine,
 		Settler:  settler,
 		Notify:   notifications,

@@ -17,6 +17,7 @@ import (
 
 	"github.com/kubestellar/dibs/pkg/api"
 	"github.com/kubestellar/dibs/pkg/auth"
+	"github.com/kubestellar/dibs/pkg/history"
 	"github.com/kubestellar/dibs/pkg/match"
 	"github.com/kubestellar/dibs/pkg/mcpserver"
 	"github.com/kubestellar/dibs/pkg/notify"
@@ -38,10 +39,11 @@ type Config struct {
 	// for the root, or "/prefix" (no trailing slash) for path-based proxying.
 	BasePath string
 	// HubURL is the human-facing hub origin (sign-in interstitial link).
-	HubURL string
-	Hub    auth.HubClient
-	Store  *store.Store
-	Repos  *registry.Registry
+	HubURL  string
+	Hub     auth.HubClient
+	Store   *store.Store
+	Repos   *registry.Registry
+	History *history.Store
 	// Engine scores idea↔repo matches (nil disables matching).
 	Engine *match.Engine
 	// Settler opens credited GitHub issues on accept (nil-GitHub records
@@ -88,7 +90,7 @@ func New(cfg Config) http.Handler {
 
 	// Authenticated routes.
 	authed := http.NewServeMux()
-	dibsAPI := &api.API{Store: cfg.Store, Registry: cfg.Repos, Engine: cfg.Engine, Settler: cfg.Settler, Notify: cfg.Notify}
+	dibsAPI := &api.API{Store: cfg.Store, Registry: cfg.Repos, History: cfg.History, Engine: cfg.Engine, Settler: cfg.Settler, Notify: cfg.Notify}
 	dibsAPI.Register(authed, base)
 
 	// Public routes + the auth-guarded rest. The UI page itself is public:

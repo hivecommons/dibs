@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/kubestellar/dibs/pkg/auth"
+	"github.com/kubestellar/dibs/pkg/history"
 	"github.com/kubestellar/dibs/pkg/match"
 	"github.com/kubestellar/dibs/pkg/notify"
 	"github.com/kubestellar/dibs/pkg/registry"
@@ -30,6 +31,7 @@ const maxRequestBody = store.MaxBodyBytes + 64*1024
 type API struct {
 	Store    *store.Store
 	Registry *registry.Registry
+	History  *history.Store
 	// Engine is nil when matching is disabled (Wave-2 features degrade).
 	Engine *match.Engine
 	// Settler opens credited GitHub issues; a nil-GitHub settler records
