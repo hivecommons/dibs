@@ -22,6 +22,8 @@ header { padding: 14px 24px; border-bottom: 1px solid var(--line); background: v
 .header-shell { width: min(100%, 1600px); margin: 0 auto; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 header .logo { font-weight: 800; font-size: 1.15rem; letter-spacing: .02em; background: none; border: none; color: var(--text); cursor: pointer; font-family: inherit; padding: 0; }
 header .logo span { color: var(--amber); }
+.logo-stack { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; }
+.logo-tag { color: var(--muted); font-size: .62rem; letter-spacing: .04em; white-space: nowrap; }
 .hdr-spacer { flex: 1; }
 /* jump affordance: the whole nav, out of the way */
 #jump-btn { display: inline-flex; align-items: center; gap: 8px; background: var(--panel-2); color: var(--muted); border: 1px solid var(--line); padding: 5px 12px; border-radius: var(--radius); cursor: pointer; font: inherit; font-size: .84rem; font-weight: 600; }
@@ -516,7 +518,10 @@ details.how-details .how-body { padding: 16px 18px; }
 </div>
 <header>
   <div class="header-shell">
-    <button class="logo" data-goto="home" aria-label="DIBS home">DI<span>BS</span></button>
+    <div class="logo-stack">
+      <button class="logo" data-goto="home" aria-label="DIBS home">DI<span>BS</span></button>
+      <span class="logo-tag">Delegate It, Bro. Seriously.</span>
+    </div>
     <button id="jump-btn" aria-haspopup="dialog" aria-controls="jump-overlay" title="Jump anywhere">Jump<kbd id="jump-kbd">⌘K</kbd></button>
     <span class="hdr-spacer"></span>
     <button id="nav-list-cta" aria-label="List an idea">＋ List an idea</button>
@@ -564,7 +569,7 @@ details.how-details .how-body { padding: 16px 18px; }
   <!-- The pitch — visible to everyone; only the sign-in CTA is anon-gated. -->
   <div class="hero compact">
     <h1>The open-source idea exchange.</h1>
-    <p class="tagline"><strong>D</strong>reams, <strong>I</strong>mplemented <strong>B</strong>y <strong>S</strong>omebody-else.</p>
+    <p class="tagline"><strong>D</strong>elegate <strong>I</strong>t, <strong>B</strong>ro. <strong>S</strong>eriously.</p>
     <p class="sub">Repos are the listed companies. Two kinds of capital move the market:
     ideas and spare AI tokens. An idea can be a spec, a requirement, or something you wish
     existed — list it, a repo with agent capacity accepts it, and the GitHub issue is filed
@@ -961,7 +966,7 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
   </div>
 </div>
 
-<footer>DIBS — Dreams, Implemented By Somebody-else · a KubeStellar project</footer>
+<footer>DIBS — Delegate It, Bro. Seriously. · a KubeStellar project</footer>
 
 <script>
 /* All URLs are RELATIVE so the app works at the root (dibs.kubestellar.io)
