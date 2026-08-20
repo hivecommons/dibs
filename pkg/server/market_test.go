@@ -226,3 +226,22 @@ func TestRepoIndexEndpoint(t *testing.T) {
 		t.Fatalf("quiet repo ticker wrong: %+v", tk.Repos)
 	}
 }
+
+func TestRepoQREndpoint(t *testing.T) {
+	f := newWave2Server(t, nil)
+
+	rec := doJSON(t, f.h, "GET", "/api/repos/kubestellar/dibs/qr.png", "", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("qr: %d %s", rec.Code, rec.Body.String())
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "image/png" {
+		t.Fatalf("content-type: want image/png, got %q", ct)
+	}
+	if rec.Body.Len() == 0 {
+		t.Fatal("qr body should be non-empty")
+	}
+
+	if rec := doJSON(t, f.h, "GET", "/api/repos/no/nope/qr.png", "", nil); rec.Code != http.StatusNotFound {
+		t.Fatalf("unknown repo: %d %s", rec.Code, rec.Body.String())
+	}
+}
