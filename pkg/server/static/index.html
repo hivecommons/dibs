@@ -5,6 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤝</text></svg>">
 <title>DIBS — the open-source idea exchange</title>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-45JER7SJ4W"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-45JER7SJ4W');
+</script>
 <style>
 :root {
   --bg: #0d1117; --panel: #1c2128; --panel-2: #22272e; --line: #30363d;
@@ -2224,7 +2233,7 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
       return;
     }
     if (!intakeAudio) return;
-    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+    navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }).then(function (stream) {
       recordStream = stream;
       recordChunks = [];
       var opts = MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('audio/webm') ? { mimeType: 'audio/webm' } : {};

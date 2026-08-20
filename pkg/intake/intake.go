@@ -298,6 +298,9 @@ func TranscribeWithContext(ctx context.Context, filename, contentType string, da
 	var body bytes.Buffer
 	mw := multipart.NewWriter(&body)
 	_ = mw.WriteField("model", model)
+	// Quiet mics get fully discarded by server-side voice-activity detection;
+	// let whisper decide what is speech.
+	_ = mw.WriteField("vad_filter", "false")
 	h := make(textproto.MIMEHeader)
 	h.Set("Content-Disposition", `form-data; name="file"; filename="`+escapeQuotes(filename)+`"`)
 	if contentType != "" {
