@@ -51,6 +51,7 @@ type Identity struct {
 	DisplayName string `json:"display_name,omitempty"`
 	Email       string `json:"email,omitempty"`
 	AvatarURL   string `json:"avatar_url,omitempty"`
+	Admin       bool   `json:"admin,omitempty"`
 }
 
 // HubClient resolves a hub session cookie to an identity.
@@ -176,6 +177,7 @@ func (m *Middleware) Wrap(next http.Handler) http.Handler {
 			m.reject(w, r, err)
 			return
 		}
+		id.Admin = IsAdmin(id.Username)
 		next.ServeHTTP(w, r.WithContext(WithIdentity(r.Context(), id)))
 	})
 }

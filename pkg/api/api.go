@@ -49,6 +49,7 @@ type API struct {
 func (a *API) Register(mux *http.ServeMux, basePath string) {
 	mux.HandleFunc("GET "+basePath+"/api/me", a.handleMe)
 	mux.HandleFunc("GET "+basePath+"/api/me/stats", a.handleMyStats)
+	mux.HandleFunc("GET "+basePath+"/api/admin/ideas", a.handleAdminIdeas)
 	mux.HandleFunc("GET "+basePath+"/api/intake/config", intake.HandleConfig)
 	mux.HandleFunc("POST "+basePath+"/api/intake", intake.HandleUpload)
 	mux.HandleFunc("GET "+basePath+"/api/ideas", a.handleListIdeas)
@@ -78,6 +79,70 @@ func identity(r *http.Request) *auth.Identity {
 
 func (a *API) handleMe(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, identity(r))
+}
+
+type adminMatchSummary struct {
+	Count int `json:"count"`
+	Top   []struct {
+		RepoID string  `json:"repoID"`
+		Score  float64 `json:"score"`
+	} `json:"top"`
+}
+
+type adminIdea struct {
+	Author        string            `json:"author"`
+	AuthorDisplay string            `json:"authorDisplay,omitempty"`
+	Title         string            `json:"title"`
+	TLDR          string            `json:"tldr,omitempty"`
+	Symbol        string            `json:"symbol,omitempty"`
+	Visibility    string            `json:"visibility"`
+	Status        string            `json:"status"`
+	CreatedAt     time.Time         `json:"createdAt"`
+	UpdatedAt     time.Time         `json:"updatedAt"`
+	Matches       adminMatchSummary `json:"matches"`
+}
+
+func summarizeMatches(matches []store.Match) adminMatchSummary {
+	out := adminMatchSummary{Count: len(matches)}
+	for _, m := range matches {
+		if len(out.Top) >= 3 {
+			break
+		}
+		out.Top = append(out.Top, struct {
+			RepoID string  `json:"repoID"`
+			Score  float64 `json:"score"`
+		}{RepoID: m.RepoID, Score: m.Score})
+	}
+	return out
+}
+
+func (a *API) handleAdminIdeas(w http.ResponseWriter, r *http.Request) {
+	id := identity(r)
+	if id == nil || !auth.IsAdmin(id.Username) {
+		writeError(w, http.StatusForbidden, "admin access required")
+		return
+	}
+	ideas, err := a.Store.ListAll()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	out := make([]adminIdea, 0, len(ideas))
+	for _, idea := range ideas {
+		out = append(out, adminIdea{
+			Author:        idea.Author,
+			AuthorDisplay: idea.AuthorDisplay,
+			Title:         idea.Title,
+			TLDR:          idea.TLDR,
+			Symbol:        idea.Symbol,
+			Visibility:    idea.Visibility,
+			Status:        idea.Status,
+			CreatedAt:     idea.CreatedAt,
+			UpdatedAt:     idea.UpdatedAt,
+			Matches:       summarizeMatches(idea.Matches),
+		})
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // ideaInput is the client-writable subset of an idea.
