@@ -188,6 +188,6 @@ padding:10px 24px;border-radius:999px}
 <div class="card">
 <div style="font-size:2rem;margin-bottom:8px">&#128161;</div>
 <h1>Sign in to Dibs</h1>
-<p>Dibs uses your Hive Hub account. Sign in at hive.kubestellar.io, then come back &mdash; your session carries over automatically.</p>
-<a class="pill" href="{{.HubURL}}">Sign in at hive.kubestellar.io</a>
+<p>Dibs uses your Hive Hub account. Sign in at hive.kubestellar.io (opens in a new tab), then reload this page &mdash; your session carries over automatically.</p>
+<a class="pill" href="{{.HubURL}}" target="_blank" rel="noopener">Sign in at hive.kubestellar.io</a>
 </div></body></html>`))
