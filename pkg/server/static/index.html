@@ -150,6 +150,11 @@ main section.sheet:first-of-type { border-top: none; margin-top: 0; padding-top:
 .modal-close { position: absolute; top: 12px; right: 12px; width: 32px; height: 32px; background: var(--panel-2); border: 1px solid var(--line); color: var(--muted); border-radius: var(--radius); cursor: pointer; font: inherit; line-height: 1; }
 .modal-close:hover { color: var(--text); border-color: var(--amber); }
 body.modal-open { overflow: hidden; }
+.qr-card { max-width: 430px; text-align: center; }
+.qr-meta { color: var(--muted); font-family: var(--font-mono); font-size: .85rem; margin-bottom: 16px; }
+.qr-matte { display: inline-flex; align-items: center; justify-content: center; background: #fff; border-radius: 6px; padding: 14px; margin: 6px auto 16px; }
+.qr-matte img { display: block; width: min(70vw, 320px); height: min(70vw, 320px); }
+.qr-caption { color: var(--muted); font-size: .9rem; }
 .donate-copy { color: var(--muted); line-height: 1.6; margin-bottom: 18px; }
 .donate-fallback { border-left: 3px solid var(--amber); background: var(--panel); padding: 14px 18px; border-radius: 0 var(--radius) var(--radius) 0; color: var(--muted); line-height: 1.55; margin: 16px 0; }
 .donate-hives { border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--panel); margin: 10px 0 18px; }
@@ -602,6 +607,7 @@ details.how-details .how-body { padding: 16px 18px; }
           <div class="chart-actions" id="chart-actions" aria-label="Selected repo actions" hidden>
             <button type="button" class="chart-action primary" id="chart-offer-btn"></button>
             <a class="chart-action secondary" id="chart-contribute-link" target="_blank" rel="noopener"></a>
+            <button type="button" class="chart-action secondary" id="chart-qr-btn">QR</button>
           </div>
         </div>
       </div>
@@ -944,6 +950,16 @@ details.how-details .how-body { padding: 16px 18px; }
     <h3 style="margin:22px 0 10px;font-size:1rem">CLI</h3>
     <code class="donate-code">npx @kubestellar/hive-contribute
 hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
+  </div>
+</div>
+
+<div class="modal" id="modal-qr" hidden role="dialog" aria-modal="true" aria-labelledby="qr-title">
+  <div class="modal-card qr-card">
+    <button class="modal-close" data-close-modal aria-label="Close QR code">✕</button>
+    <h2 class="page-title" id="qr-title"></h2>
+    <p class="qr-meta" id="qr-meta"></p>
+    <div class="qr-matte"><img id="qr-image" alt=""></div>
+    <p class="qr-caption" id="qr-caption"></p>
   </div>
 </div>
 
@@ -1366,6 +1382,12 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
     var id = String((r && (r.repoID || r.repo)) || '');
     return (r && (r.org || r.owner)) || (id.indexOf('/') !== -1 ? id.split('/')[0] : '');
   }
+  function repoQRPath(repo) {
+    var id = String((repo && repo.repoID) || '');
+    var parts = id.split('/');
+    if (parts.length !== 2 || !parts[0] || !parts[1]) return '';
+    return 'api/repos/' + encodeURIComponent(parts[0]) + '/' + encodeURIComponent(parts[1]) + '/qr.png';
+  }
   function repoAvatarHTML(r) {
     var org = repoOrg(r);
     if (!org) return '';
@@ -1377,8 +1399,8 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
   }
   function updateChartActions(repo) {
     chartSelectedRepo = repo && !repo.example ? repo : null;
-    var offer = $('chart-offer-btn'), contrib = $('chart-contribute-link'), actions = $('chart-actions');
-    if (!offer || !contrib || !actions) return;
+    var offer = $('chart-offer-btn'), contrib = $('chart-contribute-link'), qr = $('chart-qr-btn'), actions = $('chart-actions');
+    if (!offer || !contrib || !qr || !actions) return;
     if (!chartSelectedRepo) { actions.hidden = true; return; }
     var symbol = chartSelectedRepo.symbol || 'REPO';
     actions.hidden = false;
@@ -1387,6 +1409,22 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
     contrib.textContent = 'Contribute to $' + symbol;
     contrib.setAttribute('aria-label', 'Contribute to $' + symbol);
     contrib.href = getContributeHref(chartSelectedRepo);
+    qr.setAttribute('aria-label', 'Show QR code for $' + symbol);
+    if (openModalId === 'modal-qr') renderQRModal(chartSelectedRepo);
+  }
+  function renderQRModal(repo) {
+    if (!repo || !repo.repoID) return;
+    var symbol = repo.symbol || 'REPO';
+    $('qr-title').textContent = '$' + symbol;
+    $('qr-meta').textContent = repo.repoID;
+    $('qr-image').src = repoQRPath(repo);
+    $('qr-image').alt = 'QR code for ' + repo.repoID + ' contribute page';
+    $('qr-caption').textContent = 'Scan to contribute to $' + symbol;
+  }
+  function openQRModal() {
+    if (!chartSelectedRepo) return;
+    renderQRModal(chartSelectedRepo);
+    openModal('modal-qr');
   }
   function filteredChartRepos() {
     var q = chartFilter.trim().toLowerCase();
@@ -2287,6 +2325,7 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
   // routes to a friendly sign-in interstitial instead of a dead end.
   $('nav-list-cta').addEventListener('click', startListing);
   $('chart-offer-btn').addEventListener('click', function () { startListing(chartSelectedRepo); });
+  $('chart-qr-btn').addEventListener('click', openQRModal);
   $('so-close').addEventListener('click', function () {
     $('signin-overlay').hidden = true;
     $('nav-list-cta').focus();

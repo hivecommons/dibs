@@ -121,6 +121,7 @@ func New(cfg Config) http.Handler {
 	// aggregate-only numbers per listed repo.
 	root.HandleFunc("GET "+base+"/api/repos/{org}/{repo}/index", dibsAPI.HandleRepoIndex)
 	root.HandleFunc("GET "+base+"/api/repos/{org}/{repo}/news", dibsAPI.HandleRepoNews)
+	root.HandleFunc("GET "+base+"/api/repos/{org}/{repo}/qr.png", dibsAPI.HandleRepoQR)
 	root.HandleFunc("GET "+base+"/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"status":"ok","version":"` + cfg.Version + `"}` + "\n"))
