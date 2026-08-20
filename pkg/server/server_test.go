@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -72,6 +73,38 @@ func decode[T any](t *testing.T, rec *httptest.ResponseRecorder) T {
 		t.Fatalf("decoding %q: %v", rec.Body.String(), err)
 	}
 	return v
+}
+
+func TestIntakeRoutesAreAuthenticated(t *testing.T) {
+	h := newTestServer(t, "/")
+
+	rec := doJSON(t, h, "GET", "/api/intake/config", "", nil)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("anonymous config status = %d", rec.Code)
+	}
+	rec = doJSON(t, h, "GET", "/api/intake/config", "alice-session", nil)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"audio":false`) {
+		t.Fatalf("authed config: %d %s", rec.Code, rec.Body.String())
+	}
+
+	var body bytes.Buffer
+	mw := multipart.NewWriter(&body)
+	part, err := mw.CreateFormFile("file", "idea.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = part.Write([]byte("uploaded idea"))
+	if err := mw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/intake", &body)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: "alice-session"})
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"uploaded idea"`) {
+		t.Fatalf("upload: %d %s", rec.Code, rec.Body.String())
+	}
 }
 
 // TestBasePathRouting: every route must work at the default root base path

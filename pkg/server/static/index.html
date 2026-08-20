@@ -108,6 +108,12 @@ input[type=text], textarea {
   border-radius: 6px; padding: 10px 12px; font: inherit;
 }
 textarea.md { font-family: var(--font-mono); font-size: .88rem; min-height: 220px; resize: vertical; }
+.intake-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 8px 0 6px; color: var(--muted); font-size: .82rem; }
+.intake-row input[type=file] { display: none; }
+.intake-status { color: var(--muted); font-size: .78rem; min-height: 1.2em; }
+.intake-status.err { color: var(--red); }
+.intake-status.warn { color: var(--amber); }
+.pill.recording { border-color: var(--amber); color: var(--amber); background: rgba(244,199,95,.08); }
 .vis-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .vis-toggle label.opt {
   display: block; border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px;
@@ -780,6 +786,13 @@ details.how-details .how-body { padding: 16px 18px; }
     <input type="text" id="f-title" maxlength="200" placeholder="One-line summary" required>
     <label for="f-body">Body (markdown)</label>
     <textarea id="f-body" class="md" placeholder="The problem, who benefits, what done looks like." required></textarea>
+    <div class="intake-row" aria-label="Bring an existing idea">
+      <span>or bring it as it exists</span>
+      <button type="button" class="pill small" id="btn-intake-file">Attach file</button>
+      <input type="file" id="f-intake-file" accept=".txt,.md,.html,.htm,.pdf,.docx,.rtf,.mp3,.m4a,.wav,.ogg,.webm,.flac,text/plain,text/markdown,text/html,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/rtf,audio/*,video/webm">
+      <button type="button" class="pill small" id="btn-intake-record" hidden>Record</button>
+      <span class="intake-status" id="intake-status" role="status" aria-live="polite"></span>
+    </div>
     <div class="meter-wrap">
       <div class="meter" id="idea-meter" role="progressbar" aria-label="Idea completeness" aria-valuemin="0" aria-valuemax="4" aria-valuenow="0">
         <i title="Title"></i><i title="Problem"></i><i title="Beneficiaries"></i><i title="Acceptance criteria"></i>
@@ -981,6 +994,18 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
       credentials: 'same-origin'
     }).then(function (r) {
       if (r.status === 204) return null;
+      return r.json().then(function (j) {
+        if (!r.ok) throw new Error(j && j.error ? j.error : ('HTTP ' + r.status));
+        return j;
+      });
+    });
+  }
+  function apiForm(path, form) {
+    return fetch('api/' + path, {
+      method: 'POST',
+      body: form,
+      credentials: 'same-origin'
+    }).then(function (r) {
       return r.json().then(function (j) {
         if (!r.ok) throw new Error(j && j.error ? j.error : ('HTTP ' + r.status));
         return j;
@@ -2076,6 +2101,108 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
   }
   $('f-title').addEventListener('input', updateMeter);
   $('f-body').addEventListener('input', updateMeter);
+  var intakeConfigLoaded = false;
+  var intakeAudio = false;
+  var recorder = null;
+  var recordStream = null;
+  var recordChunks = [];
+  var recordTimer = null;
+  var recordStarted = 0;
+  function setIntakeStatus(msg, kind) {
+    var el = $('intake-status');
+    el.textContent = msg || '';
+    el.classList.toggle('err', kind === 'err');
+    el.classList.toggle('warn', kind === 'warn');
+  }
+  function loadIntakeConfig() {
+    if (intakeConfigLoaded) return;
+    intakeConfigLoaded = true;
+    api('GET', 'intake/config').then(function (cfg) {
+      intakeAudio = !!(cfg && cfg.audio);
+      $('btn-intake-record').hidden = !intakeAudio || !navigator.mediaDevices || !window.MediaRecorder;
+    }).catch(function () {
+      intakeAudio = false;
+      $('btn-intake-record').hidden = true;
+    });
+  }
+  function appendIntakeText(text, truncated) {
+    if (!text) {
+      setIntakeStatus('No text was found.', 'warn');
+      return;
+    }
+    var body = $('f-body');
+    body.value = body.value.trim()
+      ? body.value.replace(/\s+$/, '') + '\n\n---\n\n' + text
+      : text;
+    body.dispatchEvent(new Event('input', { bubbles: true }));
+    setIntakeStatus(truncated ? 'Added extracted text. It was truncated; edit before submitting.' : 'Added extracted text. Edit before submitting.', truncated ? 'warn' : '');
+  }
+  function uploadIntakeFile(file, name) {
+    var form = new FormData();
+    form.append('file', file, name || file.name || 'idea.webm');
+    setIntakeStatus('Reading...', '');
+    $('btn-intake-file').disabled = true;
+    $('btn-intake-record').disabled = true;
+    return apiForm('intake', form).then(function (res) {
+      appendIntakeText(res.text || '', !!res.truncated);
+    }).catch(function (e) {
+      setIntakeStatus(e.message, 'err');
+    }).finally(function () {
+      $('btn-intake-file').disabled = false;
+      $('btn-intake-record').disabled = false;
+      $('f-intake-file').value = '';
+    });
+  }
+  $('btn-intake-file').addEventListener('click', function () { $('f-intake-file').click(); });
+  $('f-intake-file').addEventListener('change', function () {
+    var file = $('f-intake-file').files && $('f-intake-file').files[0];
+    if (file) uploadIntakeFile(file);
+  });
+  function setRecordingUI(active) {
+    var b = $('btn-intake-record');
+    b.textContent = active ? 'Stop 00:00' : 'Record';
+    b.classList.toggle('recording', active);
+  }
+  function stopTracks() {
+    if (recordStream) recordStream.getTracks().forEach(function (t) { t.stop(); });
+    recordStream = null;
+  }
+  function startRecordTimer() {
+    recordStarted = Date.now();
+    recordTimer = window.setInterval(function () {
+      var s = Math.floor((Date.now() - recordStarted) / 1000);
+      $('btn-intake-record').textContent = 'Stop ' + String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+    }, 250);
+  }
+  $('btn-intake-record').addEventListener('click', function () {
+    if (recorder && recorder.state === 'recording') {
+      recorder.stop();
+      return;
+    }
+    if (!intakeAudio) return;
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+      recordStream = stream;
+      recordChunks = [];
+      var opts = MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('audio/webm') ? { mimeType: 'audio/webm' } : {};
+      recorder = new MediaRecorder(stream, opts);
+      recorder.addEventListener('dataavailable', function (ev) { if (ev.data && ev.data.size) recordChunks.push(ev.data); });
+      recorder.addEventListener('stop', function () {
+        window.clearInterval(recordTimer);
+        setRecordingUI(false);
+        stopTracks();
+        var blob = new Blob(recordChunks, { type: recorder.mimeType || 'audio/webm' });
+        uploadIntakeFile(blob, 'idea.webm');
+      });
+      recorder.start();
+      setRecordingUI(true);
+      startRecordTimer();
+      setIntakeStatus('Recording...', '');
+    }).catch(function (e) {
+      setIntakeStatus(e && e.message ? e.message : 'Could not start recording.', 'err');
+      stopTracks();
+      setRecordingUI(false);
+    });
+  });
   function setWizStep(n) {
     [1, 2, 3].forEach(function (k) {
       var tab = $('step-tab-' + k);
@@ -2095,6 +2222,8 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
     $('edit-title').textContent = idea ? 'Edit idea' : (listingTargetRepo ? 'Offer idea to $' + (listingTargetRepo.symbol || 'REPO') : 'List an idea');
     $('f-title').value = idea ? idea.title : '';
     $('f-body').value = idea ? idea.body : '';
+    setIntakeStatus('', '');
+    loadIntakeConfig();
     setVis(idea ? idea.visibility : 'public');
     updateMeter();
     setWizStep(1);
