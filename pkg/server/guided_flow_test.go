@@ -40,6 +40,10 @@ func TestGuidedFlowUIStrings(t *testing.T) {
 			"Find repos for this idea",
 			// step-3 honest empty state
 			"No repos are listed yet — your idea is on the market; matches appear as repos join.",
+			// external (non-hive) targeting in step 3
+			"…or send it to any repo",
+			"🐝 hive-powered — agent capacity ready",
+			"not hive-managed — implementation not guaranteed… yet",
 		} {
 			if !strings.Contains(body, want) {
 				t.Errorf("UI page (session=%q) missing %q", session, want)

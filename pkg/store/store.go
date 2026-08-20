@@ -25,7 +25,8 @@ const (
 // Status values for an idea's lifecycle state machine:
 //
 //	draft ──offer──▶ offered ──accept──▶ accepted ──launch──▶ issue_launched ──confirm──▶ settled
-//	  │                 │                    └────────────direct confirm──────────────────────▲
+//	  │                 │  │                 └────────────direct confirm──────────────────────▲
+//	  │                 │  └──launch (external target, no acceptance)──▶ issue_launched
 //	  │                 └──decline──▶ declined ──re-offer──▶ offered
 //	  └──direct accept (public ideas only)──▶ accepted
 //
@@ -33,6 +34,8 @@ const (
 // (Dibs is just the matchmaker — the ideator files the issue with their own
 // account); settled means they confirmed the filed issue's URL. The direct
 // accepted → settled edge remains for the legacy token-based settlement.
+// The offered → issue_launched edge serves EXTERNAL (non-hive) target repos,
+// which have no owner on our side to accept.
 const (
 	StatusDraft         = "draft"
 	StatusOffered       = "offered"
@@ -48,7 +51,10 @@ func CanTransition(from, to string) bool {
 	case StatusDraft:
 		return to == StatusOffered || to == StatusAccepted
 	case StatusOffered:
-		return to == StatusAccepted || to == StatusDeclined
+		// offered → issue_launched covers EXTERNAL (non-hive) targets:
+		// there is no repo owner on our side, so the ideator launches the
+		// credited issue without an acceptance step.
+		return to == StatusAccepted || to == StatusDeclined || to == StatusIssueLaunched
 	case StatusDeclined:
 		return to == StatusOffered
 	case StatusAccepted:
@@ -75,6 +81,10 @@ type Offer struct {
 	Status    string     `json:"status"` // pending | accepted | declined
 	CreatedAt time.Time  `json:"createdAt"`
 	DecidedAt *time.Time `json:"decidedAt,omitempty"`
+	// External marks an offer aimed at a repo OUTSIDE the hive registry.
+	// There is no repo owner on our side to accept it, so the ideator can
+	// launch the credited issue directly (offered → issue_launched).
+	External bool `json:"external,omitempty"`
 }
 
 // MaxBodyBytes caps an idea's markdown body.

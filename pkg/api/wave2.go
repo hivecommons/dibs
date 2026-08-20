@@ -12,6 +12,7 @@ import (
 
 	"github.com/kubestellar/dibs/pkg/notify"
 	"github.com/kubestellar/dibs/pkg/registry"
+	"github.com/kubestellar/dibs/pkg/settle"
 	"github.com/kubestellar/dibs/pkg/store"
 )
 
@@ -119,7 +120,9 @@ func (a *API) handleOffer(w http.ResponseWriter, r *http.Request) {
 	}
 	rp, err := a.Registry.Get(in.RepoID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "repo not found")
+		// Not a hive-managed repo: the ideator may still target ANY
+		// open-source GitHub repo — the external path.
+		a.offerExternal(w, idea, in.RepoID)
 		return
 	}
 	if !rp.AcceptingIdeas {
@@ -152,6 +155,51 @@ func (a *API) handleOffer(w http.ResponseWriter, r *http.Request) {
 	}
 	a.notifyAdd(rp.Owner, notify.KindOffer,
 		updated.AuthorDisplay+" offered the idea “"+updated.Title+"” to "+rp.RepoID+".", updated.ID, rp.RepoID)
+	writeJSON(w, http.StatusOK, updated)
+}
+
+// offerExternal records an offer aimed at a repo OUTSIDE the hive registry.
+// There is no repo owner on our side to notify or to accept, so the repo
+// becomes the idea's launch target immediately: the ideator proceeds
+// straight to the credited-issue launch flow (offered → issue_launched →
+// settled). A private idea reveals nothing here — nobody on our side can
+// see it, and the reveal happens only when the ideator files the public
+// GitHub issue themselves.
+func (a *API) offerExternal(w http.ResponseWriter, idea *store.Idea, repoID string) {
+	if err := settle.ValidateRepoID(repoID); err != nil {
+		writeError(w, http.StatusBadRequest, "not a hive-managed repo — to target any GitHub repo, use the org/repo format")
+		return
+	}
+	updated, err := a.Store.Mutate(idea.ID, true, func(i *store.Idea) error {
+		if o := i.OfferTo(repoID); o != nil && o.Status != store.OfferDeclined {
+			return &store.ValidationError{Msg: "already offered to this repo"}
+		}
+		if i.Status != store.StatusOffered {
+			if !store.CanTransition(i.Status, store.StatusOffered) {
+				return &store.ValidationError{Msg: "cannot offer an idea in status " + i.Status}
+			}
+			i.Status = store.StatusOffered
+		}
+		if o := i.OfferTo(repoID); o != nil {
+			o.Status = store.OfferPending
+			o.External = true
+			o.CreatedAt = timeNow()
+			o.DecidedAt = nil
+		} else {
+			i.Offers = append(i.Offers, store.Offer{RepoID: repoID, Status: store.OfferPending, External: true, CreatedAt: timeNow()})
+		}
+		// No acceptance step: the external repo is the launch target now.
+		i.TargetRepo = repoID
+		return nil
+	})
+	if err != nil {
+		status, msg := storeErrStatus(err)
+		writeError(w, status, msg)
+		return
+	}
+	a.notifyAdd(updated.Author, notify.KindOffer,
+		"“"+updated.Title+"” is aimed at "+repoID+" (external repo) — file the credited GitHub issue whenever you're ready.",
+		updated.ID, repoID)
 	writeJSON(w, http.StatusOK, updated)
 }
 

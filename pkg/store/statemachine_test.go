@@ -12,6 +12,7 @@ func TestCanTransition(t *testing.T) {
 		{StatusDraft, StatusAccepted}:         true, // public idea accepted straight from a repo feed
 		{StatusOffered, StatusAccepted}:       true,
 		{StatusOffered, StatusDeclined}:       true,
+		{StatusOffered, StatusIssueLaunched}:  true, // external (non-hive) target: no acceptance step
 		{StatusDeclined, StatusOffered}:       true, // re-offer after a decline
 		{StatusAccepted, StatusIssueLaunched}: true, // ideator opened the prefilled GitHub form
 		{StatusAccepted, StatusSettled}:       true, // legacy token settlement / direct confirm

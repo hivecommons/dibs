@@ -10,15 +10,31 @@ package settle
 import (
 	"fmt"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 )
 
-// Footer is the attribution line every launched issue body ends with.
+// Footer is the attribution line issues filed on HIVE-MANAGED repos end
+// with — they already have agent capacity, so no pitch is needed.
 const Footer = "🐝 Matched via [Dibs](https://dibs.kubestellar.io) (dibs.kubestellar.io)"
 
-// footerBlock is the footer with its separator, as appended to bodies.
-const footerBlock = "\n\n---\n" + Footer
+// ExternalFooter is the growth-loop call-to-action appended to issues filed
+// on repos NOT managed by a hive: every idea filed externally advertises
+// hive to that repo's maintainers.
+const ExternalFooter = "🐝 **This idea was matched via [Dibs](https://dibs.kubestellar.io)** — the open-source idea exchange.\n" +
+	"⚡ Want AI agents to implement ideas like this automatically? **[Request a hive for this repo →](https://hive.kubestellar.io)**"
+
+// footerFor picks the footer by hive membership of the target repo.
+func footerFor(hiveManaged bool) string {
+	if hiveManaged {
+		return Footer
+	}
+	return ExternalFooter
+}
+
+// footerBlockFor is footerFor with its separator, as appended to bodies.
+func footerBlockFor(hiveManaged bool) string { return "\n\n---\n" + footerFor(hiveManaged) }
 
 // MaxIssueURLLen is the budget for a prefilled new-issue URL. Browsers and
 // GitHub tolerate roughly 8k characters; stay safely under it.
@@ -29,20 +45,22 @@ const MaxIssueURLLen = 7500
 const truncationNote = "\n\n_(Draft truncated to fit the URL — paste the full text from Dibs over this section.)_"
 
 // LaunchBody returns body terminated by the Dibs footer (idempotent).
-func LaunchBody(body string) string {
+// hiveManaged selects the footer: the short attribution for hive-managed
+// repos, the "request a hive" growth CTA for external ones.
+func LaunchBody(body string, hiveManaged bool) string {
 	body = strings.TrimRight(body, "\n ")
-	if strings.HasSuffix(body, Footer) {
+	if strings.HasSuffix(body, Footer) || strings.HasSuffix(body, ExternalFooter) {
 		return body
 	}
-	return body + footerBlock
+	return body + footerBlockFor(hiveManaged)
 }
 
 // NewIssueURL builds the prefilled GitHub new-issue URL for repoID
 // ("org/name") with the ideated label. When the encoded URL would exceed
 // MaxIssueURLLen the body is truncated rune-safely (a note and the footer
-// are preserved) and truncated=true — callers should then offer the full
-// body via copy-to-clipboard.
-func NewIssueURL(repoID, title, body string) (issueURL string, truncated bool) {
+// matching hiveManaged are preserved) and truncated=true — callers should
+// then offer the full body via copy-to-clipboard.
+func NewIssueURL(repoID, title, body string, hiveManaged bool) (issueURL string, truncated bool) {
 	build := func(b string) string {
 		q := url.Values{}
 		q.Set("title", title)
@@ -54,7 +72,7 @@ func NewIssueURL(repoID, title, body string) (issueURL string, truncated bool) {
 	if len(full) <= MaxIssueURLLen {
 		return full, false
 	}
-	tail := truncationNote + footerBlock
+	tail := truncationNote + footerBlockFor(hiveManaged)
 	runes := []rune(body)
 	// Binary-search the longest body prefix whose encoded URL fits.
 	lo, hi := 0, len(runes)
@@ -96,4 +114,18 @@ func ValidateIssueURL(raw, repoID string) error {
 		return fmt.Errorf("settle: %q is not an issue number", parts[3])
 	}
 	return nil
+}
+
+// repoIDPattern approximates GitHub's "org/name" shape: owners are
+// alphanumeric with hyphens (max 39 chars); repo names add dots and
+// underscores (max 100 chars).
+var repoIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9._-]{1,100}$`)
+
+// ValidateRepoID checks that repoID looks like a real GitHub "org/name" —
+// the shape required when an ideator targets an EXTERNAL (non-hive) repo.
+func ValidateRepoID(repoID string) error {
+	if repoIDPattern.MatchString(repoID) {
+		return nil
+	}
+	return fmt.Errorf("settle: %q is not a GitHub repo — use the org/repo format", repoID)
 }

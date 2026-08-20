@@ -643,6 +643,17 @@ details.how-details .how-body { padding: 16px 18px; }
     </div>
     <p class="wiz-offer-note" id="wiz-saved-note"></p>
     <div id="wiz-matches" aria-live="polite"><div class="empty">Scoring repos…</div></div>
+    <div class="panel" id="wiz-external" style="margin-top:16px">
+      <h3 style="font-size:1rem;margin-bottom:4px">🌍 …or send it to any repo</h3>
+      <p style="color:var(--muted);font-size:.88rem;line-height:1.55">Target any open-source GitHub repo — not just hive-managed ones.
+      <span class="chip">external repo</span> not hive-managed — implementation not guaranteed… yet.
+      Your filed issue invites the maintainers to request a hive.</p>
+      <div class="row" style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap">
+        <input type="text" id="ext-repo" placeholder="org/repo" aria-label="Any GitHub repo, org/repo format" style="flex:1;min-width:180px">
+        <button type="button" class="pill small primary" id="btn-ext-offer" aria-label="Offer this idea to the repo you typed">💌 Offer this idea</button>
+      </div>
+      <div class="wiz-offer-note" id="ext-result" style="margin-bottom:0"></div>
+    </div>
     <div class="form-actions">
       <button type="button" class="pill primary" id="btn-wiz-finish">Done → idea status</button>
       <button type="button" class="pill" id="btn-wiz-back3">← Back to ✨ Embellish</button>
@@ -1177,9 +1188,16 @@ details.how-details .how-body { padding: 16px 18px; }
 
   /* ── my ideas ── */
   var statusLabels = { issue_launched: 'issue launched' };
+  // externalTarget: the idea is aimed at a non-hive repo — launchable
+  // straight from "offered" (no repo owner on our side to accept).
+  function externalTarget(idea) {
+    if (idea.status !== 'offered' || !idea.targetRepo) return false;
+    return (idea.offers || []).some(function (o) { return o.external && o.repoID === idea.targetRepo; });
+  }
   function ideaCard(idea, mine) {
     var matchable = idea.status === 'draft' || idea.status === 'offered' || idea.status === 'declined';
-    var launchable = idea.status === 'accepted' || idea.status === 'issue_launched';
+    var extTarget = externalTarget(idea);
+    var launchable = idea.status === 'accepted' || idea.status === 'issue_launched' || extTarget;
     var d = document.createElement('div'); d.className = 'card';
     d.innerHTML =
       '<div class="row">' + symChip(idea.symbol) + '<h4>' + esc(idea.title) + '</h4>' +
@@ -1190,7 +1208,9 @@ details.how-details .how-body { padding: 16px 18px; }
       '<div class="body-preview">' + esc(idea.body.length > 280 ? idea.body.slice(0, 280) + '…' : idea.body) + '</div>' +
       '<div class="meta">by ' + esc(idea.authorDisplay || idea.author) + ' · updated ' + new Date(idea.updatedAt).toLocaleString() + '</div>' +
       (idea.issueURL ? '<div class="meta">🎉 settled: <a href="' + esc(idea.issueURL) + '" target="_blank" rel="noopener">' + esc(idea.issueURL) + '</a></div>' : '') +
-      (mine && launchable ? '<div class="meta">🎉 ' + esc(idea.targetRepo || '') + ' accepted this idea — file the GitHub issue to claim your credit (+100 points).</div>' : '') +
+      (mine && launchable ? '<div class="meta">' + (extTarget
+        ? '🌍 aimed at ' + esc(idea.targetRepo) + ' — external repo, no acceptance needed. File the GitHub issue to claim your credit (+100 points).'
+        : '🎉 ' + esc(idea.targetRepo || '') + ' accepted this idea — file the GitHub issue to claim your credit (+100 points).') + '</div>' : '') +
       (mine ? '<div class="row" style="margin-top:10px">' +
         (launchable ? '<button class="pill small primary" data-act="launch">' +
           (idea.status === 'issue_launched' ? '🔗 Confirm the issue link' : '🚀 File the GitHub issue') + '</button>' : '') +
@@ -1468,6 +1488,7 @@ details.how-details .how-body { padding: 16px 18px; }
   function goWizMatch() {
     setWizStep(3);
     $('wiz-saved-note').textContent = '';
+    $('ext-result').textContent = '';
     $('wiz-matches').innerHTML = '<div class="empty">Scoring repos…</div>';
     saveIdea().then(function (idea) {
       $('wiz-saved-note').innerHTML = '💾 Saved ' + symChip(idea.symbol) + '<b>' + esc(idea.title) +
@@ -1487,7 +1508,9 @@ details.how-details .how-body { padding: 16px 18px; }
     matches.forEach(function (m) {
       var d = document.createElement('div'); d.className = 'card';
       d.innerHTML =
-        '<div class="row"><h4>🐝 ' + esc(m.repo.repoID) + '</h4>' + scorePill(m.score) + '</div>' +
+        '<div class="row"><h4>🐝 ' + esc(m.repo.repoID) + '</h4>' +
+        '<span class="badge-chip mini" title="Hive-managed: accepted ideas are implemented by AI agent swarms">🐝 hive-powered — agent capacity ready</span>' +
+        scorePill(m.score) + '</div>' +
         (m.repo.description ? '<div class="body-preview">' + esc(m.repo.description) + '</div>' : '') +
         '<div class="topics">' + (m.repo.topics || []).map(function (t) { return '<span class="t">' + esc(t) + '</span>'; }).join('') + '</div>' +
         (m.repo.appetite ? '<div class="meta">appetite: ' + esc(m.repo.appetite) + '</div>' : '') +
@@ -1512,11 +1535,40 @@ details.how-details .how-body { padding: 16px 18px; }
     if (wizIdea) openIdeaDetail(wizIdea.id); else show('home');
   });
 
+  /* ── 🌍 external targets: any GitHub repo, hive-managed or not. No repo
+     owner on our side → no acceptance step; the ideator launches the
+     credited issue directly, and the issue body advertises hive. ── */
+  var EXT_REPO_RE = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9._-]{1,100}$/;
+  $('ext-repo').addEventListener('keydown', function (ev) {
+    if (ev.key === 'Enter') { ev.preventDefault(); $('btn-ext-offer').click(); }
+  });
+  $('btn-ext-offer').addEventListener('click', function () {
+    if (!wizIdea) { showErr('Save the idea first — go back a step.'); return; }
+    var repoID = $('ext-repo').value.trim();
+    if (!EXT_REPO_RE.test(repoID)) { showErr('Use the org/repo format — e.g. kubernetes/kubernetes.'); return; }
+    var b = $('btn-ext-offer');
+    b.disabled = true;
+    api('POST', 'ideas/' + wizIdea.id + '/offer', { repoID: repoID })
+      .then(function (idea) {
+        b.disabled = false;
+        wizIdea = idea;
+        $('ext-repo').value = '';
+        $('ext-result').innerHTML = '✅ Aimed at <b>' + esc(repoID) + '</b> — external repos need no acceptance. ' +
+          '<button type="button" class="pill small primary" id="btn-ext-launch">🚀 File the issue now</button>';
+        $('btn-ext-launch').addEventListener('click', function () { openLaunch(idea); });
+        showOk('💌 \u201c' + esc(idea.title) + '\u201d is aimed at ' + esc(repoID) + ' — file the credited GitHub issue whenever you\u2019re ready.');
+        loadGamebar();
+      })
+      .catch(function (e) { b.disabled = false; showErr(e.message); });
+  });
+
   /* ── 💡 idea detail / status view: what happened, what's next ── */
   function nextStepHint(idea) {
     switch (idea.status) {
       case 'draft': return 'Next: 🎯 find repos for this idea and offer it — both sides must say yes.';
-      case 'offered': return 'Offers are out — you\u2019ll get a 🔔 when a repo decides. Offer more repos to raise the odds.';
+      case 'offered': return externalTarget(idea)
+        ? '🌍 Aimed at ' + idea.targetRepo + ' (external repo) — 🚀 file the credited GitHub issue; no acceptance needed.'
+        : 'Offers are out — you\u2019ll get a 🔔 when a repo decides. Offer more repos to raise the odds.';
       case 'declined': return 'Declined this round — sharpen the idea or 🎯 offer it to more repos.';
       case 'accepted': return '🎉 Accepted! Next: 🚀 file the credited GitHub issue to claim your credit (+100 points).';
       case 'issue_launched': return 'Issue launched — paste the GitHub link to 🔗 confirm and settle (+100 points).';

@@ -10,8 +10,8 @@ import (
 // title/body/label through URL encoding, and carries the Dibs footer.
 func TestNewIssueURL(t *testing.T) {
 	title := "💡 Great idea & more"
-	body := LaunchBody("Line one.\n\nSecond ¶ with specials: ?&=#+%")
-	got, truncated := NewIssueURL("kubestellar/dibs", title, body)
+	body := LaunchBody("Line one.\n\nSecond ¶ with specials: ?&=#+%", true)
+	got, truncated := NewIssueURL("kubestellar/dibs", title, body, true)
 	if truncated {
 		t.Fatal("small body must not be truncated")
 	}
@@ -39,14 +39,14 @@ func TestNewIssueURL(t *testing.T) {
 
 // TestLaunchBody: appends the footer exactly once.
 func TestLaunchBody(t *testing.T) {
-	b := LaunchBody("Body.")
+	b := LaunchBody("Body.", true)
 	if !strings.HasSuffix(b, Footer) {
 		t.Fatalf("missing footer: %q", b)
 	}
-	if again := LaunchBody(b); again != b {
+	if again := LaunchBody(b, true); again != b {
 		t.Fatalf("footer must be idempotent:\n%q\nvs\n%q", b, again)
 	}
-	if strings.Count(LaunchBody(LaunchBody("x")), Footer) != 1 {
+	if strings.Count(LaunchBody(LaunchBody("x", true), true), Footer) != 1 {
 		t.Fatal("footer duplicated")
 	}
 }
@@ -55,8 +55,8 @@ func TestLaunchBody(t *testing.T) {
 // truncation note + footer, and reports truncated=true so the UI offers
 // copy-to-clipboard of the full text.
 func TestNewIssueURLTruncation(t *testing.T) {
-	huge := LaunchBody(strings.Repeat("An idea so grand it overflows URLs. ", 400)) // ~15k chars
-	got, truncated := NewIssueURL("org/repo", "Big one", huge)
+	huge := LaunchBody(strings.Repeat("An idea so grand it overflows URLs. ", 400), true) // ~15k chars
+	got, truncated := NewIssueURL("org/repo", "Big one", huge, true)
 	if !truncated {
 		t.Fatal("expected truncation")
 	}
@@ -82,7 +82,7 @@ func TestNewIssueURLTruncation(t *testing.T) {
 // TestNewIssueURLTruncationMultibyte: rune-safe cutting — no torn UTF-8.
 func TestNewIssueURLTruncationMultibyte(t *testing.T) {
 	huge := strings.Repeat("蜂蜜と🐝のアイデア ", 800)
-	got, truncated := NewIssueURL("org/repo", "多バイト", huge)
+	got, truncated := NewIssueURL("org/repo", "多バイト", huge, true)
 	if !truncated {
 		t.Fatal("expected truncation")
 	}
@@ -126,6 +126,69 @@ func TestValidateIssueURL(t *testing.T) {
 	for _, u := range invalid {
 		if err := ValidateIssueURL(u, repo); err == nil {
 			t.Errorf("ValidateIssueURL(%q) = nil, want error", u)
+		}
+	}
+}
+
+// TestLaunchBodyExternal: issues aimed at NON-hive repos carry the
+// "request a hive" growth CTA instead of the short attribution footer —
+// and the hive footer never carries the pitch.
+func TestLaunchBodyExternal(t *testing.T) {
+	ext := LaunchBody("Body.", false)
+	if !strings.HasSuffix(ext, ExternalFooter) {
+		t.Fatalf("external body missing the growth footer: %q", ext)
+	}
+	if !strings.Contains(ext, "Request a hive for this repo") || !strings.Contains(ext, "hive.kubestellar.io") {
+		t.Fatalf("external footer missing the hive CTA: %q", ext)
+	}
+	// Idempotent: relaunching an already-footered body adds nothing.
+	if again := LaunchBody(ext, false); again != ext {
+		t.Fatalf("external footer must be idempotent:\n%q\nvs\n%q", ext, again)
+	}
+	if strings.Count(LaunchBody(LaunchBody("x", false), false), "Request a hive") != 1 {
+		t.Fatal("external footer duplicated")
+	}
+	// The hive footer never pitches a hive (they already have one).
+	if hive := LaunchBody("Body.", true); strings.Contains(hive, "Request a hive") {
+		t.Fatalf("hive-managed footer must not carry the pitch: %q", hive)
+	}
+}
+
+// TestNewIssueURLExternalTruncation: an over-budget EXTERNAL body still
+// fits the URL budget and keeps the growth CTA at the end.
+func TestNewIssueURLExternalTruncation(t *testing.T) {
+	huge := LaunchBody(strings.Repeat("An idea so grand it overflows URLs. ", 400), false)
+	got, truncated := NewIssueURL("someorg/somerepo", "Big one", huge, false)
+	if !truncated {
+		t.Fatal("expected truncation")
+	}
+	if len(got) > MaxIssueURLLen {
+		t.Fatalf("still over budget: %d > %d", len(got), MaxIssueURLLen)
+	}
+	u, err := url.Parse(got)
+	if err != nil {
+		t.Fatalf("parsing built url: %v", err)
+	}
+	body := u.Query().Get("body")
+	if !strings.HasSuffix(body, ExternalFooter) {
+		t.Fatalf("truncated external body must still end with the growth CTA:\n%.200s", body)
+	}
+}
+
+// TestValidateRepoID pins the org/repo shape check used for external
+// (non-hive) offer targets.
+func TestValidateRepoID(t *testing.T) {
+	valid := []string{"kubernetes/kubernetes", "a/b", "my-org/my.repo_name", "Org-1/Repo-2"}
+	for _, id := range valid {
+		if err := ValidateRepoID(id); err != nil {
+			t.Errorf("ValidateRepoID(%q) = %v, want nil", id, err)
+		}
+	}
+	invalid := []string{"", "norepo", "org/", "/repo", "org/repo/extra", "-org/repo",
+		"org/re po", "https://github.com/org/repo", "org//repo"}
+	for _, id := range invalid {
+		if err := ValidateRepoID(id); err == nil {
+			t.Errorf("ValidateRepoID(%q) = nil, want error", id)
 		}
 	}
 }
