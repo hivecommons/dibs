@@ -27,6 +27,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -85,8 +86,10 @@ type HubClient interface {
 // HTTPHubClient is the production HubClient (codes against the follow-up hub
 // endpoint documented in the package comment).
 type HTTPHubClient struct {
-	BaseURL string
-	Client  *http.Client
+	BaseURL   string
+	Client    *http.Client
+	Token     string
+	GitHubAPI string
 }
 
 // ReposPath is the hub endpoint listing hive-managed repos.
@@ -119,7 +122,47 @@ func (c *HTTPHubClient) ListRepos(ctx context.Context) ([]RepoProfile, error) {
 	if err := json.NewDecoder(io.LimitReader(resp.Body, maxReposBody)).Decode(&repos); err != nil {
 		return nil, fmt.Errorf("registry: decoding hub response: %w", err)
 	}
+	c.enrichDescriptions(ctx, repos)
 	return repos, nil
+}
+
+func (c *HTTPHubClient) enrichDescriptions(ctx context.Context, repos []RepoProfile) {
+	client := c.Client
+	if client == nil {
+		client = &http.Client{Timeout: hubRequestTimeout}
+	}
+	base := strings.TrimRight(c.GitHubAPI, "/")
+	if base == "" {
+		base = "https://api.github.com"
+	}
+	for i := range repos {
+		if strings.TrimSpace(repos[i].Description) != "" || !strings.Contains(repos[i].RepoID, "/") {
+			continue
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/repos/"+repos[i].RepoID, nil)
+		if err != nil {
+			continue
+		}
+		req.Header.Set("Accept", "application/vnd.github+json")
+		req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+		if c.Token != "" {
+			req.Header.Set("Authorization", "Bearer "+c.Token)
+		}
+		resp, err := client.Do(req)
+		if err != nil {
+			continue
+		}
+		var gh struct {
+			Description string `json:"description"`
+		}
+		if resp.StatusCode == http.StatusOK {
+			_ = json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&gh)
+		}
+		resp.Body.Close()
+		if strings.TrimSpace(gh.Description) != "" {
+			repos[i].Description = strings.TrimSpace(gh.Description)
+		}
+	}
 }
 
 // FakeHub is an in-memory HubClient for tests and local development.
@@ -210,6 +253,9 @@ func (r *Registry) Merge(incoming []RepoProfile) error {
 		}
 		if existing, ok := r.repos[in.RepoID]; ok {
 			in.Symbol = existing.Symbol
+			if strings.TrimSpace(in.Description) == "" {
+				in.Description = existing.Description
+			}
 			in.AcceptingIdeas = existing.AcceptingIdeas
 			in.Topics = existing.Topics
 			in.Appetite = existing.Appetite

@@ -63,6 +63,33 @@ func TestFallbackScoreDeterministic(t *testing.T) {
 	}
 }
 
+func TestHiveBM25RanksNewsletterRepoFromRepoID(t *testing.T) {
+	st, reg := newFixtures(t)
+	if err := reg.Merge([]registry.RepoProfile{
+		{RepoID: "kellyaa/agent-newsletter", HiveID: "hive-news", Owner: "kelly", AcceptingIdeas: true},
+		{RepoID: "example/kubernetes-operator", HiveID: "hive-k8s", Owner: "alice", AcceptingIdeas: true,
+			Description: "Kubernetes operators and cluster automation", Topics: []string{"kubernetes", "operator"}},
+		{RepoID: "example/web-dashboard", HiveID: "hive-web", Owner: "bob", AcceptingIdeas: true,
+			Description: "Web dashboard for metrics", Topics: []string{"dashboard", "metrics"}},
+	}); err != nil {
+		t.Fatalf("Merge: %v", err)
+	}
+	idea := createIdea(t, st, "Daily 5-minute audio newsletter",
+		"Create a daily five minute audio newsletter for agents to summarize important updates.")
+	e := &Engine{Store: st, Registry: reg}
+
+	_, hive, _, err := e.RematchIdea(context.Background(), idea, false, nil)
+	if err != nil {
+		t.Fatalf("RematchIdea: %v", err)
+	}
+	if len(hive) == 0 {
+		t.Fatal("expected hive matches")
+	}
+	if hive[0].RepoID != "kellyaa/agent-newsletter" {
+		t.Fatalf("top hive match = %s, want kellyaa/agent-newsletter: %+v", hive[0].RepoID, hive)
+	}
+}
+
 func TestFallbackTLDR(t *testing.T) {
 	idea := &store.Idea{Title: "T", Body: "First paragraph  with   spaces.\n\nSecond paragraph is ignored."}
 	if got := FallbackTLDR(idea); got != "First paragraph with spaces." {

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -17,6 +19,34 @@ func newTestRegistry(t *testing.T) (*Registry, string) {
 		t.Fatalf("New: %v", err)
 	}
 	return r, dir
+}
+
+func TestHTTPHubClientEnrichesEmptyDescriptions(t *testing.T) {
+	hub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != ReposPath {
+			t.Fatalf("unexpected hub path %s", r.URL.Path)
+		}
+		_ = json.NewEncoder(w).Encode([]RepoProfile{{RepoID: "owner/repo", HiveID: "h", Owner: "alice"}})
+	}))
+	defer hub.Close()
+	gh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/repos/owner/repo" {
+			t.Fatalf("unexpected github path %s", r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer token" {
+			t.Fatalf("Authorization = %q", got)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]string{"description": "Enriched from GitHub"})
+	}))
+	defer gh.Close()
+	c := &HTTPHubClient{BaseURL: hub.URL, GitHubAPI: gh.URL, Token: "token"}
+	repos, err := c.ListRepos(context.Background())
+	if err != nil {
+		t.Fatalf("ListRepos: %v", err)
+	}
+	if len(repos) != 1 || repos[0].Description != "Enriched from GitHub" {
+		t.Fatalf("repos not enriched: %+v", repos)
+	}
 }
 
 func sampleRepos() []RepoProfile {
@@ -75,6 +105,23 @@ func TestSyncPreservesLocalEdits(t *testing.T) {
 	}
 	if !rp.AcceptingIdeas || len(rp.Topics) != 2 || rp.Appetite != appetite {
 		t.Fatalf("re-sync clobbered local edits: %+v", rp)
+	}
+}
+
+func TestSyncPreservesDescriptionWhenIncomingBlank(t *testing.T) {
+	r, _ := newTestRegistry(t)
+	if err := r.Merge([]RepoProfile{{RepoID: "owner/repo", HiveID: "h", Owner: "alice", Description: "enriched"}}); err != nil {
+		t.Fatalf("Merge: %v", err)
+	}
+	if err := r.Sync(context.Background(), &FakeHub{Repos: []RepoProfile{{RepoID: "owner/repo", HiveID: "h", Owner: "alice"}}}); err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	rp, err := r.Get("owner/repo")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if rp.Description != "enriched" {
+		t.Fatalf("description was not preserved: %+v", rp)
 	}
 }
 

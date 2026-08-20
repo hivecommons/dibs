@@ -53,6 +53,8 @@ type ProgressEvent struct {
 	Score  float64 `json:"score,omitempty"`
 	ByLLM  bool    `json:"byLLM,omitempty"`
 	Note   string  `json:"note,omitempty"`
+	Done   int     `json:"done,omitempty"`
+	Total  int     `json:"total,omitempty"`
 }
 
 // Engine lazily computes and caches TLDRs and idea↔repo scores.
@@ -237,24 +239,27 @@ func (e *Engine) cncfMatchesForIdea(ctx context.Context, idea *store.Idea, persi
 	if e == nil || e.Catalog == nil {
 		return []CNCFMatch{}, nil
 	}
+	scanned := len(e.Catalog.List())
 	candidates := e.Catalog.TopK(idea.Title+" "+idea.Body, MaxCNCFCandidates)
 	if len(candidates) == 0 {
 		return []CNCFMatch{}, nil
 	}
 	if progress != nil {
-		progress(ProgressEvent{Phase: "cncf_bm25_start", Note: fmt.Sprintf("%d candidates", len(candidates))})
-		for _, c := range candidates {
+		progress(ProgressEvent{Phase: "cncf_bm25_start", Note: fmt.Sprintf("%d projects scanned via BM25", scanned), Done: len(candidates), Total: scanned})
+		for i, c := range candidates {
 			progress(ProgressEvent{
 				Phase:  "cncf_bm25",
 				RepoID: c.Project.RepoID,
 				Score:  c.Score,
 				Note:   c.Project.Name,
+				Done:   i + 1,
+				Total:  len(candidates),
 			})
 		}
 	}
 	topScore := candidates[0].Score
 	out := make([]CNCFMatch, 0, len(candidates))
-	for _, c := range candidates {
+	for i, c := range candidates {
 		m := CNCFMatch{
 			Name:     c.Project.Name,
 			RepoID:   c.Project.RepoID,
@@ -277,7 +282,9 @@ func (e *Engine) cncfMatchesForIdea(ctx context.Context, idea *store.Idea, persi
 				RepoID: m.RepoID,
 				Score:  m.Score,
 				ByLLM:  m.ByLLM,
-				Note:   firstNonEmpty(m.Name, m.Reason),
+				Note:   fmt.Sprintf("%d projects scanned via BM25", scanned),
+				Done:   i + 1,
+				Total:  len(candidates),
 			})
 		}
 		out = append(out, m)
@@ -312,6 +319,57 @@ func (e *Engine) nonHiveCNCF(matches []CNCFMatch) []CNCFMatch {
 	return out
 }
 
+type hiveCandidate struct {
+	Repo  registry.RepoProfile
+	Score float64
+}
+
+func (e *Engine) hiveBM25Candidates(idea *store.Idea, repos []registry.RepoProfile) []hiveCandidate {
+	projects := make([]catalog.Project, 0, len(repos))
+	for _, rp := range repos {
+		projects = append(projects, catalog.Project{
+			Name:        hiveRepoCorpusName(rp.RepoID),
+			RepoID:      rp.RepoID,
+			Description: rp.Description,
+			Topics:      rp.Topics,
+			Readme:      rp.Appetite,
+		})
+	}
+	ranked := catalog.NewBM25(projects).TopK(idea.Title+" "+idea.TLDR+" "+idea.Body, len(projects))
+	out := make([]hiveCandidate, 0, len(ranked))
+	byID := map[string]registry.RepoProfile{}
+	for _, rp := range repos {
+		byID[rp.RepoID] = rp
+	}
+	top := 0.0
+	if len(ranked) > 0 {
+		top = ranked[0].Score
+	}
+	for _, c := range ranked {
+		rp := byID[c.Project.RepoID]
+		out = append(out, hiveCandidate{Repo: rp, Score: bm25ToScore(c.Score, top)})
+	}
+	return out
+}
+
+func hiveRepoCorpusName(repoID string) string {
+	return repoID + " " + strings.NewReplacer("/", " ", "-", " ", "_", " ").Replace(splitCamel(repoID))
+}
+
+func splitCamel(s string) string {
+	var b strings.Builder
+	var prevLower bool
+	for _, r := range s {
+		isUpper := r >= 'A' && r <= 'Z'
+		if isUpper && prevLower {
+			b.WriteByte(' ')
+		}
+		b.WriteRune(r)
+		prevLower = r >= 'a' && r <= 'z'
+	}
+	return b.String()
+}
+
 // RematchIdea runs the full idea matching pipeline from fresh inputs. When
 // persist is false it does not update the store or notify; when true it saves
 // the same fields organic matching uses and emits normal fresh-match events.
@@ -332,15 +390,26 @@ func (e *Engine) RematchIdea(ctx context.Context, idea *store.Idea, persist bool
 		progress(ProgressEvent{Phase: "tldr_done", Note: "Using cached TLDR"})
 	}
 	var matches []store.Match
-	if progress != nil {
-		progress(ProgressEvent{Phase: "hive_start", Note: "Scoring hive repos"})
-	}
+	repos := []registry.RepoProfile{}
 	for _, rp := range e.Registry.List(true) {
-		rp := rp
 		if work.HasPassed(rp.RepoID) || work.OfferTo(rp.RepoID) != nil {
 			continue
 		}
-		m := e.score(ctx, &work, &rp, RepoHash(&rp))
+		repos = append(repos, rp)
+	}
+	if progress != nil {
+		progress(ProgressEvent{Phase: "hive_start", Note: "Scoring hive repos", Total: len(repos)})
+	}
+	baseline := e.hiveBM25Candidates(&work, repos)
+	for i, c := range baseline {
+		rp := c.Repo
+		m := store.Match{
+			RepoID:      rp.RepoID,
+			Score:       c.Score,
+			Reason:      "BM25 keyword fit across repo name, description, topics, and appetite",
+			SuggestedAt: time.Now().UTC(),
+			RepoHash:    RepoHash(&rp),
+		}
 		matches = append(matches, m)
 		if progress != nil {
 			progress(ProgressEvent{
@@ -348,22 +417,46 @@ func (e *Engine) RematchIdea(ctx context.Context, idea *store.Idea, persist bool
 				RepoID: rp.RepoID,
 				Symbol: rp.Symbol,
 				Score:  m.Score,
-				ByLLM:  m.ByLLM,
 				Note:   m.Reason,
+				Done:   i + 1,
+				Total:  len(baseline),
+			})
+		}
+	}
+	rerank := len(matches)
+	if rerank > MaxCNCFCandidates {
+		rerank = MaxCNCFCandidates
+	}
+	for i := 0; i < rerank; i++ {
+		rp := baseline[i].Repo
+		llmMatch := e.score(ctx, &work, &rp, RepoHash(&rp))
+		if llmMatch.ByLLM {
+			matches[i] = llmMatch
+		}
+		if progress != nil && llmMatch.ByLLM {
+			progress(ProgressEvent{
+				Phase:  "hive_rerank",
+				RepoID: rp.RepoID,
+				Symbol: rp.Symbol,
+				Score:  matches[i].Score,
+				ByLLM:  matches[i].ByLLM,
+				Note:   matches[i].Reason,
+				Done:   i + 1,
+				Total:  rerank,
 			})
 		}
 	}
 	sort.SliceStable(matches, func(i, j int) bool { return matches[i].Score > matches[j].Score })
-	if len(matches) > MaxMatches {
-		matches = matches[:MaxMatches]
+	if len(matches) > 2 {
+		matches = matches[:2]
 	}
 	cncf, err := e.cncfMatchesForIdea(ctx, &work, false, progress)
 	if err != nil {
 		return "", nil, nil, err
 	}
 	cncf = e.nonHiveCNCF(cncf)
-	if len(cncf) > MaxMatches {
-		cncf = cncf[:MaxMatches]
+	if len(cncf) > 2 {
+		cncf = cncf[:2]
 	}
 	if progress != nil {
 		progress(ProgressEvent{
