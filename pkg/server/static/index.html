@@ -257,10 +257,16 @@ body.admin [data-admin] { display: revert !important; }
 .admin-row:focus-within { outline: 1px solid var(--amber); outline-offset: -1px; }
 .admin-toggle { background: transparent; border: 0; color: var(--text); text-align: left; font: inherit; padding: 0; cursor: pointer; }
 .admin-author { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
-.admin-author img { width: 18px; height: 18px; border-radius: 50%; flex: 0 0 auto; }
+.admin-author img, .admin-author .avatar-fallback { width: 18px; height: 18px; border-radius: 50%; flex: 0 0 auto; }
+.admin-author .avatar-fallback { display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line); color: var(--muted); }
+.admin-author .avatar-fallback svg, .provider-icon svg { width: 13px; height: 13px; fill: currentColor; }
+.provider-icon { display: inline-flex; align-items: center; color: var(--muted); }
 .admin-author a { color: var(--text); text-decoration: none; font-weight: 700; }
 .admin-author a:hover { color: var(--amber); }
 .admin-author .display { color: var(--muted); font-size: .78rem; }
+.admin-spinner { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: .82rem; }
+.admin-spinner::before { content: ""; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--amber); animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 .admin-detail-row td { background: rgba(15,20,28,.55); }
 .admin-detail { display: grid; gap: 10px; }
 .admin-detail h4 { margin: 0 0 4px; font-size: .82rem; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; }
@@ -1103,6 +1109,9 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
     }).join('');
   }
   var LIGHTBULB_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M8.5 14.5c-1.4-1.1-2.2-2.8-2.2-4.6a5.7 5.7 0 1 1 11.4 0c0 1.8-.8 3.5-2.2 4.6-.7.6-1 1.1-1 2H9.5c0-.9-.3-1.4-1-2Z"/></svg>';
+  var PERSON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm7 8a7 7 0 0 0-14 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var GITHUB_SVG = '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38v-1.33c-2.23.49-2.7-1.08-2.7-1.08-.37-.93-.9-1.18-.9-1.18-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.72 1.22 1.88.87 2.34.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .68-.21 2.2.82A7.6 7.6 0 0 1 8 3.88c.68 0 1.36.09 2 .27 1.53-1.03 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.18c0 .21.15.45.55.38A8 8 0 0 0 8 0Z"/></svg>';
+  var KEY_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 14a4 4 0 1 1 2.83-6.83A4 4 0 0 1 7 14Zm4-4h10v3h-3v3h-3v-3h-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   // Idea-symbol chip — no dollar prefix; repo tickers use .tsym exclusively.
   function symChip(symbol) {
     return symbol ? '<span class="idea-chip">' + LIGHTBULB_SVG + esc(symbol) + '</span> ' : '';
@@ -2105,11 +2114,20 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
   }
 
   function authorCell(idea) {
-    var login = idea.author || '';
-    var display = idea.authorDisplay && idea.authorDisplay !== login ? idea.authorDisplay : '';
+    var raw = idea.author || '';
+    var provider = idea.authorProvider || (raw.indexOf(':') > 0 ? raw.split(':')[0] : 'github');
+    var login = provider !== 'github' && raw.indexOf(':') > 0 ? raw.slice(raw.indexOf(':') + 1) : raw;
+    var display = idea.authorDisplay && idea.authorDisplay !== login && idea.authorDisplay !== raw ? idea.authorDisplay : '';
+    var avatar = idea.authorAvatar ? '<img src="' + esc(idea.authorAvatar) + '" loading="lazy" alt="" onerror="this.hidden=true">'
+      : (provider === 'github' ? '<img src="https://github.com/' + esc(login) + '.png?size=48" loading="lazy" alt="" onerror="this.hidden=true">'
+        : '<span class="avatar-fallback">' + PERSON_SVG + '</span>');
+    var name = provider === 'github'
+      ? '<a href="https://github.com/' + esc(login) + '" target="_blank" rel="noopener">' + esc(login) + '</a>'
+      : '<span class="login">' + esc(login) + '</span>';
+    var icon = '<span class="provider-icon" title="' + esc(provider === 'github' ? 'GitHub' : provider + ' OIDC') + '">' +
+      (provider === 'github' ? GITHUB_SVG : KEY_SVG) + '</span>';
     return '<span class="admin-author">' +
-      '<img src="https://github.com/' + esc(login) + '.png?size=48" loading="lazy" alt="" onerror="this.hidden=true">' +
-      '<a href="https://github.com/' + esc(login) + '" target="_blank" rel="noopener">' + esc(login) + '</a>' +
+      avatar + icon + name +
       (display ? '<span class="display">' + esc(display) + '</span>' : '') + '</span>';
   }
   function scoreText(score) {
@@ -2136,14 +2154,36 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
     if (!out) return;
     out.innerHTML = adminMatchesHTML((res && res.matches) || {});
   }
+  function pollAdminRematch(id, row) {
+    api('GET', 'admin/ideas/' + id + '/rematch').then(function (res) {
+      var out = row.nextElementSibling && row.nextElementSibling.querySelector('.admin-output');
+      if (res.status === 'running') {
+        if (out) out.innerHTML = '<div class="admin-spinner">Rematch running…</div>';
+        setTimeout(function () { pollAdminRematch(id, row); }, 3000);
+        return;
+      }
+      if (res.status === 'error') {
+        if (out) out.innerHTML = '<div class="empty">' + esc(res.error || 'Rematch failed.') + '</div>';
+        return;
+      }
+      renderAdminOutput(row, res);
+      if (!res.dry) loadAdminIdeas();
+    }).catch(function (e) { showErr(e.message); });
+  }
   function runAdminRematch(id, dry, row) {
     var detail = row.nextElementSibling;
     if (!detail) return;
     var btns = detail.querySelectorAll('button');
+    var out = detail.querySelector('.admin-output');
+    if (out) out.innerHTML = '<div class="admin-spinner">Starting rematch…</div>';
     btns.forEach(function (b) { b.disabled = true; });
     api('POST', 'admin/ideas/' + id + '/rematch' + (dry ? '?dry=1' : '')).then(function (res) {
-      renderAdminOutput(row, res);
-      if (!dry) loadAdminIdeas();
+      if (res.status === 'running') {
+        pollAdminRematch(id, row);
+      } else {
+        renderAdminOutput(row, res);
+        if (!dry) loadAdminIdeas();
+      }
     }).catch(function (e) {
       showErr(e.message);
     }).finally(function () {

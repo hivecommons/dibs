@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kubestellar/dibs/pkg/api"
 	"github.com/kubestellar/dibs/pkg/auth"
@@ -71,8 +72,9 @@ func newWave2Server(t *testing.T, github settle.Client, cncfProjects ...catalog.
 		HubURL:   "https://hive.kubestellar.io",
 		Hub: &auth.FakeHub{Sessions: map[string]auth.Identity{
 			"alice-session":   {Username: "alice", DisplayName: "Alice A"},
-			"bob-session":     {Username: "bob", DisplayName: "Bob B"},
+			"bob-session":     {Username: "bob", DisplayName: "Bob B", AvatarURL: "https://avatars.example/bob.png"},
 			"charlie-session": {Username: "charlie", DisplayName: "Charlie C"},
+			"oidc-session":    {Username: "okta:00u123", DisplayName: "OIDC User", AvatarURL: "https://avatars.example/oidc.png"},
 		}},
 		Store:   st,
 		Repos:   reg,
@@ -393,23 +395,42 @@ func TestAdminRematchDryApplyAndPayload(t *testing.T) {
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("non-admin dry rematch: want 403, got %d %s", rec.Code, rec.Body.String())
 	}
+	rec = doJSON(t, f.h, "GET", "/api/admin/ideas/"+idea.ID+"/rematch", "bob-session", nil)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("non-admin poll rematch: want 403, got %d %s", rec.Code, rec.Body.String())
+	}
 
 	rec = doJSON(t, f.h, "POST", "/api/admin/ideas/"+idea.ID+"/rematch?dry=1", "alice-session", nil)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("admin dry rematch: %d %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("admin dry rematch start: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = doJSON(t, f.h, "POST", "/api/admin/ideas/"+idea.ID+"/rematch", "alice-session", nil)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("double-start rematch: want 409, got %d %s", rec.Code, rec.Body.String())
 	}
 	var dry struct {
-		Dry     bool `json:"dry"`
+		Status  string `json:"status"`
+		Dry     bool   `json:"dry"`
 		Matches struct {
 			Count int               `json:"count"`
 			Hive  []store.Match     `json:"hive"`
 			CNCF  []store.CNCFMatch `json:"cncf"`
 		} `json:"matches"`
 	}
-	if err := json.NewDecoder(rec.Body).Decode(&dry); err != nil {
-		t.Fatalf("decode dry: %v", err)
+	for i := 0; i < 50; i++ {
+		rec = doJSON(t, f.h, "GET", "/api/admin/ideas/"+idea.ID+"/rematch", "alice-session", nil)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("poll dry rematch: %d %s", rec.Code, rec.Body.String())
+		}
+		if err := json.NewDecoder(rec.Body).Decode(&dry); err != nil {
+			t.Fatalf("decode dry: %v", err)
+		}
+		if dry.Status != "running" {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
-	if !dry.Dry || len(dry.Matches.Hive) == 0 || len(dry.Matches.CNCF) == 0 {
+	if dry.Status != "done" || !dry.Dry || len(dry.Matches.Hive) == 0 || len(dry.Matches.CNCF) == 0 {
 		t.Fatalf("dry rematch missing output: %+v", dry)
 	}
 	got, _ := f.store.Get(idea.ID)
@@ -418,8 +439,27 @@ func TestAdminRematchDryApplyAndPayload(t *testing.T) {
 	}
 
 	rec = doJSON(t, f.h, "POST", "/api/admin/ideas/"+idea.ID+"/rematch", "alice-session", nil)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("admin apply rematch: %d %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("admin apply rematch start: %d %s", rec.Code, rec.Body.String())
+	}
+	for i := 0; i < 50; i++ {
+		rec = doJSON(t, f.h, "GET", "/api/admin/ideas/"+idea.ID+"/rematch", "alice-session", nil)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("poll apply rematch: %d %s", rec.Code, rec.Body.String())
+		}
+		var applied struct {
+			Status string `json:"status"`
+		}
+		if err := json.NewDecoder(rec.Body).Decode(&applied); err != nil {
+			t.Fatalf("decode apply: %v", err)
+		}
+		if applied.Status != "running" {
+			if applied.Status != "done" {
+				t.Fatalf("apply status = %s, want done", applied.Status)
+			}
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 	got, _ = f.store.Get(idea.ID)
 	if len(got.Matches) == 0 || len(got.CNCFMatches) == 0 || got.MatchesUpdatedAt.IsZero() {
@@ -443,6 +483,51 @@ func TestAdminRematchDryApplyAndPayload(t *testing.T) {
 	}
 	if len(ideas) != 1 || ideas[0].ID != idea.ID || len(ideas[0].Matches.Hive) == 0 || len(ideas[0].Matches.CNCF) == 0 {
 		t.Fatalf("admin payload missing stored matches: %+v", ideas)
+	}
+}
+
+func TestAdminAuthorIdentityPayload(t *testing.T) {
+	t.Setenv("DIBS_ADMINS", "alice")
+	f := newWave2Server(t, nil)
+	githubIdea := f.createIdea(t, "bob-session", "GitHub idea", "body", "public")
+	oidcIdea := f.createIdea(t, "oidc-session", "OIDC idea", "body", "public")
+	if _, err := f.store.Mutate(githubIdea.ID, false, func(i *store.Idea) error {
+		i.AuthorProvider = ""
+		return nil
+	}); err != nil {
+		t.Fatalf("clear legacy provider: %v", err)
+	}
+
+	rec := doJSON(t, f.h, "GET", "/api/admin/ideas", "alice-session", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("admin ideas: %d %s", rec.Code, rec.Body.String())
+	}
+	var ideas []struct {
+		ID             string `json:"id"`
+		Author         string `json:"author"`
+		AuthorAvatar   string `json:"authorAvatar"`
+		AuthorProvider string `json:"authorProvider"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&ideas); err != nil {
+		t.Fatalf("decode admin ideas: %v", err)
+	}
+	byID := map[string]struct {
+		Author         string `json:"author"`
+		AuthorAvatar   string `json:"authorAvatar"`
+		AuthorProvider string `json:"authorProvider"`
+	}{}
+	for _, idea := range ideas {
+		byID[idea.ID] = struct {
+			Author         string `json:"author"`
+			AuthorAvatar   string `json:"authorAvatar"`
+			AuthorProvider string `json:"authorProvider"`
+		}{idea.Author, idea.AuthorAvatar, idea.AuthorProvider}
+	}
+	if got := byID[githubIdea.ID]; got.AuthorProvider != "github" || got.AuthorAvatar != "https://avatars.example/bob.png" {
+		t.Fatalf("github author identity = %+v", got)
+	}
+	if got := byID[oidcIdea.ID]; got.Author != "okta:00u123" || got.AuthorProvider != "okta" || got.AuthorAvatar != "https://avatars.example/oidc.png" {
+		t.Fatalf("oidc author identity = %+v", got)
 	}
 }
 

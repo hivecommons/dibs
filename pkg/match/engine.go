@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"regexp"
@@ -29,6 +30,8 @@ const NotifyThreshold = 60
 
 // MaxTLDRLen caps a generated TLDR.
 const MaxTLDRLen = 280
+
+var ErrIdeaChanged = errors.New("match: idea changed during rematch")
 
 // maxPromptBody bounds how much idea body we send to the LLM.
 const maxPromptBody = 4000
@@ -294,9 +297,6 @@ func (e *Engine) RematchIdea(ctx context.Context, idea *store.Idea, persist bool
 		}
 		m := e.score(ctx, &work, &rp, RepoHash(&rp))
 		matches = append(matches, m)
-		if persist && m.Score >= NotifyThreshold && e.Notifier != nil {
-			e.Notifier.NewMatch(work.Author, rp.Owner, &work, &rp, m.Score)
-		}
 	}
 	sort.SliceStable(matches, func(i, j int) bool { return matches[i].Score > matches[j].Score })
 	if len(matches) > MaxMatches {
@@ -313,6 +313,9 @@ func (e *Engine) RematchIdea(ctx context.Context, idea *store.Idea, persist bool
 	if persist {
 		tldr, persistedMatches, persistedCNCF := work.TLDR, matches, cncf
 		if _, err := e.Store.Mutate(idea.ID, false, func(i *store.Idea) error {
+			if i.Title != work.Title || i.Body != work.Body || !i.UpdatedAt.Equal(work.UpdatedAt) {
+				return ErrIdeaChanged
+			}
 			i.TLDR = tldr
 			i.Matches = persistedMatches
 			i.CNCFMatches = persistedCNCF
@@ -320,6 +323,16 @@ func (e *Engine) RematchIdea(ctx context.Context, idea *store.Idea, persist bool
 			return nil
 		}); err != nil {
 			return "", nil, nil, err
+		}
+		if e.Notifier != nil {
+			for _, m := range matches {
+				if m.Score < NotifyThreshold {
+					continue
+				}
+				if rp, err := e.Registry.Get(m.RepoID); err == nil {
+					e.Notifier.NewMatch(work.Author, rp.Owner, &work, rp, m.Score)
+				}
+			}
 		}
 	}
 	return work.TLDR, matches, cncf, nil

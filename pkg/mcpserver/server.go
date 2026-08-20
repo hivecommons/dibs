@@ -219,6 +219,7 @@ func (t *tools) submitIdea(ctx context.Context, req *mcpsdk.CallToolRequest, in 
 	idea := &store.Idea{
 		Author:        id.Username,
 		AuthorDisplay: firstNonEmpty(id.DisplayName, id.Username),
+		AuthorAvatar:  id.AvatarURL,
 		Title:         in.Title,
 		Body:          in.Description,
 		Tags:          normalizeTags(in.Tags),

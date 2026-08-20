@@ -80,6 +80,25 @@ func TestCreateGetUpdateDelete(t *testing.T) {
 	}
 }
 
+func TestCreateStoresAuthorIdentityFields(t *testing.T) {
+	s, _ := newTestStore(t)
+	idea := validIdea("okta:00u123")
+	idea.AuthorAvatar = "https://avatars.example/oidc.png"
+	if err := s.Create(idea); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	got, err := s.Get(idea.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.AuthorProvider != "okta" || got.AuthorAvatar != idea.AuthorAvatar {
+		t.Fatalf("author identity fields = provider %q avatar %q", got.AuthorProvider, got.AuthorAvatar)
+	}
+	if AuthorProvider("alice") != "github" {
+		t.Fatalf("legacy github provider inference failed")
+	}
+}
+
 func TestValidation(t *testing.T) {
 	s, _ := newTestStore(t)
 	cases := []struct {
