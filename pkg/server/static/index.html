@@ -121,8 +121,17 @@ textarea.md { font-family: var(--font-mono); font-size: .88rem; min-height: 220p
 .switch .track::before { content: ""; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px; background: var(--muted); border-radius: 50%; transition: .15s; }
 .switch input:checked + .track { background: var(--green); }
 .switch input:checked + .track::before { transform: translateX(18px); background: #080b0f; }
-section.view { display: none; }
-section.view.active { display: block; }
+/* ── one page: stacked terminal sheets ── */
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+main section.sheet { border-top: 1px solid var(--line); margin-top: 44px; padding-top: 28px; scroll-margin-top: 74px; }
+main section.sheet:first-of-type { border-top: none; margin-top: 0; padding-top: 0; }
+/* ── modals: flows float over the one page ── */
+.modal { position: fixed; inset: 0; background: rgba(8,11,15,.8); z-index: 90; overflow-y: auto; padding: 5vh 16px 48px; }
+.modal[hidden] { display: none; }
+.modal-card { position: relative; max-width: 780px; margin: 0 auto; background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius); padding: 26px 26px 22px; box-shadow: 0 18px 60px rgba(0,0,0,.55); }
+.modal-close { position: absolute; top: 12px; right: 12px; width: 32px; height: 32px; background: var(--panel-2); border: 1px solid var(--line); color: var(--muted); border-radius: var(--radius); cursor: pointer; font: inherit; line-height: 1; }
+.modal-close:hover { color: var(--text); border-color: var(--amber); }
+body.modal-open { overflow: hidden; }
 /* ── notifications bell ── */
 #bell-wrap { position: relative; }
 #bell { background: transparent; border: 1px solid transparent; color: var(--muted); font: inherit; padding: 7px 10px 4px; border-radius: var(--radius); cursor: pointer; position: relative; }
@@ -441,7 +450,11 @@ details.how-details .how-body { padding: 16px 18px; }
 <div id="err" class="error-banner" role="alert"></div>
 <div id="ok" class="ok-banner" role="status"></div>
 
-<section id="view-home" class="view active">
+<!-- ═══ ONE PAGE. Sections stacked like a trading terminal; the jump menu
+     scrolls, it never swaps views. Wizard/match/launch/feed/detail are
+     modals on top. ═══ -->
+
+<section class="sheet" id="sec-market" aria-label="Market terminal">
   <!-- Signed in: slim desk summary — the terminal below is the page. -->
   <div class="desk-strip" data-auth>
     <span class="ds-nums" id="ds-nums">Loading your desk…</span>
@@ -461,7 +474,7 @@ details.how-details .how-body { padding: 16px 18px; }
       <button class="pill" data-goto="credits" style="margin-left:8px">See The Board</button>
     </div>
   </div>
-  <!-- the terminal: everyone's home page — derived repo value-index chart -->
+  <!-- the terminal: everyone's home — derived repo value-index chart -->
   <div class="chart-panel" aria-label="Repo value index chart">
       <div class="chart-head">
         <div class="chart-title-wrap">
@@ -478,16 +491,57 @@ details.how-details .how-body { padding: 16px 18px; }
         <span class="chart-note" id="chart-note">index derived from market activity — offers, bids hit, settlements</span>
       </div>
     </div>
-    <div class="mkt-stats" id="mkt-stats" aria-label="Exchange statistics"></div>
-    <div class="markets" aria-label="Live markets">
-      <h3>Live idea board</h3>
-      <p class="mkts-sub">Every public idea on the exchange — phase, listing venue, momentum.</p>
-      <h4 id="bt-head">Trending</h4>
-      <div class="board" id="board-trending" role="list" aria-labelledby="bt-head"></div>
-      <h4 id="bn-head">New listings</h4>
-      <div class="board" id="board-new" role="list" aria-labelledby="bn-head"></div>
+  <div class="mkt-stats" id="mkt-stats" aria-label="Exchange statistics"></div>
+</section>
+
+<section class="sheet" id="sec-desk" data-auth aria-label="Your desk">
+  <div class="toolbar">
+    <div>
+      <h2 class="page-title">Your desk</h2>
+      <p class="page-sub" style="margin:0">Everything that needs you, in one place.</p>
     </div>
-  <div class="landing-extra">
+    <button class="pill primary" id="btn-desk-new">＋ List an idea</button>
+  </div>
+  <div class="level-banner panel" id="level-banner" style="display:none"></div>
+  <div class="stats-strip" id="my-stats"></div>
+  <div class="desk-tabs" role="tablist" aria-label="Desk zones">
+    <button role="tab" id="tab-ideas" aria-selected="true" aria-controls="zone-ideas">My ideas<span class="tab-badge" id="badge-ideas"></span></button>
+    <button role="tab" id="tab-matches" aria-selected="false" aria-controls="zone-matches">Matches to review<span class="tab-badge" id="badge-matches"></span></button>
+    <button role="tab" id="tab-activity" aria-selected="false" aria-controls="zone-activity">Activity<span class="tab-badge" id="badge-activity"></span></button>
+  </div>
+  <div id="zone-ideas" role="tabpanel" aria-labelledby="tab-ideas" tabindex="0">
+    <div class="empty">Loading your ideas…</div>
+  </div>
+  <div id="zone-matches" role="tabpanel" aria-labelledby="tab-matches" tabindex="0" hidden>
+    <div class="swipe-stage" id="home-stage"><div class="empty">Loading your matches…</div></div>
+    <p class="key-hint" id="home-key-hint" style="display:none"><kbd>←</kbd> pass · <kbd>→</kbd> accept</p>
+  </div>
+  <div id="zone-activity" role="tabpanel" aria-labelledby="tab-activity" tabindex="0" hidden>
+    <div class="empty">Loading activity…</div>
+  </div>
+</section>
+
+<section class="sheet" id="sec-ideas" aria-label="Live idea board">
+  <div class="toolbar">
+    <div>
+      <h2 class="page-title">Live idea board</h2>
+      <p class="page-sub" style="margin:0">Every public idea on the exchange — phase, listing venue, momentum.</p>
+    </div>
+  </div>
+  <div class="markets" aria-label="Live markets">
+    <h4 id="bt-head">Trending</h4>
+    <div class="board" id="board-trending" role="list" aria-labelledby="bt-head"></div>
+    <h4 id="bn-head">New listings</h4>
+    <div class="board" id="board-new" role="list" aria-labelledby="bn-head"></div>
+  </div>
+  <div data-auth>
+    <h3 style="margin:26px 0 4px;font-size:1rem">All public ideas</h3>
+    <p class="page-sub" style="font-size:.9rem">Every public idea from the community, full cards.</p>
+    <div id="browse-list"></div>
+  </div>
+</section>
+
+<div class="landing-extra">
     <div class="how-market" aria-label="How the market works">
       <h3>How the market works</h3>
       <p class="hm-sub">A stock market where <b>repos are the listed companies</b> — and two
@@ -568,48 +622,40 @@ details.how-details .how-body { padding: 16px 18px; }
       </div>
     </details>
   </div>
-</section>
 
-<section id="view-desk" class="view">
+<section class="sheet" id="sec-repos" data-auth aria-label="For repos">
   <div class="toolbar">
     <div>
-      <h2 class="page-title">Your desk</h2>
-      <p class="page-sub" style="margin:0">Everything that needs you, in one place.</p>
+      <h2 class="page-title">For repos</h2>
+      <p class="page-sub" style="margin:0">Opt your hive-managed repo in. Set topics &amp; appetite. Review your feed.</p>
     </div>
-    <button class="pill primary" id="btn-desk-new">＋ List an idea</button>
   </div>
-  <div class="desk-tabs" role="tablist" aria-label="Desk zones">
-    <button role="tab" id="tab-ideas" aria-selected="true" aria-controls="zone-ideas">My ideas<span class="tab-badge" id="badge-ideas"></span></button>
-    <button role="tab" id="tab-matches" aria-selected="false" aria-controls="zone-matches">Matches to review<span class="tab-badge" id="badge-matches"></span></button>
-    <button role="tab" id="tab-activity" aria-selected="false" aria-controls="zone-activity">Activity<span class="tab-badge" id="badge-activity"></span></button>
-  </div>
-  <div id="zone-ideas" role="tabpanel" aria-labelledby="tab-ideas" tabindex="0">
-    <div class="empty">Loading your ideas…</div>
-  </div>
-  <div id="zone-matches" role="tabpanel" aria-labelledby="tab-matches" tabindex="0" hidden>
-    <div class="swipe-stage" id="home-stage"><div class="empty">Loading your matches…</div></div>
-    <p class="key-hint" id="home-key-hint" style="display:none"><kbd>←</kbd> pass · <kbd>→</kbd> accept</p>
-  </div>
-  <div id="zone-activity" role="tabpanel" aria-labelledby="tab-activity" tabindex="0" hidden>
-    <div class="empty">Loading activity…</div>
-  </div>
+  <h3 style="margin:18px 0 10px;font-size:1rem">My repos</h3>
+  <div id="myrepos-list"></div>
+  <h3 style="margin:26px 0 10px;font-size:1rem">Repos accepting ideas</h3>
+  <div id="repos-list"></div>
 </section>
 
-<section id="view-mine" class="view">
+<section class="sheet" id="sec-board" aria-label="The Board">
   <div class="toolbar">
     <div>
-      <h2 class="page-title">Your positions</h2>
-      <p class="page-sub" style="margin:0">Your ideas on the exchange. Drafts stay yours. Offer one to enter matching.</p>
+      <h2 class="page-title">The Board</h2>
+      <p class="page-sub" style="margin:0">Top ideators by portfolio — ranked by dividends earned as ideas ship.</p>
     </div>
-    <button class="pill primary" id="btn-new">＋ List an idea</button>
   </div>
-  <div class="level-banner panel" id="level-banner" style="display:none"></div>
-  <div class="stats-strip" id="my-stats"></div>
-  <div id="mine-list"></div>
+  <div id="leaderboard-list"></div>
+  <h3 style="margin:30px 0 6px;font-size:1.05rem">Credit wall</h3>
+  <p class="page-sub" style="font-size:.9rem">Every settled idea, credited to the person who thought of it.</p>
+  <div id="credits-list"></div>
 </section>
+</main>
 
-<section id="view-edit" class="view">
-  <h2 class="page-title" id="edit-title">List an idea</h2>
+<!-- ═══ modals: flows float over the one page ═══ -->
+
+<div class="modal" id="modal-edit" hidden role="dialog" aria-modal="true" aria-labelledby="edit-title">
+  <div class="modal-card">
+    <button class="modal-close" data-close-modal aria-label="Close listing wizard">✕</button>
+    <h2 class="page-title" id="edit-title">List an idea</h2>
   <ol class="stepper" id="wiz-stepper" aria-label="Listing steps">
     <li id="step-tab-1" class="current" aria-current="step"><span class="sn" aria-hidden="true">1</span>Write</li>
     <li class="step-arrow" aria-hidden="true">→</li>
@@ -690,56 +736,35 @@ details.how-details .how-body { padding: 16px 18px; }
       <button type="button" class="pill" id="btn-wiz-back3">← Back to Embellish</button>
     </div>
   </div>
-</section>
-
-<section id="view-idea" class="view">
-  <div class="toolbar">
-    <div>
-      <h2 class="page-title" id="idea-detail-title">Idea status</h2>
-      <p class="page-sub" id="idea-detail-sub" style="margin:0"></p>
-    </div>
-    <button class="pill" data-goto="desk">← Your desk</button>
   </div>
-  <div id="idea-detail-card"></div>
-</section>
+</div>
 
-<section id="view-browse" class="view">
-  <h2 class="page-title">Browse public ideas</h2>
-  <p class="page-sub">Every public idea from the community.</p>
-  <div id="browse-list"></div>
-</section>
-
-<section id="view-repos" class="view">
-  <h2 class="page-title">For repos</h2>
-  <p class="page-sub">Opt your hive-managed repo in. Set topics &amp; appetite. Review your feed.</p>
-  <h3 style="margin:18px 0 10px;font-size:1rem">My repos</h3>
-  <div id="myrepos-list"></div>
-  <h3 style="margin:26px 0 10px;font-size:1rem">Repos accepting ideas</h3>
-  <div id="repos-list"></div>
-</section>
-
-<section id="view-match" class="view">
-  <div class="toolbar">
-    <div>
-      <h2 class="page-title" id="match-title">Find a home for your idea</h2>
-      <p class="page-sub" style="margin:0">Offer it, or pass.</p>
-    </div>
-    <button class="pill" data-goto="mine">← Your positions</button>
+<div class="modal" id="modal-idea" hidden role="dialog" aria-modal="true" aria-labelledby="idea-detail-title">
+  <div class="modal-card">
+    <button class="modal-close" data-close-modal aria-label="Close idea status">✕</button>
+    <h2 class="page-title" id="idea-detail-title">Idea status</h2>
+    <p class="page-sub" id="idea-detail-sub"></p>
+    <div id="idea-detail-card"></div>
   </div>
-  <div id="match-tldr" class="tldr-banner"></div>
-  <div class="swipe-stage" id="match-stage"></div>
-  <p class="key-hint"><kbd>←</kbd> pass · <kbd>→</kbd> offer</p>
-</section>
+</div>
 
-<section id="view-launch" class="view">
-  <div class="toolbar">
-    <div>
-      <h2 class="page-title" id="launch-title">File the issue</h2>
-      <p class="page-sub" style="margin:0">Your account, your name, your credit. We're just the matchmaker.</p>
-    </div>
-    <button class="pill" data-goto="mine">← Your positions</button>
+<div class="modal" id="modal-match" hidden role="dialog" aria-modal="true" aria-labelledby="match-title">
+  <div class="modal-card">
+    <button class="modal-close" data-close-modal aria-label="Close matching">✕</button>
+    <h2 class="page-title" id="match-title">Find a home for your idea</h2>
+    <p class="page-sub">Offer it, or pass.</p>
+    <div id="match-tldr" class="tldr-banner"></div>
+    <div class="swipe-stage" id="match-stage"></div>
+    <p class="key-hint"><kbd>←</kbd> pass · <kbd>→</kbd> offer</p>
   </div>
-  <form class="panel" id="launch-form">
+</div>
+
+<div class="modal" id="modal-launch" hidden role="dialog" aria-modal="true" aria-labelledby="launch-title">
+  <div class="modal-card">
+    <button class="modal-close" data-close-modal aria-label="Close issue filing">✕</button>
+    <h2 class="page-title" id="launch-title">File the issue</h2>
+    <p class="page-sub">Your account, your name, your credit. We're just the matchmaker.</p>
+    <form class="panel" id="launch-form">
     <label for="l-title">Issue title</label>
     <input type="text" id="l-title" maxlength="200" required>
     <label for="l-body">Issue body (markdown — the Dibs footer is added automatically)</label>
@@ -761,32 +786,21 @@ details.how-details .how-body { padding: 16px 18px; }
       </div>
     </div>
   </form>
-</section>
-
-<section id="view-feed" class="view">
-  <div class="toolbar">
-    <div>
-      <h2 class="page-title" id="feed-title">Idea feed</h2>
-      <p class="page-sub" style="margin:0">Incoming offers and matched public ideas for your repo.</p>
-    </div>
-    <button class="pill" data-goto="repos">← For repos</button>
   </div>
-  <h3 style="margin:6px 0 10px;font-size:1rem">Offers to you</h3>
-  <div id="feed-offers"></div>
-  <h3 style="margin:26px 0 10px;font-size:1rem">Matched public ideas</h3>
-  <div class="swipe-stage" id="feed-stage"></div>
-  <p class="key-hint"><kbd>←</kbd> pass · <kbd>→</kbd> accept</p>
-</section>
+</div>
 
-<section id="view-credits" class="view">
-  <h2 class="page-title">The Board</h2>
-  <p class="page-sub">Top ideators by portfolio — ranked by dividends earned as ideas ship.</p>
-  <div id="leaderboard-list"></div>
-  <h3 style="margin:30px 0 6px;font-size:1.05rem">Credit wall</h3>
-  <p class="page-sub" style="font-size:.9rem">Every settled idea, credited to the person who thought of it.</p>
-  <div id="credits-list"></div>
-</section>
-</main>
+<div class="modal" id="modal-feed" hidden role="dialog" aria-modal="true" aria-labelledby="feed-title">
+  <div class="modal-card">
+    <button class="modal-close" data-close-modal aria-label="Close repo feed">✕</button>
+    <h2 class="page-title" id="feed-title">Idea feed</h2>
+    <p class="page-sub">Incoming offers and matched public ideas for your repo.</p>
+    <h3 style="margin:6px 0 10px;font-size:1rem">Offers to you</h3>
+    <div id="feed-offers"></div>
+    <h3 style="margin:26px 0 10px;font-size:1rem">Matched public ideas</h3>
+    <div class="swipe-stage" id="feed-stage"></div>
+    <p class="key-hint"><kbd>←</kbd> pass · <kbd>→</kbd> accept</p>
+  </div>
+</div>
 
 <!-- It's a match! celebration -->
 <div id="match-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="mo-title">
@@ -859,20 +873,81 @@ details.how-details .how-body { padding: 16px 18px; }
     return symbol ? '<span class="tsym">$' + esc(symbol) + '</span> ' : '';
   }
 
-  /* ── navigation ── */
-  var authViews = { desk: 1, mine: 1, browse: 1, repos: 1, edit: 1, match: 1, feed: 1, launch: 1, idea: 1 };
+  /* ── navigation: ONE page. Old view names map to section anchors
+     (smooth scroll) or modals — show()/data-goto stay compatible. ── */
+  var authViews = { desk: 1, mine: 1, repos: 1, edit: 1, match: 1, feed: 1, launch: 1, idea: 1 };
+  var SECTION_OF = { home: 'sec-market', desk: 'sec-desk', mine: 'sec-desk', browse: 'sec-ideas', repos: 'sec-repos', credits: 'sec-board' };
+  var MODAL_OF = { edit: 'modal-edit', idea: 'modal-idea', match: 'modal-match', launch: 'modal-launch', feed: 'modal-feed' };
+
+  /* modals: flows float over the one page */
+  var openModalId = null, modalReturnFocus = null;
+  function openModal(id) {
+    if (openModalId && openModalId !== id) { $(openModalId).hidden = true; }
+    else if (!openModalId) { modalReturnFocus = document.activeElement; }
+    openModalId = id;
+    var m = $(id);
+    m.hidden = false;
+    m.scrollTop = 0;
+    document.body.classList.add('modal-open');
+    var c = m.querySelector('.modal-close');
+    if (c) c.focus();
+  }
+  function closeModal() {
+    if (!openModalId) return;
+    $(openModalId).hidden = true;
+    openModalId = null;
+    document.body.classList.remove('modal-open');
+    activeDeck = null;
+    if (modalReturnFocus && modalReturnFocus.focus) modalReturnFocus.focus();
+    modalReturnFocus = null;
+  }
+  document.querySelectorAll('[data-close-modal]').forEach(function (b) {
+    b.addEventListener('click', closeModal);
+  });
+  document.querySelectorAll('.modal').forEach(function (m) {
+    m.addEventListener('click', function (ev) { if (ev.target === m) closeModal(); });
+  });
+
+  /* lazy per-section loading: sections fetch on first scroll-into-view.
+     Observation starts once identity is known, so authed loaders never
+     fire for anonymous visitors. */
+  var sectionLoaded = {};
+  var SECTION_LOADERS = {
+    'sec-market': function () { loadTerminal(); if (!anon) loadDeskSummary(); },
+    'sec-desk':   function () { loadDesk(); loadStats(); },
+    'sec-ideas':  function () { loadBoard(); if (!anon) loadBrowse(); },
+    'sec-repos':  function () { loadRepos(); },
+    'sec-board':  function () { loadCredits(); }
+  };
+  function ensureSection(id, force) {
+    if (!force && sectionLoaded[id]) return;
+    var el = document.getElementById(id);
+    if (!el || (anon && el.hasAttribute('data-auth'))) return;
+    sectionLoaded[id] = true;
+    SECTION_LOADERS[id]();
+  }
+  var secIO = ('IntersectionObserver' in window) ?
+    new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { if (e.isIntersecting) ensureSection(e.target.id); });
+    }, { rootMargin: '240px' }) : null;
+  function startSections() {
+    sectionLoaded = {};
+    document.querySelectorAll('main section.sheet').forEach(function (s) {
+      if (secIO) { secIO.unobserve(s); secIO.observe(s); } // (re-)observe → initial intersection fires
+      else ensureSection(s.id);
+    });
+  }
+
   function show(view) {
     if (anon && authViews[view]) view = 'home';
     showErr(''); showOk('');
+    if (MODAL_OF[view]) { openModal(MODAL_OF[view]); return; }
+    closeModal();
     activeDeck = null;
-    document.querySelectorAll('section.view').forEach(function (s) { s.classList.remove('active'); });
-    $('view-' + view).classList.add('active');
-    if (view === 'home') { loadTerminal(); if (!anon) loadDeskSummary(); }
-    if (view === 'desk') loadDesk();
-    if (view === 'mine') { loadMine(); loadStats(); }
-    if (view === 'browse') loadBrowse();
-    if (view === 'repos') loadRepos();
-    if (view === 'credits') loadCredits();
+    var sec = SECTION_OF[view] || 'sec-market';
+    ensureSection(sec, true);
+    var el = document.getElementById(sec);
+    if (el) el.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth' });
     loadNotifs();
     if (!anon) loadGamebar();
   }
@@ -885,10 +960,9 @@ details.how-details .how-body { padding: 16px 18px; }
      Focus stays trapped on the input (combobox + aria-activedescendant),
      so the dialog is fully keyboard- and screen-reader-operable. ── */
   var JUMP_ITEMS = [
-    { label: 'Market', kind: 'go', hint: 'Tape, chart, live board', run: function () { show('home'); } },
-    { label: 'My desk', kind: 'go', auth: true, hint: 'Ideas, matches, activity', run: function () { show('desk'); } },
-    { label: 'Positions', kind: 'go', auth: true, hint: 'Your ideas on the exchange', run: function () { show('mine'); } },
-    { label: 'Browse ideas', kind: 'go', auth: true, hint: 'Every public idea', run: function () { show('browse'); } },
+    { label: 'Market', kind: 'go', hint: 'Tape, chart, exchange stats', run: function () { show('home'); } },
+    { label: 'My desk', kind: 'go', auth: true, hint: 'Positions, matches, activity', run: function () { show('desk'); } },
+    { label: 'Idea board', kind: 'go', hint: 'Every public idea, live', run: function () { show('browse'); } },
     { label: 'Repos', kind: 'go', auth: true, hint: 'Opt in, set appetite', run: function () { show('repos'); } },
     { label: 'The Board', kind: 'go', hint: 'Leaderboard + credit wall', run: function () { show('credits'); } },
     { label: 'List an idea', kind: 'do', hint: 'Guided 3-step listing', run: function () {
@@ -968,10 +1042,11 @@ details.how-details .how-body { padding: 16px 18px; }
       return;
     }
     if (!$('jump-overlay').hidden && ev.key === 'Escape') { ev.preventDefault(); closeJump(); return; }
+    if (openModalId && ev.key === 'Escape') { ev.preventDefault(); closeModal(); return; }
     if (ev.key !== '/') return;
     var tag = (document.activeElement || {}).tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-    if (!$('jump-overlay').hidden || !$('match-overlay').hidden || !$('signin-overlay').hidden) return;
+    if (!$('jump-overlay').hidden || !$('match-overlay').hidden || !$('signin-overlay').hidden || openModalId) return;
     ev.preventDefault();
     openJump();
   });
@@ -983,16 +1058,15 @@ details.how-details .how-body { padding: 16px 18px; }
     var w = $('who');
     w.innerHTML = (me.avatar_url ? '<img src="' + esc(me.avatar_url) + '" alt="">' : '') +
       '<span>' + esc(me.display_name || me.username) + '</span>';
-    loadTerminal();
-    loadDeskSummary();
     loadGamebar();
+    startSections(); // (re-)arm lazy sections now that auth state is known
   }
   api('GET', 'me').then(applyIdentity).catch(function () {
     // Not signed in: the terminal is still the page — authed nav and the
     // bell disappear; the pitch and sign-in CTAs appear.
     anon = true;
     document.body.classList.add('anon');
-    loadTerminal();
+    startSections();
   });
 
   // Stale-tab SSO recovery (#20): a tab that decided "anonymous" at load
@@ -1033,7 +1107,7 @@ details.how-details .how-body { padding: 16px 18px; }
       (ev.up ? ' <span class="up">▲</span>' : '') +
       (isExample ? ' <span class="ex">(example)</span>' : '') + '</span>';
   }
-  function loadTape() {
+  function loadTape(refresh) {
     api('GET', 'ticker').then(function (res) {
       var entries = res.ticker || [];
       var repos = res.repos || [];
@@ -1066,8 +1140,8 @@ details.how-details .how-body { padding: 16px 18px; }
       var w = copy.offsetWidth;
       track.style.setProperty('--tape-dur',
         (w ? Math.max(24, Math.round(w / 30)) : Math.max(24, (entries.length + repos.length) * 6)) + 's');
-      initChart(repos);
-    }).catch(function () { $('tape-track').innerHTML = ''; initChart([]); });
+      initChart(repos, refresh);
+    }).catch(function () { if (!refresh) { $('tape-track').innerHTML = ''; initChart([]); } });
   }
   function fmtDelta(delta) {
     var s = Math.abs(delta).toFixed(1);
@@ -1105,8 +1179,14 @@ details.how-details .how-body { padding: 16px 18px; }
     return { repoID: 'org/example-repo', symbol: 'EXAMPLE', points: points, bars: bars,
       current: v, delta: 0, example: true };
   })();
-  function initChart(repos) {
+  function initChart(repos, refresh) {
     chartRepos = repos;
+    // On a background refresh keep the user's selected repo and cached
+    // series — only re-fetch the current one so the live dot stays fresh.
+    if (refresh) {
+      if (chartCurrent) { delete chartCache[chartCurrent]; showChart(chartCurrent); }
+      return;
+    }
     var chips = $('chart-chips');
     if (!repos.length) {
       chips.innerHTML = '';
@@ -1279,7 +1359,16 @@ details.how-details .how-body { padding: 16px 18px; }
       renderBoard($('board-new'), [], 'Markets are warming up…');
     });
   }
-  function loadTerminal() { loadTape(); loadMktStats(); loadBoard(); }
+  function loadTerminal(refresh) { loadTape(refresh); loadMktStats(); }
+  // Sticky terminal: the page is meant to be LEFT OPEN like a market
+  // screen — tape, stats, board, and desk summary refresh on their own.
+  setInterval(function () {
+    if (document.hidden) return;
+    if (!sectionLoaded['sec-market']) return; // identity not resolved yet
+    loadTerminal(true);
+    if (sectionLoaded['sec-ideas']) loadBoard();
+    if (!anon) loadDeskSummary();
+  }, 90000);
 
   /* ── slim desk summary on home (signed in): cheap counts only —
      no match scoring here (that stays on the desk, where it's wanted). ── */
@@ -1412,10 +1501,8 @@ details.how-details .how-body { padding: 16px 18px; }
       d.querySelector('[data-act=del]').addEventListener('click', function () {
         if (!confirm('Delete "' + idea.title + '"?')) return;
         api('DELETE', 'ideas/' + idea.id).then(function () {
-          var active = document.querySelector('section.view.active');
-          if (active && active.id === 'view-mine') loadMine();
-          else if (active && active.id === 'view-desk') loadDesk();
-          else show('home');
+          if (openModalId) closeModal();
+          loadDesk(); loadStats(); loadDeskSummary();
         }).catch(function (e) { showErr(e.message); });
       });
     }
@@ -1425,14 +1512,6 @@ details.how-details .how-body { padding: 16px 18px; }
     el.innerHTML = '';
     if (!ideas.length) { el.innerHTML = '<div class="empty">' + emptyMsg + '</div>'; return; }
     ideas.forEach(function (i) { el.appendChild(ideaCard(i, mine)); });
-  }
-  function loadMine() {
-    api('GET', 'ideas').then(function (ideas) {
-      renderList($('mine-list'), ideas, true,
-        'No ideas yet — list your first and earn the First Dibs badge.<br><button class="pill primary" id="mine-empty-new">＋ List an idea</button>');
-      var b = $('mine-empty-new');
-      if (b) b.addEventListener('click', function () { openEdit(null); });
-    }).catch(function (e) { showErr(e.message); });
   }
   function loadBrowse() {
     api('GET', 'ideas?scope=public').then(function (ideas) {
@@ -1582,10 +1661,9 @@ details.how-details .how-body { padding: 16px 18px; }
     show('edit');
     $('f-title').focus();
   }
-  $('btn-new').addEventListener('click', function () { openEdit(null); });
   $('btn-home-new').addEventListener('click', function () { openEdit(null); });
   $('btn-desk-new').addEventListener('click', function () { openEdit(null); });
-  $('btn-cancel').addEventListener('click', function () { show('home'); });
+  $('btn-cancel').addEventListener('click', function () { closeModal(); });
   // The ever-present navbar CTA — THE action of the site. Signed out, it
   // routes to a friendly sign-in interstitial instead of a dead end.
   $('nav-list-cta').addEventListener('click', function () {
@@ -1610,7 +1688,7 @@ details.how-details .how-body { padding: 16px 18px; }
   }
   $('btn-save').addEventListener('click', function () {
     if (!$('idea-form').reportValidity()) return;
-    saveIdea().then(function () { show('mine'); }).catch(function (e) { showErr(e.message); });
+    saveIdea().then(function () { show('desk'); }).catch(function (e) { showErr(e.message); });
   });
   // Step ① → ② : advancing auto-runs the AI embellishment.
   $('idea-form').addEventListener('submit', function (ev) {
@@ -1834,7 +1912,7 @@ details.how-details .how-body { padding: 16px 18px; }
     if (!url) { showErr('Paste the GitHub issue link first.'); return; }
     api('POST', 'ideas/' + launchIdea.id + '/confirm-issue', { issueURL: url })
       .then(function () {
-        show('mine');
+        show('desk');
         celebrate('<b>Settled!</b> Your idea is a GitHub issue with your name on it. ' +
           '<b>+100 points</b> — welcome to the leaderboard.');
       })
@@ -1851,7 +1929,9 @@ details.how-details .how-body { padding: 16px 18px; }
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
     if (!$('match-overlay').hidden) return;
     if (!activeDeck || !document.body.contains(activeDeck.stage)) return;
-    if (!activeDeck.stage.closest('section.view').classList.contains('active')) return;
+    if (activeDeck.stage.offsetParent === null) return; // hidden zone / closed modal
+    // A deck under an open modal must not react to the modal's keys.
+    if (openModalId && !activeDeck.stage.closest('#' + openModalId)) return;
     if (activeDeck.stage.closest('[hidden]')) return; // e.g. a hidden desk zone
     var btn = ev.key === 'ArrowLeft' ? activeDeck.no : activeDeck.yes;
     if (btn && !btn.disabled) { ev.preventDefault(); btn.click(); }
@@ -2069,7 +2149,7 @@ details.how-details .how-body { padding: 16px 18px; }
         ' has an idea — let me TLDR it for you:</b><br>' + esc(res.tldr || idea.body.slice(0, 200));
       renderDeck($('match-stage'), res.matches.map(function (m) { return { kind: 'repo', idea: idea, m: m }; }),
         repoMatchCard,
-        'No more matches for this idea. Check back as repos opt in — or sharpen the idea.<br><button class="pill" data-goto="mine">← Your positions</button>');
+        'No more matches for this idea. Check back as repos opt in — or sharpen the idea.<br><button class="pill" data-goto="desk">← Your desk</button>');
     }).catch(function (e) { showErr(e.message); });
   }
 

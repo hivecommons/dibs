@@ -29,8 +29,8 @@ func TestGuidedFlowUIStrings(t *testing.T) {
 			`id="wiz-stepper"`,
 			"Polishing your idea with AI",
 			"AI polish unavailable — your draft is ready",
-			// 3. the desk (its own view since the terminal redesign) zones
-			`id="view-desk"`,
+			// 3. the desk (a stacked section since the one-page collapse) zones
+			`id="sec-desk"`,
 			"Your desk",
 			"My ideas",
 			"Matches to review",

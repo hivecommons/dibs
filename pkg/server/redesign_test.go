@@ -8,8 +8,9 @@ import (
 
 // TestTerminalHomeForEveryone pins the terminal-redesign invariants: the
 // market terminal (tape, chart, stats, live board) is everyone's home page —
-// not gated behind the logged-out landing class — the desk lives in its own
-// view, and the jump menu replaces the persistent nav row.
+// not gated behind the logged-out landing class — and the jump menu replaces
+// the persistent nav row. After the one-page collapse, every destination is
+// a stacked section on a single scrolling page; flows are modals on top.
 func TestTerminalHomeForEveryone(t *testing.T) {
 	h := newTestServer(t, "/")
 	rec := doJSON(t, h, "GET", "/", "", nil)
@@ -24,8 +25,20 @@ func TestTerminalHomeForEveryone(t *testing.T) {
 		`class="chart-panel"`,
 		`id="mkt-stats"`,
 		`id="board-trending"`,
-		// desk moved to its own view; home carries a slim summary strip
-		`id="view-desk"`,
+		// one page: every destination is a stacked section
+		`id="sec-market"`,
+		`id="sec-desk" data-auth`,
+		`id="sec-ideas"`,
+		`id="sec-repos" data-auth`,
+		`id="sec-board"`,
+		// flows are modals over the one page
+		`id="modal-edit" hidden role="dialog" aria-modal="true"`,
+		`id="modal-idea"`,
+		`id="modal-match"`,
+		`id="modal-launch"`,
+		`id="modal-feed"`,
+		`data-close-modal`,
+		// home carries a slim desk summary strip for signed-in users
 		`class="desk-strip" data-auth`,
 		"Open your desk",
 		// jump menu: dialog + combobox/listbox semantics + header affordance
@@ -45,6 +58,12 @@ func TestTerminalHomeForEveryone(t *testing.T) {
 	}
 	if strings.Contains(body, `<nav aria-label="Main">`) {
 		t.Errorf("persistent nav button row should be replaced by the jump menu")
+	}
+	// The multi-view shell is gone: no swappable section.view panes remain.
+	for _, gone := range []string{`id="view-home"`, `id="view-mine"`, `id="view-desk"`, `class="view active"`, `section.view`} {
+		if strings.Contains(body, gone) {
+			t.Errorf("one-page collapse left old multi-view artifact %q", gone)
+		}
 	}
 }
 
