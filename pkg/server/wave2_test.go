@@ -381,6 +381,71 @@ func TestIdeaMatchesReturnOneHiveThenTwoNonHiveCNCF(t *testing.T) {
 	}
 }
 
+func TestAdminRematchDryApplyAndPayload(t *testing.T) {
+	t.Setenv("DIBS_ADMINS", "alice")
+	f := newWave2Server(t, nil,
+		catalog.Project{Name: "Envoy", RepoID: "envoyproxy/envoy", RepoURL: "https://github.com/envoyproxy/envoy", Maturity: "graduated", Category: "Service Proxy", Description: "kubernetes marketplace matching proxy"},
+	)
+	idea := f.createIdea(t, "bob-session", "Kubernetes marketplace matching",
+		"kubernetes marketplace matching for open source repos", "public")
+
+	rec := doJSON(t, f.h, "POST", "/api/admin/ideas/"+idea.ID+"/rematch?dry=1", "bob-session", nil)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("non-admin dry rematch: want 403, got %d %s", rec.Code, rec.Body.String())
+	}
+
+	rec = doJSON(t, f.h, "POST", "/api/admin/ideas/"+idea.ID+"/rematch?dry=1", "alice-session", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("admin dry rematch: %d %s", rec.Code, rec.Body.String())
+	}
+	var dry struct {
+		Dry     bool `json:"dry"`
+		Matches struct {
+			Count int               `json:"count"`
+			Hive  []store.Match     `json:"hive"`
+			CNCF  []store.CNCFMatch `json:"cncf"`
+		} `json:"matches"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&dry); err != nil {
+		t.Fatalf("decode dry: %v", err)
+	}
+	if !dry.Dry || len(dry.Matches.Hive) == 0 || len(dry.Matches.CNCF) == 0 {
+		t.Fatalf("dry rematch missing output: %+v", dry)
+	}
+	got, _ := f.store.Get(idea.ID)
+	if len(got.Matches) != 0 || len(got.CNCFMatches) != 0 {
+		t.Fatalf("dry rematch persisted suggestions: %+v", got)
+	}
+
+	rec = doJSON(t, f.h, "POST", "/api/admin/ideas/"+idea.ID+"/rematch", "alice-session", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("admin apply rematch: %d %s", rec.Code, rec.Body.String())
+	}
+	got, _ = f.store.Get(idea.ID)
+	if len(got.Matches) == 0 || len(got.CNCFMatches) == 0 || got.MatchesUpdatedAt.IsZero() {
+		t.Fatalf("apply did not persist suggestions: %+v", got)
+	}
+
+	rec = doJSON(t, f.h, "GET", "/api/admin/ideas", "alice-session", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("admin ideas: %d %s", rec.Code, rec.Body.String())
+	}
+	var ideas []struct {
+		ID      string `json:"id"`
+		Matches struct {
+			Count int               `json:"count"`
+			Hive  []store.Match     `json:"hive"`
+			CNCF  []store.CNCFMatch `json:"cncf"`
+		} `json:"matches"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&ideas); err != nil {
+		t.Fatalf("decode admin ideas: %v", err)
+	}
+	if len(ideas) != 1 || ideas[0].ID != idea.ID || len(ideas[0].Matches.Hive) == 0 || len(ideas[0].Matches.CNCF) == 0 {
+		t.Fatalf("admin payload missing stored matches: %+v", ideas)
+	}
+}
+
 // TestRepoFeedCandidatesAndPass: public ideas appear as candidates for repo
 // owners; pass hides them for that repo only; ideator pass hides repos.
 func TestRepoFeedCandidatesAndPass(t *testing.T) {

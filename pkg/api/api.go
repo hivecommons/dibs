@@ -50,6 +50,7 @@ func (a *API) Register(mux *http.ServeMux, basePath string) {
 	mux.HandleFunc("GET "+basePath+"/api/me", a.handleMe)
 	mux.HandleFunc("GET "+basePath+"/api/me/stats", a.handleMyStats)
 	mux.HandleFunc("GET "+basePath+"/api/admin/ideas", a.handleAdminIdeas)
+	mux.HandleFunc("POST "+basePath+"/api/admin/ideas/{id}/rematch", a.handleAdminRematch)
 	mux.HandleFunc("GET "+basePath+"/api/intake/config", intake.HandleConfig)
 	mux.HandleFunc("POST "+basePath+"/api/intake", intake.HandleUpload)
 	mux.HandleFunc("GET "+basePath+"/api/ideas", a.handleListIdeas)
@@ -77,12 +78,22 @@ func identity(r *http.Request) *auth.Identity {
 	return auth.FromContext(r.Context())
 }
 
+func ideaForViewer(idea *store.Idea, viewer string) *store.Idea {
+	cp := *idea
+	if cp.Author != viewer {
+		cp.SuggestionsSeenAt = time.Time{}
+	}
+	return &cp
+}
+
 func (a *API) handleMe(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, identity(r))
 }
 
 type adminMatchSummary struct {
-	Count int `json:"count"`
+	Count int               `json:"count"`
+	Hive  []store.Match     `json:"hive"`
+	CNCF  []store.CNCFMatch `json:"cncf,omitempty"`
 	Top   []struct {
 		RepoID string  `json:"repoID"`
 		Score  float64 `json:"score"`
@@ -90,6 +101,7 @@ type adminMatchSummary struct {
 }
 
 type adminIdea struct {
+	ID            string            `json:"id"`
 	Author        string            `json:"author"`
 	AuthorDisplay string            `json:"authorDisplay,omitempty"`
 	Title         string            `json:"title"`
@@ -102,8 +114,8 @@ type adminIdea struct {
 	Matches       adminMatchSummary `json:"matches"`
 }
 
-func summarizeMatches(matches []store.Match) adminMatchSummary {
-	out := adminMatchSummary{Count: len(matches)}
+func summarizeMatches(matches []store.Match, cncf []store.CNCFMatch) adminMatchSummary {
+	out := adminMatchSummary{Count: len(matches) + len(cncf), Hive: matches, CNCF: cncf}
 	for _, m := range matches {
 		if len(out.Top) >= 3 {
 			break
@@ -116,10 +128,17 @@ func summarizeMatches(matches []store.Match) adminMatchSummary {
 	return out
 }
 
-func (a *API) handleAdminIdeas(w http.ResponseWriter, r *http.Request) {
+func (a *API) requireAdmin(w http.ResponseWriter, r *http.Request) bool {
 	id := identity(r)
 	if id == nil || !auth.IsAdmin(id.Username) {
 		writeError(w, http.StatusForbidden, "admin access required")
+		return false
+	}
+	return true
+}
+
+func (a *API) handleAdminIdeas(w http.ResponseWriter, r *http.Request) {
+	if !a.requireAdmin(w, r) {
 		return
 	}
 	ideas, err := a.Store.ListAll()
@@ -130,6 +149,7 @@ func (a *API) handleAdminIdeas(w http.ResponseWriter, r *http.Request) {
 	out := make([]adminIdea, 0, len(ideas))
 	for _, idea := range ideas {
 		out = append(out, adminIdea{
+			ID:            idea.ID,
 			Author:        idea.Author,
 			AuthorDisplay: idea.AuthorDisplay,
 			Title:         idea.Title,
@@ -139,10 +159,37 @@ func (a *API) handleAdminIdeas(w http.ResponseWriter, r *http.Request) {
 			Status:        idea.Status,
 			CreatedAt:     idea.CreatedAt,
 			UpdatedAt:     idea.UpdatedAt,
-			Matches:       summarizeMatches(idea.Matches),
+			Matches:       summarizeMatches(idea.Matches, idea.CNCFMatches),
 		})
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+func (a *API) handleAdminRematch(w http.ResponseWriter, r *http.Request) {
+	if !a.requireAdmin(w, r) {
+		return
+	}
+	if a.Engine == nil {
+		writeError(w, http.StatusServiceUnavailable, "matching not configured")
+		return
+	}
+	idea, err := a.Store.Get(r.PathValue("id"))
+	if err != nil {
+		status, msg := storeErrStatus(err)
+		writeError(w, status, msg)
+		return
+	}
+	persist := r.URL.Query().Get("dry") != "1"
+	tldr, hive, cncf, err := a.Engine.RematchIdea(r.Context(), idea, persist)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"dry":     !persist,
+		"tldr":    tldr,
+		"matches": adminMatchSummary{Count: len(hive) + len(cncf), Hive: hive, CNCF: cncf},
+	})
 }
 
 // ideaInput is the client-writable subset of an idea.
@@ -201,7 +248,11 @@ func (a *API) handleListIdeas(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, "internal error")
 			return
 		}
-		writeJSON(w, http.StatusOK, ideas)
+		out := make([]*store.Idea, 0, len(ideas))
+		for _, idea := range ideas {
+			out = append(out, ideaForViewer(idea, id.Username))
+		}
+		writeJSON(w, http.StatusOK, out)
 	default:
 		writeError(w, http.StatusBadRequest, `scope must be "mine" or "public"`)
 	}
@@ -280,7 +331,7 @@ func (a *API) offeredToCallerRepo(idea *store.Idea, username string) bool {
 
 func (a *API) handleGetIdea(w http.ResponseWriter, r *http.Request) {
 	if idea := a.loadAuthorized(w, r, false); idea != nil {
-		writeJSON(w, http.StatusOK, idea)
+		writeJSON(w, http.StatusOK, ideaForViewer(idea, identity(r).Username))
 	}
 }
 

@@ -113,21 +113,38 @@ type Match struct {
 	ByLLM bool `json:"byLLM,omitempty"`
 }
 
+// CNCFMatch is a cached idea↔CNCF project fit score.
+type CNCFMatch struct {
+	Name     string  `json:"name"`
+	RepoID   string  `json:"repoID"`
+	RepoURL  string  `json:"repoURL"`
+	Maturity string  `json:"maturity"`
+	Category string  `json:"category"`
+	Score    float64 `json:"score"`
+	Reason   string  `json:"reason"`
+	ByLLM    bool    `json:"byLLM,omitempty"`
+}
+
 // Idea is one ideator-authored idea.
 type Idea struct {
-	ID            string    `json:"id"`
-	Author        string    `json:"author"`        // identity key (github login / provider:sub)
-	AuthorDisplay string    `json:"authorDisplay"` // human name for credit
-	Title         string    `json:"title"`
-	Tags          []string  `json:"tags,omitempty"`
-	Symbol        string    `json:"symbol,omitempty"` // $TICKER-style display symbol, assigned at creation
-	Body          string    `json:"body"`             // markdown
-	TLDR          string    `json:"tldr,omitempty"`   // filled by the matching wave
-	Visibility    string    `json:"visibility"`       // public | private
-	Status        string    `json:"status"`
-	CreatedAt     time.Time `json:"createdAt"`
-	UpdatedAt     time.Time `json:"updatedAt"`
-	Matches       []Match   `json:"matches"`
+	ID            string      `json:"id"`
+	Author        string      `json:"author"`        // identity key (github login / provider:sub)
+	AuthorDisplay string      `json:"authorDisplay"` // human name for credit
+	Title         string      `json:"title"`
+	Tags          []string    `json:"tags,omitempty"`
+	Symbol        string      `json:"symbol,omitempty"` // $TICKER-style display symbol, assigned at creation
+	Body          string      `json:"body"`             // markdown
+	TLDR          string      `json:"tldr,omitempty"`   // filled by the matching wave
+	Visibility    string      `json:"visibility"`       // public | private
+	Status        string      `json:"status"`
+	CreatedAt     time.Time   `json:"createdAt"`
+	UpdatedAt     time.Time   `json:"updatedAt"`
+	Matches       []Match     `json:"matches"`
+	CNCFMatches   []CNCFMatch `json:"cncfMatches,omitempty"`
+	// MatchesUpdatedAt is bumped whenever stored hive/CNCF suggestions change.
+	MatchesUpdatedAt time.Time `json:"matchesUpdatedAt,omitempty"`
+	// SuggestionsSeenAt records when the author last opened this idea's suggestions.
+	SuggestionsSeenAt time.Time `json:"suggestionsSeenAt,omitempty"`
 	// Offers are the repos the ideator explicitly offered this idea to.
 	Offers []Offer `json:"offers,omitempty"`
 	// PassedRepos are repos the ideator swiped away; they never resurface
@@ -384,11 +401,19 @@ func (s *Store) Update(idea *Idea) error {
 	if idea.Title != existing.Title || idea.Body != existing.Body {
 		idea.TLDR = ""
 		idea.Matches = []Match{}
+		idea.CNCFMatches = []CNCFMatch{}
+		idea.MatchesUpdatedAt = time.Time{}
+		idea.SuggestionsSeenAt = time.Time{}
 	} else {
 		idea.TLDR = existing.TLDR
 		if idea.Matches == nil {
 			idea.Matches = existing.Matches
 		}
+		if idea.CNCFMatches == nil {
+			idea.CNCFMatches = existing.CNCFMatches
+		}
+		idea.MatchesUpdatedAt = existing.MatchesUpdatedAt
+		idea.SuggestionsSeenAt = existing.SuggestionsSeenAt
 	}
 	return s.persistLocked(idea)
 }
