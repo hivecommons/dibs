@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤝</text></svg>">
-<title>Dibs — the open-source idea exchange</title>
+<title>DIBS — the open-source idea exchange</title>
 <style>
 :root {
   --bg: #0d1117; --panel: #1c2128; --panel-2: #22272e; --line: #30363d;
@@ -516,7 +516,7 @@ details.how-details .how-body { padding: 16px 18px; }
 </div>
 <header>
   <div class="header-shell">
-    <button class="logo" data-goto="home" aria-label="Dibs home">Di<span>bs</span></button>
+    <button class="logo" data-goto="home" aria-label="DIBS home">DI<span>BS</span></button>
     <button id="jump-btn" aria-haspopup="dialog" aria-controls="jump-overlay" title="Jump anywhere">Jump<kbd id="jump-kbd">⌘K</kbd></button>
     <span class="hdr-spacer"></span>
     <button id="nav-list-cta" aria-label="List an idea">＋ List an idea</button>
@@ -698,7 +698,7 @@ details.how-details .how-body { padding: 16px 18px; }
     <div class="why-not">
       <h3>Why not just open an issue?</h3>
       <p class="why-hook">Most issues filed into open-source queues are ignored, misunderstood,
-      or never implemented at all. Dibs exists to raise the odds your idea gets used
+      or never implemented at all. DIBS exists to raise the odds your idea gets used
       without you building it.</p>
       <div class="why-grid">
         <div class="panel">
@@ -726,12 +726,12 @@ details.how-details .how-body { padding: 16px 18px; }
             <p>Review matched repos and offer the idea to the ones you choose.
             Both sides must accept.</p></div>
           <div class="step"><span class="n">3</span><h4>File the issue</h4>
-            <p>On acceptance, Dibs builds a prefilled GitHub issue. You file it from your
+            <p>On acceptance, DIBS builds a prefilled GitHub issue. You file it from your
             own account with the <code>ideated</code> label.</p></div>
         </div>
         <div class="credit-note">
           The all-contributors spec credits ideas. The CRediT taxonomy credits
-          conceptualization. Dibs records that credit publicly.
+          conceptualization. DIBS records that credit publicly.
         </div>
       </div>
     </details>
@@ -887,7 +887,7 @@ details.how-details .how-body { padding: 16px 18px; }
     <form class="panel" id="launch-form">
     <label for="l-title">Issue title</label>
     <input type="text" id="l-title" maxlength="200" required>
-    <label for="l-body">Issue body (markdown; Dibs footer appended)</label>
+    <label for="l-body">Issue body (markdown; DIBS footer appended)</label>
     <textarea id="l-body" class="md" required></textarea>
     <div class="form-actions">
       <button type="submit" class="pill primary" id="btn-launch">Open prefilled GitHub issue</button>
@@ -953,14 +953,14 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
 <div id="signin-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="so-title">
   <div class="mo-card">
     <h2 id="so-title">Sign in to list an idea</h2>
-    <p>Dibs uses your Hive Hub account. Sign-in opens in a new tab; this page
+    <p>DIBS uses your Hive Hub account. Sign-in opens in a new tab; this page
     picks up the session automatically.</p>
     <a class="pill primary" id="so-signin" href="__HUB_URL__" target="_blank" rel="noopener">Sign in</a>
     <button class="pill" id="so-close">Cancel</button>
   </div>
 </div>
 
-<footer>Dibs · a KubeStellar project</footer>
+<footer>DIBS · a KubeStellar project</footer>
 
 <script>
 /* All URLs are RELATIVE so the app works at the root (dibs.kubestellar.io)
@@ -2491,7 +2491,7 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
   }
 
   /* ── launch: file the issue yourself via a prefilled GitHub URL.
-     Dibs never calls the GitHub API here — the issue is created by YOU,
+     DIBS never calls the GitHub API here — the issue is created by YOU,
      under your account, so GitHub natively attributes it to you. ── */
   var launchIdea = null;
   var launchFullBody = '';
