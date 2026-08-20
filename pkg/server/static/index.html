@@ -341,20 +341,50 @@ details.how-details .how-body { padding: 16px 18px; }
 /* ── the terminal: repo value-index chart ── */
 .hero.compact { padding: 26px 0 18px; }
 .hero.compact h1 { font-size: 1.8rem; }
-.chart-panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px 12px; margin: 18px 0 0; }
+.market-layout { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 14px; align-items: stretch; margin: 18px 0 0; }
+.watchlist-panel, .chart-panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
+.watchlist-panel { display: flex; flex-direction: column; min-height: 0; max-height: 418px; overflow: hidden; }
+.watchlist-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 12px 12px 8px; border-bottom: 1px solid var(--line); font-size: .72rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.watchlist-count { font-family: var(--font-mono); font-weight: 700; letter-spacing: 0; text-transform: none; }
+#watchlist-filter { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: var(--bg); font-family: var(--font-mono); font-size: .78rem; padding: 9px 11px; }
+.watchlist-list { overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line) transparent; padding: 4px; }
+.watchlist-list::-webkit-scrollbar { width: 8px; height: 8px; }
+.watchlist-list::-webkit-scrollbar-thumb { background: var(--line); border-radius: 999px; }
+.watch-row { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) 70px 64px; gap: 8px; align-items: center; background: transparent; border: 1px solid transparent; border-left: 2px solid transparent; color: var(--text); border-radius: var(--radius); padding: 8px 8px 8px 9px; cursor: pointer; font: inherit; text-align: left; }
+.watch-row:hover, .watch-row:focus-visible { background: var(--panel-2); border-color: var(--line); outline: none; }
+.watch-row[aria-selected="true"] { background: rgba(244,199,95,.07); border-color: rgba(244,199,95,.32); border-left-color: var(--amber); }
+.watch-meta { min-width: 0; }
+.watch-symbol { display: block; font-family: var(--font-mono); font-size: .85rem; font-weight: 800; color: var(--text); letter-spacing: .02em; }
+.watch-name { display: block; color: var(--muted); font-size: .72rem; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.watch-spark { width: 70px; height: 24px; color: var(--muted); }
+.watch-spark svg { display: block; width: 70px; height: 24px; }
+.watch-price { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.watch-value { display: block; font-size: .82rem; font-weight: 800; }
+.watch-delta { display: inline-block; margin-top: 3px; border-radius: 4px; padding: 1px 5px; font-size: .68rem; font-weight: 800; }
+.watch-delta.up { color: var(--green); background: rgba(116,223,154,.1); }
+.watch-delta.down { color: var(--red); background: rgba(255,126,126,.1); }
+.watch-delta.flat { color: var(--muted); background: rgba(168,179,194,.08); }
+.watch-empty { padding: 26px 10px; text-align: center; color: var(--muted); font-size: .82rem; }
+.chart-panel { padding: 16px 18px 12px; margin: 0; min-width: 0; }
 .chart-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-.chart-title-wrap { display: flex; align-items: baseline; gap: 10px; }
+.chart-title-wrap { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
 .chart-sym { font-family: var(--font-mono); font-weight: 800; font-size: 1.25rem; color: var(--amber); }
-.chart-repo { color: var(--muted); font-size: .85rem; font-family: var(--font-mono); }
+.chart-repo { color: var(--muted); font-size: .85rem; font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chart-quote { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 1.25rem; font-weight: 800; }
 .chart-quote .qd { font-size: .85rem; font-weight: 700; margin-left: 6px; }
 .chart-quote .qd.up { color: var(--green); }
 .chart-quote .qd.down { color: var(--red); }
 .chart-quote .ex { color: var(--muted); font-style: italic; font-size: .72rem; font-weight: 400; margin-left: 8px; }
-.chip-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 4px; }
-.chip-row button { font-family: var(--font-mono); font-size: .74rem; font-weight: 700; letter-spacing: .02em; background: var(--panel-2); border: 1px solid var(--line); color: var(--muted); border-radius: 4px; padding: 3px 10px; cursor: pointer; }
-.chip-row button:hover, .chip-row button:focus-visible { color: var(--text); border-color: var(--amber); }
-.chip-row button[aria-selected="true"] { color: #080b0f; background: var(--amber); border-color: var(--amber); }
+@media (max-width: 800px) {
+  .market-layout { grid-template-columns: 1fr; }
+  .watchlist-panel { max-height: none; }
+  .watchlist-list { display: flex; gap: 6px; overflow-x: auto; overflow-y: hidden; padding: 6px; }
+  .watch-row { grid-template-columns: minmax(92px, 1fr) 58px; grid-template-areas: "meta price" "spark spark"; flex: 0 0 188px; }
+  .watch-meta { grid-area: meta; }
+  .watch-spark { grid-area: spark; width: 100%; }
+  .watch-spark svg { width: 100%; }
+  .watch-price { grid-area: price; }
+}
 #chart-stage svg { display: block; width: 100%; height: auto; }
 #chart-stage .grid-line { stroke: var(--line); stroke-width: 1; stroke-dasharray: 2 4; }
 #chart-stage .axis-label { fill: var(--muted); font-family: var(--font-mono); font-size: 10px; font-variant-numeric: tabular-nums; }
@@ -491,7 +521,13 @@ details.how-details .how-body { padding: 16px 18px; }
     </div>
   </div>
   <!-- the terminal: everyone's home — derived repo value-index chart -->
-  <div class="chart-panel" aria-label="Repo value index chart">
+  <div class="market-layout">
+    <aside class="watchlist-panel" aria-label="Listed repo watchlist">
+      <div class="watchlist-head"><span>Watchlist</span><span class="watchlist-count" id="watchlist-count"></span></div>
+      <input type="text" id="watchlist-filter" autocomplete="off" placeholder="filter symbol or repo" aria-label="Filter watchlist">
+      <div class="watchlist-list" id="chart-watchlist" role="listbox" aria-label="Listed repos"></div>
+    </aside>
+    <div class="chart-panel" aria-label="Repo value index chart">
       <div class="chart-head">
         <div class="chart-title-wrap">
           <span class="chart-sym" id="chart-sym"></span>
@@ -499,7 +535,6 @@ details.how-details .how-body { padding: 16px 18px; }
         </div>
         <div class="chart-quote" id="chart-quote" aria-live="polite"></div>
       </div>
-      <div class="chip-row" id="chart-chips" role="tablist" aria-label="Listed repos"></div>
       <div id="chart-stage"></div>
       <div class="chart-legend" id="chart-legend">
         <button class="legend-chip on" data-series="ideas" aria-pressed="true"><span class="sw sw-ideas"></span>ideas listed/matched</button>
@@ -507,6 +542,7 @@ details.how-details .how-body { padding: 16px 18px; }
         <span class="chart-note" id="chart-note">Index derived from offers, acceptances, and settlements.</span>
       </div>
     </div>
+  </div>
   <div class="mkt-stats" id="mkt-stats" aria-label="Exchange statistics"></div>
 </section>
 
@@ -1210,34 +1246,145 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
     return { repoID: 'org/example-repo', symbol: 'EXAMPLE', points: points, bars: bars,
       current: v, delta: 0, example: true };
   })();
+  var chartFilter = '';
+  var watchlistSparkScheduled = false;
+  var watchlistSparkLoading = {};
+  function repoDisplayName(r) {
+    return r.name || r.title || r.repo || r.repoID || r.symbol || '';
+  }
+  function filteredChartRepos() {
+    var q = chartFilter.trim().toLowerCase();
+    if (!q) return chartRepos;
+    return chartRepos.filter(function (r) {
+      return String(r.symbol || '').toLowerCase().indexOf(q) !== -1 ||
+        repoDisplayName(r).toLowerCase().indexOf(q) !== -1 ||
+        String(r.repoID || '').toLowerCase().indexOf(q) !== -1;
+    });
+  }
+  function chartRows() {
+    var list = $('chart-watchlist');
+    return list ? Array.prototype.slice.call(list.querySelectorAll('.watch-row')) : [];
+  }
   function initChart(repos, refresh) {
     chartRepos = repos;
-    // On a background refresh keep the user's selected repo and cached
-    // series — only re-fetch the current one so the live dot stays fresh.
-    if (refresh) {
-      scheduleChartRotation();
-      if (chartCurrent) { delete chartCache[chartCurrent]; showChart(chartCurrent); }
-      return;
-    }
-    var chips = $('chart-chips');
+    renderWatchlist();
     if (!repos.length) {
       chartCurrent = null;
-      chips.innerHTML = '';
       renderChart(CHART_EXAMPLE);
       scheduleChartRotation();
       return;
     }
-    chips.innerHTML = repos.map(function (r, i) {
-      return '<button role="tab" aria-selected="' + (i === 0) + '" data-repo="' + esc(r.repoID) + '">$' + esc(r.symbol) + '</button>';
-    }).join('');
-    chips.querySelectorAll('button').forEach(function (b) {
-      b.addEventListener('click', function () { showChart(b.dataset.repo); });
-    });
-    showChart(repos[0].repoID); // default: the most active repo
+    var hasCurrent = chartCurrent && repos.some(function (r) { return r.repoID === chartCurrent; });
+    if (refresh && hasCurrent) {
+      delete chartCache[chartCurrent];
+      showChart(chartCurrent);
+      scheduleChartRotation();
+      return;
+    }
+    showChart((hasCurrent ? chartCurrent : repos[0].repoID));
     scheduleChartRotation();
   }
-  function chartButtons() {
-    return Array.prototype.slice.call($('chart-chips').querySelectorAll('button'));
+  function renderWatchlist() {
+    var list = $('chart-watchlist');
+    if (!list) return;
+    var repos = filteredChartRepos();
+    $('watchlist-count').textContent = repos.length ? repos.length + '/' + chartRepos.length : '0/' + chartRepos.length;
+    if (!chartRepos.length) {
+      list.innerHTML = '<div class="watch-empty">No repos listed yet.</div>';
+      return;
+    }
+    if (!repos.length) {
+      list.innerHTML = '<div class="watch-empty">No matches.</div>';
+      return;
+    }
+    list.innerHTML = repos.map(function (r) {
+      var d = fmtDelta(Number(r.delta) || 0);
+      var current = Number(r.value || 0);
+      return '<button type="button" class="watch-row" role="option" aria-selected="' +
+        String(r.repoID === chartCurrent) + '" data-repo="' + esc(r.repoID) + '">' +
+        '<span class="watch-meta"><span class="watch-symbol">$' + esc(r.symbol) + '</span>' +
+        '<span class="watch-name">' + esc(repoDisplayName(r)) + '</span></span>' +
+        '<span class="watch-spark" aria-hidden="true"></span>' +
+        '<span class="watch-price"><span class="watch-value">' + current.toFixed(1) + '</span>' +
+        '<span class="watch-delta ' + d.cls + '">' + d.text + '</span></span></button>';
+    }).join('');
+    chartRows().forEach(function (row) {
+      row.addEventListener('click', function (ev) {
+        if (ev.isTrusted) noteChartInteraction();
+        showChart(row.dataset.repo);
+      });
+    });
+    syncWatchlistSelection();
+    scheduleWatchlistSparks();
+  }
+  function syncWatchlistSelection() {
+    chartRows().forEach(function (row) {
+      var selected = row.dataset.repo === chartCurrent;
+      row.setAttribute('aria-selected', String(selected));
+      if (selected && row.scrollIntoView) row.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    });
+  }
+  function scheduleWatchlistSparks() {
+    if (watchlistSparkScheduled) return;
+    watchlistSparkScheduled = true;
+    var idle = window.requestIdleCallback || function (cb) { return setTimeout(function () { cb({ timeRemaining: function () { return 50; } }); }, 40); };
+    idle(processWatchlistSparks);
+  }
+  function rowNearWatchlistViewport(row) {
+    var list = $('chart-watchlist');
+    if (!list || !row.getBoundingClientRect) return true;
+    var lr = list.getBoundingClientRect(), rr = row.getBoundingClientRect(), pad = 48;
+    return rr.bottom >= lr.top - pad && rr.top <= lr.bottom + pad &&
+      rr.right >= lr.left - pad && rr.left <= lr.right + pad;
+  }
+  function processWatchlistSparks(deadline) {
+    watchlistSparkScheduled = false;
+    var rows = chartRows();
+    for (var i = 0; i < rows.length; i++) {
+      var repoID = rows[i].dataset.repo;
+      if (rows[i].dataset.sparked === 'true' || !rowNearWatchlistViewport(rows[i])) continue;
+      if (chartCache[repoID]) {
+        renderWatchlistSpark(repoID);
+      } else if (!watchlistSparkLoading[repoID]) {
+        watchlistSparkLoading[repoID] = true;
+        (function (id) {
+          api('GET', 'repos/' + id + '/index').then(function (d) {
+            chartCache[id] = d;
+            renderWatchlistSpark(id);
+            scheduleWatchlistSparks();
+          }).catch(function () { scheduleWatchlistSparks(); });
+        })(repoID);
+        break;
+      }
+      if (deadline && deadline.timeRemaining && deadline.timeRemaining() < 8) break;
+    }
+    if (chartRows().some(function (row) {
+      return row.dataset.sparked !== 'true' && rowNearWatchlistViewport(row) && !watchlistSparkLoading[row.dataset.repo];
+    })) {
+      scheduleWatchlistSparks();
+    }
+  }
+  function renderWatchlistSpark(repoID) {
+    chartRows().forEach(function (row) {
+      if (row.dataset.repo !== repoID) return;
+      var slot = row.querySelector('.watch-spark');
+      if (!slot || !chartCache[repoID]) return;
+      slot.innerHTML = sparkSVG(chartCache[repoID]);
+      row.dataset.sparked = 'true';
+    });
+  }
+  function sparkSVG(d) {
+    var pts = (d.points || []).map(function (p) { return Number(p.value) || 0; });
+    if (!pts.length) return '';
+    var W = 70, H = 24, min = Math.min.apply(null, pts), max = Math.max.apply(null, pts);
+    if (max - min < 1) { max += 0.5; min -= 0.5; }
+    var trend = d.delta > 0 ? 'up' : d.delta < 0 ? 'down' : 'flat';
+    function x(i) { return (W - 2) * (pts.length === 1 ? 0.5 : i / (pts.length - 1)) + 1; }
+    function y(v) { return H - 2 - (H - 4) * ((v - min) / (max - min)); }
+    var line = pts.map(function (v, i) { return (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1); }).join('');
+    return '<svg viewBox="0 0 ' + W + ' ' + H + '" focusable="false">' +
+      '<path d="' + line + '" fill="none" stroke="' + TREND_COLOR[trend] + '" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" opacity=".9"/>' +
+      '</svg>';
   }
   function stopChartRotation() {
     if (chartRotateTimer) clearTimeout(chartRotateTimer);
@@ -1245,14 +1392,14 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
   }
   function chartCanRotate() {
     return chartRepos.length > 1 &&
-      chartButtons().length > 1 &&
+      chartRows().length > 1 &&
       chartPanelVisible &&
       !document.hidden &&
       Date.now() >= chartPausedUntil;
   }
   function scheduleChartRotation() {
     stopChartRotation();
-    if (chartRepos.length <= 1 || chartButtons().length <= 1 || !chartPanelVisible || document.hidden) return;
+    if (chartRepos.length <= 1 || chartRows().length <= 1 || !chartPanelVisible || document.hidden) return;
     chartRotateTimer = setTimeout(rotateChart, Math.max(CHART_ROTATE_MS, chartPausedUntil - Date.now()));
   }
   function noteChartInteraction() {
@@ -1262,21 +1409,20 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
   function rotateChart() {
     chartRotateTimer = null;
     if (chartCanRotate()) {
-      var buttons = chartButtons();
-      var current = buttons.findIndex(function (b) { return b.getAttribute('aria-selected') === 'true'; });
-      buttons[(current + 1) % buttons.length].click();
+      var rows = chartRows();
+      var current = rows.findIndex(function (row) { return row.getAttribute('aria-selected') === 'true'; });
+      showChart(rows[(current + 1) % rows.length].dataset.repo);
     }
     scheduleChartRotation();
   }
   function showChart(repoID) {
     chartCurrent = repoID;
-    $('chart-chips').querySelectorAll('button').forEach(function (b) {
-      b.setAttribute('aria-selected', String(b.dataset.repo === repoID));
-    });
-    if (chartCache[repoID]) { renderChart(chartCache[repoID]); return; }
+    syncWatchlistSelection();
+    if (chartCache[repoID]) { renderChart(chartCache[repoID]); renderWatchlistSpark(repoID); return; }
     $('chart-stage').innerHTML = '<div class="chart-empty">Loading…</div>';
     api('GET', 'repos/' + repoID + '/index').then(function (d) {
       chartCache[repoID] = d;
+      renderWatchlistSpark(repoID);
       if (chartCurrent === repoID) renderChart(d);
     }).catch(function () {
       $('chart-stage').innerHTML = '<div class="chart-empty">Chart unavailable.</div>';
@@ -1364,6 +1510,24 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
     var MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return MON[+m[2] - 1] + ' ' + (+m[3]);
   }
+  var watchlistFilter = $('watchlist-filter');
+  if (watchlistFilter) {
+    watchlistFilter.addEventListener('input', function (ev) {
+      chartFilter = watchlistFilter.value;
+      if (ev.isTrusted) noteChartInteraction();
+      var visible = filteredChartRepos();
+      renderWatchlist();
+      if (visible.length && !visible.some(function (r) { return r.repoID === chartCurrent; })) {
+        showChart(visible[0].repoID);
+      }
+      scheduleChartRotation();
+    });
+  }
+  var watchlistList = $('chart-watchlist');
+  if (watchlistList) {
+    watchlistList.addEventListener('scroll', scheduleWatchlistSparks, { passive: true });
+  }
+
   // Legend chips toggle each bar series and re-render from cache.
   $('chart-legend').querySelectorAll('.legend-chip').forEach(function (b) {
     b.addEventListener('click', function () {
@@ -1378,12 +1542,13 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
   function wireChartRotation() {
     var panel = document.querySelector('.chart-panel');
     if (!panel) return;
-    panel.addEventListener('click', function (ev) { if (ev.isTrusted) noteChartInteraction(); }, true);
-    panel.addEventListener('pointerenter', function (ev) { if (ev.isTrusted) noteChartInteraction(); });
-    panel.addEventListener('pointermove', function (ev) { if (ev.isTrusted) noteChartInteraction(); });
-    panel.addEventListener('pointerleave', function (ev) { if (ev.isTrusted) noteChartInteraction(); });
-    panel.addEventListener('focusin', function (ev) { if (ev.isTrusted) noteChartInteraction(); });
-    panel.addEventListener('keydown', function (ev) { if (ev.isTrusted) noteChartInteraction(); });
+    var interactionArea = document.querySelector('.market-layout') || panel;
+    interactionArea.addEventListener('click', function (ev) { if (ev.isTrusted) noteChartInteraction(); }, true);
+    interactionArea.addEventListener('pointerenter', function (ev) { if (ev.isTrusted) noteChartInteraction(); });
+    interactionArea.addEventListener('pointermove', function (ev) { if (ev.isTrusted) noteChartInteraction(); });
+    interactionArea.addEventListener('pointerleave', function (ev) { if (ev.isTrusted) noteChartInteraction(); });
+    interactionArea.addEventListener('focusin', function (ev) { if (ev.isTrusted) noteChartInteraction(); });
+    interactionArea.addEventListener('keydown', function (ev) { if (ev.isTrusted) noteChartInteraction(); });
     if ('IntersectionObserver' in window) {
       new IntersectionObserver(function (entries) {
         entries.forEach(function (e) {
