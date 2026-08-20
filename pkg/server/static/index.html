@@ -899,10 +899,28 @@ details.how-details .how-body { padding: 16px 18px; }
       var html = repos.map(function (r) { return repoTapeHTML(r); })
         .concat(entries.map(function (e) { return tapeItemHTML(e, isExample); })).join('');
       var track = $('tape-track');
-      // Two copies make the -50% translate loop seamless; the second copy
-      // is decoration only.
-      track.innerHTML = '<span>' + html + '</span><span aria-hidden="true">' + html + '</span>';
-      track.style.setProperty('--tape-dur', Math.max(24, (entries.length + repos.length) * 6) + 's');
+      // True infinite loop: pad the sequence until one copy is at least as
+      // wide as the viewport (otherwise blank space scrolls by and the wrap
+      // shows as a jump), then render it TWICE so translateX(0 → -50%) wraps
+      // on a pixel-identical seam. The second copy is decoration only.
+      var copy = document.createElement('span');
+      copy.innerHTML = html;
+      track.innerHTML = '';
+      track.appendChild(copy);
+      var vw = track.parentElement ? track.parentElement.offsetWidth : 0;
+      var reps = 1;
+      if (!reducedMotion) {
+        while (html && copy.offsetWidth < vw && reps < 40) { copy.innerHTML += html; reps++; }
+        var dup = copy.cloneNode(true);
+        dup.setAttribute('aria-hidden', 'true');
+        track.appendChild(dup);
+      }
+      // Constant scroll speed regardless of item count: duration scales with
+      // one copy's pixel width (~30px/s). Fallback to item count if the tape
+      // is not laid out yet (width 0).
+      var w = copy.offsetWidth;
+      track.style.setProperty('--tape-dur',
+        (w ? Math.max(24, Math.round(w / 30)) : Math.max(24, (entries.length + repos.length) * 6)) + 's');
       initChart(repos);
     }).catch(function () { $('tape-track').innerHTML = ''; initChart([]); });
   }
