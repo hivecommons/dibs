@@ -33,10 +33,10 @@ type Level struct {
 
 // Levels ascending by Min. LevelFor depends on this ordering.
 var Levels = []Level{
-	{Name: "Larva", Emoji: "🐛", Min: 0},
-	{Name: "Worker", Emoji: "🐝", Min: 100},
-	{Name: "Forager", Emoji: "🍯", Min: 300},
-	{Name: "Queen", Emoji: "👑", Min: 750},
+	{Name: "Bronze", Emoji: "", Min: 0},
+	{Name: "Silver", Emoji: "", Min: 100},
+	{Name: "Gold", Emoji: "", Min: 300},
+	{Name: "Platinum", Emoji: "", Min: 750},
 }
 
 // matched reports whether the idea entered matching: it carries at least
@@ -103,7 +103,7 @@ func LevelFor(score int) (current Level, next *Level) {
 type Progress struct {
 	Score int   `json:"score"`
 	Level Level `json:"level"`
-	// NextLevel is nil once the ideator is Queen.
+	// NextLevel is nil at the top level.
 	NextLevel *Level `json:"nextLevel,omitempty"`
 	// ToNext is the points still needed for NextLevel (0 at the top).
 	ToNext int `json:"toNext"`

@@ -221,7 +221,6 @@ details.how-details .how-body { padding: 16px 18px; }
 .credit-note b { color: var(--text); }
 /* ── level banner (profile) ── */
 .level-banner { display: flex; align-items: center; gap: 18px; margin-bottom: 18px; flex-wrap: wrap; }
-.level-banner .lb-emoji { font-size: 2.6rem; }
 .level-banner .lb-main { flex: 1; min-width: 220px; }
 .level-banner .lb-name { font-weight: 800; font-size: 1.15rem; }
 .level-banner .lb-name .pts { color: var(--amber); }
@@ -1376,7 +1375,7 @@ details.how-details .how-body { padding: 16px 18px; }
       var chip = $('level-chip');
       chip.style.display = 'inline-block';
       chip.innerHTML =
-        '<span class="lc-top">' + esc(s.level.emoji) + ' ' + esc(s.level.name) +
+        '<span class="lc-top">' + esc(s.level.name) +
         ' <span class="pts">' + s.score + '</span></span>' +
         '<span class="lc-bar"><i style="width:' + Math.max(2, s.pct) + '%"></i></span>';
       chip.setAttribute('aria-label', s.level.name + ' level, ' + s.score + ' points' +
@@ -1511,12 +1510,11 @@ details.how-details .how-body { padding: 16px 18px; }
       var lb = $('level-banner');
       lb.style.display = 'flex';
       lb.innerHTML =
-        '<div class="lb-emoji" aria-hidden="true">' + esc(s.level.emoji) + '</div>' +
         '<div class="lb-main">' +
           '<div class="lb-name">' + esc(s.level.name) + ' · <span class="pts">' + s.score + ' pts</span></div>' +
           '<div class="lb-bar" role="progressbar" aria-label="Progress to next level" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + s.pct + '"><i style="width:' + Math.max(2, s.pct) + '%"></i></div>' +
           '<div class="lb-next">' + (s.nextLevel
-            ? s.toNext + ' pts to ' + esc(s.nextLevel.emoji) + ' ' + esc(s.nextLevel.name)
+            ? s.toNext + ' pts to ' + esc(s.nextLevel.name)
             : 'Top level') + '</div>' +
         '</div>' +
         '<div class="lb-badges">' + (s.badges && s.badges.length
@@ -1545,7 +1543,7 @@ details.how-details .how-body { padding: 16px 18px; }
           '<span class="rank">' + (e.rank === 1 ? '🥇' : e.rank === 2 ? '🥈' : e.rank === 3 ? '🥉' : '#' + e.rank) + '</span>' +
           '<img class="avatar" src="https://github.com/' + encodeURIComponent(e.author) + '.png?size=80" alt="" loading="lazy">' +
           '<span class="who"><span class="handle">' + esc(e.authorDisplay || e.author) + '</span>' +
-          '<div class="lvl">' + esc(e.level.emoji) + ' ' + esc(e.level.name) + '</div></span>' +
+          '<div class="lvl">' + esc(e.level.name) + '</div></span>' +
           '<span class="score-col"><div class="pts">' + e.score + ' pts</div>' +
           '<div class="settled-n">' + e.settled + ' settled</div></span>' +
           (e.badges && e.badges.length ? '<span class="lb-badge-list">' + badgeChips(e.badges, true) + '</span>' : '');
