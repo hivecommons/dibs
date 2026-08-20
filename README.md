@@ -98,6 +98,57 @@ hub-cookie prerequisites.
 Everything else requires a hive hub session; signed-in ideators additionally
 get `GET /api/me/stats` (ideas posted / offered / accepted / settled).
 
+## Submit ideas from your agent
+
+Dibs exposes a stateless Streamable HTTP MCP endpoint at
+`https://dibs.kubestellar.io/mcp`, so Claude Code, Copilot CLI, Cursor, and
+other MCP clients can submit ideas without leaving the agent.
+
+Available tools:
+
+| Tool | Auth | Purpose |
+|---|---|---|
+| `submit_idea(title, description, tags?)` | Required | Creates a private draft idea owned by you and returns its id and API URL |
+| `list_my_ideas()` | Required | Lists your ideas with lifecycle phase/status |
+| `get_idea(id)` | Optional for public ideas; required for your private ideas | Shows detail, matches, offers, and settlement state |
+| `list_repos()` | Not required | Lists registered repo venues |
+
+### Token
+
+Use `Authorization: Bearer <token>`. Dibs first asks the Hive Hub
+`/api/saas/whoami` endpoint to verify the bearer token server-to-server; the
+hub already accepts GitHub bearer tokens for registered hub users. If that is
+not practical, copy the raw `hive_hub_user` cookie value from your browser
+after signing in at `https://hive.kubestellar.io`; Dibs falls back to verifying
+that value through the same hub `whoami` cookie flow used by the web UI.
+
+In Chrome/Edge: open DevTools → Application → Cookies →
+`https://hive.kubestellar.io` (or `https://dibs.kubestellar.io`) → copy the
+`hive_hub_user` value.
+
+### Claude Code
+
+```sh
+claude mcp add --transport http dibs https://dibs.kubestellar.io/mcp \
+  --header "Authorization: Bearer <your-token-or-hive_hub_user-cookie-value>"
+```
+
+### Generic MCP JSON
+
+```json
+{
+  "mcpServers": {
+    "dibs": {
+      "type": "http",
+      "url": "https://dibs.kubestellar.io/mcp",
+      "headers": {
+        "Authorization": "Bearer <your-token-or-hive_hub_user-cookie-value>"
+      }
+    }
+  }
+}
+```
+
 ## Development
 
 ```sh

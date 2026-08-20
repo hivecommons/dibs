@@ -18,6 +18,7 @@ import (
 	"github.com/kubestellar/dibs/pkg/api"
 	"github.com/kubestellar/dibs/pkg/auth"
 	"github.com/kubestellar/dibs/pkg/match"
+	"github.com/kubestellar/dibs/pkg/mcpserver"
 	"github.com/kubestellar/dibs/pkg/notify"
 	"github.com/kubestellar/dibs/pkg/registry"
 	"github.com/kubestellar/dibs/pkg/settle"
@@ -119,6 +120,7 @@ func New(cfg Config) http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"status":"ok","version":"` + cfg.Version + `"}` + "\n"))
 	})
+	root.Handle(base+"/mcp", mcpserver.NewHandler(mcpserver.Config{Hub: cfg.Hub, Store: cfg.Store, Registry: cfg.Repos, BasePath: base}))
 	// With a prefix, the bare base path (no trailing slash) redirects to the
 	// canonical UI URL: relative asset and API URLs in the page only resolve
 	// correctly under "{base}/". At the root there is no bare form.

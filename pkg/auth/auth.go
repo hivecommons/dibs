@@ -60,6 +60,13 @@ type HubClient interface {
 	WhoAmI(ctx context.Context, sessionCookie string) (*Identity, error)
 }
 
+// BearerHubClient resolves an explicit bearer token to an identity.
+type BearerHubClient interface {
+	// WhoAmIBearer returns the identity for a bearer token accepted by the hub,
+	// or ErrUnauthenticated if the token is missing/expired/invalid.
+	WhoAmIBearer(ctx context.Context, token string) (*Identity, error)
+}
+
 // HTTPHubClient is the production HubClient: it forwards the session cookie
 // to the hub's whoami endpoint.
 type HTTPHubClient struct {
@@ -91,6 +98,23 @@ func (c *HTTPHubClient) WhoAmI(ctx context.Context, sessionCookie string) (*Iden
 		return nil, fmt.Errorf("auth: building hub request: %w", err)
 	}
 	req.AddCookie(&http.Cookie{Name: SessionCookieName, Value: sessionCookie})
+	return c.doWhoAmI(req)
+}
+
+// WhoAmIBearer implements BearerHubClient against a real hub.
+func (c *HTTPHubClient) WhoAmIBearer(ctx context.Context, token string) (*Identity, error) {
+	if token == "" {
+		return nil, ErrUnauthenticated
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+WhoAmIPath, nil)
+	if err != nil {
+		return nil, fmt.Errorf("auth: building hub request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	return c.doWhoAmI(req)
+}
+
+func (c *HTTPHubClient) doWhoAmI(req *http.Request) (*Identity, error) {
 	resp, err := c.httpClient().Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("auth: hub unreachable: %w", err)
