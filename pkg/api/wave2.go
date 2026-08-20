@@ -28,6 +28,7 @@ const (
 // registerWave2 mounts the matching/settlement/notification routes.
 func (a *API) registerWave2(mux *http.ServeMux, basePath string) {
 	mux.HandleFunc("GET "+basePath+"/api/ideas/{id}/matches", a.handleIdeaMatches)
+	mux.HandleFunc("POST "+basePath+"/api/ideas/{id}/matches/seen", a.handleIdeaMatchesSeen)
 	mux.HandleFunc("POST "+basePath+"/api/ideas/{id}/offer", a.handleOffer)
 	mux.HandleFunc("POST "+basePath+"/api/ideas/{id}/pass", a.handleIdeatorPass)
 	mux.HandleFunc("GET "+basePath+"/api/repos/{org}/{repo}/feed", a.handleRepoFeed)
@@ -124,6 +125,25 @@ func (a *API) handleIdeaMatches(w http.ResponseWriter, r *http.Request) {
 		cncfViews = append(cncfViews, m)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"tldr": idea.TLDR, "matches": views, "cncf": cncfViews})
+}
+
+func (a *API) handleIdeaMatchesSeen(w http.ResponseWriter, r *http.Request) {
+	idea := a.loadAuthorized(w, r, true)
+	if idea == nil {
+		return
+	}
+	updated, err := a.Store.Mutate(idea.ID, false, func(i *store.Idea) error {
+		if !i.MatchesUpdatedAt.IsZero() {
+			i.SuggestionsSeenAt = i.MatchesUpdatedAt
+		}
+		return nil
+	})
+	if err != nil {
+		status, msg := storeErrStatus(err)
+		writeError(w, status, msg)
+		return
+	}
+	writeJSON(w, http.StatusOK, updated)
 }
 
 type offerInput struct {
@@ -315,7 +335,7 @@ func (a *API) handleRepoFeed(w http.ResponseWriter, r *http.Request) {
 // repoView scores one idea for one repo (cached both directions) and
 // ensures the TLDR exists for display.
 func (a *API) repoView(ctx context.Context, idea *store.Idea, rp *registry.RepoProfile) matchView {
-	v := matchView{Idea: idea}
+	v := matchView{Idea: ideaForViewer(idea, rp.Owner)}
 	if a.Engine == nil {
 		return v
 	}
@@ -397,7 +417,7 @@ func (a *API) handleDecide(w http.ResponseWriter, r *http.Request) {
 		}
 		a.notifyAdd(updated.Author, notify.KindDeclined,
 			rp.RepoID+" declined your idea “"+updated.Title+"”.", updated.ID, rp.RepoID)
-		writeJSON(w, http.StatusOK, map[string]any{"result": "declined", "idea": updated})
+		writeJSON(w, http.StatusOK, map[string]any{"result": "declined", "idea": ideaForViewer(updated, identity(r).Username)})
 	case "accept":
 		a.accept(w, r, idea, rp, offer)
 	default:
@@ -465,7 +485,7 @@ func (a *API) legacySettle(w http.ResponseWriter, r *http.Request, updated *stor
 	if err != nil {
 		warning := "accepted, but opening the GitHub issue failed: " + err.Error()
 		log.Printf("api: legacy settlement for %s on %s: %v", updated.ID, rp.RepoID, err)
-		writeJSON(w, http.StatusOK, map[string]any{"result": "accepted", "idea": updated, "warning": warning})
+		writeJSON(w, http.StatusOK, map[string]any{"result": "accepted", "idea": ideaForViewer(updated, identity(r).Username), "warning": warning})
 		return
 	}
 	settled, err := a.Store.Mutate(updated.ID, true, func(i *store.Idea) error {
@@ -483,7 +503,7 @@ func (a *API) legacySettle(w http.ResponseWriter, r *http.Request, updated *stor
 	}
 	a.notifyAdd(settled.Author, notify.KindIssue,
 		"“"+settled.Title+"” is now a GitHub issue on "+rp.RepoID+": "+issueURL, settled.ID, rp.RepoID)
-	writeJSON(w, http.StatusOK, map[string]any{"result": "settled", "idea": settled, "issueURL": issueURL})
+	writeJSON(w, http.StatusOK, map[string]any{"result": "settled", "idea": ideaForViewer(settled, identity(r).Username), "issueURL": issueURL})
 }
 
 // handleListNotifications returns the caller's feed (?unread=1 filters) and

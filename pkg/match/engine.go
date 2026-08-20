@@ -49,16 +49,7 @@ type Engine struct {
 }
 
 // CNCFMatch is a scored candidate from the separate CNCF catalog.
-type CNCFMatch struct {
-	Name     string  `json:"name"`
-	RepoID   string  `json:"repoID"`
-	RepoURL  string  `json:"repoURL"`
-	Maturity string  `json:"maturity"`
-	Category string  `json:"category"`
-	Score    float64 `json:"score"`
-	Reason   string  `json:"reason"`
-	ByLLM    bool    `json:"byLLM,omitempty"`
-}
+type CNCFMatch = store.CNCFMatch
 
 // RepoHash fingerprints the score-relevant part of a repo profile; a changed
 // hash invalidates every cached match against that repo.
@@ -158,6 +149,7 @@ func (e *Engine) MatchesForIdea(ctx context.Context, idea *store.Idea) ([]store.
 		persisted := out
 		if _, err := e.Store.Mutate(idea.ID, false, func(i *store.Idea) error {
 			i.Matches = persisted
+			i.MatchesUpdatedAt = time.Now().UTC()
 			return nil
 		}); err != nil {
 			return nil, err
@@ -192,6 +184,7 @@ func (e *Engine) ScoreForRepo(ctx context.Context, idea *store.Idea, rp *registr
 		if !replaced {
 			i.Matches = append(i.Matches, kept)
 		}
+		i.MatchesUpdatedAt = time.Now().UTC()
 		return nil
 	}); err != nil {
 		return store.Match{}, err
@@ -220,6 +213,10 @@ func (e *Engine) score(ctx context.Context, idea *store.Idea, rp *registry.RepoP
 // CNCFMatchesForIdea returns CNCF project candidates from the catalog. BM25
 // selects the top 15; the LLM reranks only those candidates when configured.
 func (e *Engine) CNCFMatchesForIdea(ctx context.Context, idea *store.Idea) ([]CNCFMatch, error) {
+	return e.cncfMatchesForIdea(ctx, idea, true)
+}
+
+func (e *Engine) cncfMatchesForIdea(ctx context.Context, idea *store.Idea, persist bool) ([]CNCFMatch, error) {
 	if e == nil || e.Catalog == nil {
 		return []CNCFMatch{}, nil
 	}
@@ -249,7 +246,83 @@ func (e *Engine) CNCFMatchesForIdea(ctx context.Context, idea *store.Idea) ([]CN
 		out = append(out, m)
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Score > out[j].Score })
+	if persist && e.Store != nil {
+		persisted := e.nonHiveCNCF(out)
+		if len(persisted) > MaxMatches {
+			persisted = persisted[:MaxMatches]
+		}
+		if _, err := e.Store.Mutate(idea.ID, false, func(i *store.Idea) error {
+			i.CNCFMatches = persisted
+			i.MatchesUpdatedAt = time.Now().UTC()
+			return nil
+		}); err != nil {
+			return nil, err
+		}
+	}
 	return out, nil
+}
+
+func (e *Engine) nonHiveCNCF(matches []CNCFMatch) []CNCFMatch {
+	out := make([]CNCFMatch, 0, len(matches))
+	for _, m := range matches {
+		if e.Registry != nil {
+			if _, err := e.Registry.Get(m.RepoID); err == nil {
+				continue
+			}
+		}
+		out = append(out, m)
+	}
+	return out
+}
+
+// RematchIdea runs the full idea matching pipeline from fresh inputs. When
+// persist is false it does not update the store or notify; when true it saves
+// the same fields organic matching uses and emits normal fresh-match events.
+func (e *Engine) RematchIdea(ctx context.Context, idea *store.Idea, persist bool) (string, []store.Match, []CNCFMatch, error) {
+	if e == nil {
+		return "", nil, nil, fmt.Errorf("match: engine is nil")
+	}
+	work := *idea
+	if work.TLDR == "" {
+		work.TLDR = e.generateTLDR(ctx, &work)
+	}
+	var matches []store.Match
+	for _, rp := range e.Registry.List(true) {
+		rp := rp
+		if work.HasPassed(rp.RepoID) || work.OfferTo(rp.RepoID) != nil {
+			continue
+		}
+		m := e.score(ctx, &work, &rp, RepoHash(&rp))
+		matches = append(matches, m)
+		if persist && m.Score >= NotifyThreshold && e.Notifier != nil {
+			e.Notifier.NewMatch(work.Author, rp.Owner, &work, &rp, m.Score)
+		}
+	}
+	sort.SliceStable(matches, func(i, j int) bool { return matches[i].Score > matches[j].Score })
+	if len(matches) > MaxMatches {
+		matches = matches[:MaxMatches]
+	}
+	cncf, err := e.cncfMatchesForIdea(ctx, &work, false)
+	if err != nil {
+		return "", nil, nil, err
+	}
+	cncf = e.nonHiveCNCF(cncf)
+	if len(cncf) > MaxMatches {
+		cncf = cncf[:MaxMatches]
+	}
+	if persist {
+		tldr, persistedMatches, persistedCNCF := work.TLDR, matches, cncf
+		if _, err := e.Store.Mutate(idea.ID, false, func(i *store.Idea) error {
+			i.TLDR = tldr
+			i.Matches = persistedMatches
+			i.CNCFMatches = persistedCNCF
+			i.MatchesUpdatedAt = time.Now().UTC()
+			return nil
+		}); err != nil {
+			return "", nil, nil, err
+		}
+	}
+	return work.TLDR, matches, cncf, nil
 }
 
 func bm25ToScore(score, top float64) float64 {
