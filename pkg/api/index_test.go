@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kubestellar/dibs/pkg/history"
 	"github.com/kubestellar/dibs/pkg/registry"
 	"github.com/kubestellar/dibs/pkg/store"
 )
@@ -152,5 +153,33 @@ func TestRepoEventsWeights(t *testing.T) {
 	}
 	if evs := repoEvents(ideas, "org/uninvolved"); len(evs) != 0 {
 		t.Fatalf("uninvolved repo should have no events, got %+v", evs)
+	}
+}
+
+func TestHistoryEventsUseNativeIndexSemantics(t *testing.T) {
+	hist, err := history.NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	if err := hist.Upsert("org/repo", []history.DayActivity{{
+		Date: "2026-08-18", MergedPRs: 2, Commits: 3,
+	}}, ts(t, "2026-08-19T12:00:00Z")); err != nil {
+		t.Fatalf("Upsert: %v", err)
+	}
+	evs := historyEvents(hist, "org/repo")
+	if len(evs) != 1 {
+		t.Fatalf("historyEvents len=%d, want 1", len(evs))
+	}
+	wantWeight := 2*weightSettle + 3*weightAccept
+	if evs[0].weight != wantWeight || evs[0].kind != "agent" || evs[0].count != 5 {
+		t.Fatalf("history event = %+v, want weight %v kind agent count 5", evs[0], wantWeight)
+	}
+	_, bars1, cur1, _, act1 := buildIndex(evs, ts(t, "2026-08-19T12:00:00Z"))
+	_, bars2, cur2, _, act2 := buildIndex(historyEvents(hist, "org/repo"), ts(t, "2026-08-19T12:00:00Z"))
+	if cur1 != cur2 || act1 != act2 || !reflect.DeepEqual(bars1, bars2) {
+		t.Fatalf("same persisted backfill should produce same series")
+	}
+	if bars1[len(bars1)-2].Agent != 5 {
+		t.Fatalf("agent bar = %d, want 5", bars1[len(bars1)-2].Agent)
 	}
 }

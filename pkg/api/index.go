@@ -29,6 +29,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kubestellar/dibs/pkg/history"
 	"github.com/kubestellar/dibs/pkg/registry"
 	"github.com/kubestellar/dibs/pkg/store"
 )
@@ -47,10 +48,18 @@ const (
 type repoEvent struct {
 	at     time.Time
 	weight float64
+	count  int
 	// kind buckets the sub-chart bars: "ideas" (offers — listing/match
 	// interest) or "agent" (accept/settle — implementation activity; an
 	// honest PROXY until real token metering exists).
 	kind string
+}
+
+func (e repoEvent) barCount() int {
+	if e.count > 0 {
+		return e.count
+	}
+	return 1
 }
 
 // IndexPoint is one smoothed daily index value.
@@ -141,6 +150,36 @@ func repoEvents(ideas []*store.Idea, repoID string) []repoEvent {
 	return evs
 }
 
+// historyEvents converts backfilled GitHub activity into the same weighted
+// agent-activity semantics as Dibs-native implementation events: merged PRs
+// mirror settlements, and commits mirror accepted implementation work.
+func historyEvents(hist *history.Store, repoID string) []repoEvent {
+	if hist == nil {
+		return nil
+	}
+	h, ok := hist.Get(repoID)
+	if !ok {
+		return nil
+	}
+	evs := make([]repoEvent, 0, len(h.Days))
+	for _, d := range h.Days {
+		if d.MergedPRs == 0 && d.Commits == 0 {
+			continue
+		}
+		at, err := time.Parse("2006-01-02", d.Date)
+		if err != nil {
+			continue
+		}
+		evs = append(evs, repoEvent{
+			at:     at,
+			weight: float64(d.MergedPRs)*weightSettle + float64(d.Commits)*weightAccept,
+			count:  d.MergedPRs + d.Commits,
+			kind:   "agent",
+		})
+	}
+	return evs
+}
+
 // buildIndex turns events into the smoothed daily series ending at now.
 // Pure function of its inputs — the determinism the chart tests pin down.
 func buildIndex(evs []repoEvent, now time.Time) ([]IndexPoint, []IndexBar, float64, float64, int) {
@@ -164,11 +203,11 @@ func buildIndex(evs []repoEvent, now time.Time) ([]IndexPoint, []IndexBar, float
 		case !d.After(day):
 			i := int(d.Sub(start).Hours() / 24)
 			daily[i] += e.weight
-			activity++
+			activity += e.barCount()
 			if e.kind == "ideas" {
-				bars[i].Ideas++
+				bars[i].Ideas += e.barCount()
 			} else {
-				bars[i].Agent++
+				bars[i].Agent += e.barCount()
 			}
 		}
 	}
@@ -219,7 +258,8 @@ func (a *API) repoTickers() ([]RepoTicker, error) {
 	now := timeNow()
 	out := make([]RepoTicker, 0, len(repos))
 	for _, rp := range repos {
-		_, _, current, delta, activity := buildIndex(repoEvents(ideas, rp.RepoID), now)
+		evs := append(repoEvents(ideas, rp.RepoID), historyEvents(a.History, rp.RepoID)...)
+		_, _, current, delta, activity := buildIndex(evs, now)
 		out = append(out, RepoTicker{
 			RepoID: rp.RepoID, Symbol: syms[rp.RepoID],
 			Value: current, Delta: delta, Activity: activity,
@@ -251,7 +291,8 @@ func (a *API) HandleRepoIndex(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	points, bars, current, delta, _ := buildIndex(repoEvents(ideas, repoID), timeNow())
+	evs := append(repoEvents(ideas, repoID), historyEvents(a.History, repoID)...)
+	points, bars, current, delta, _ := buildIndex(evs, timeNow())
 	syms := repoSymbols(a.Registry.List(false))
 	writeJSON(w, http.StatusOK, RepoIndex{
 		RepoID: repoID, Symbol: syms[repoID],
