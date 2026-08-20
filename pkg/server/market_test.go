@@ -181,7 +181,7 @@ func TestRepoIndexEndpoint(t *testing.T) {
 		t.Fatalf("index: %d %s", rec.Code, rec.Body.String())
 	}
 	quiet := decode[repoIndexResp](t, rec)
-	if quiet.Current != 100 || quiet.Delta != 0 || len(quiet.Points) != 30 || quiet.Symbol != "OTHER" {
+	if quiet.Current != 100 || quiet.Delta != 0 || len(quiet.Points) != 30 || quiet.Symbol != "OTHR" {
 		t.Fatalf("quiet index wrong: %+v", quiet)
 	}
 

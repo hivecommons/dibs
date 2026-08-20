@@ -18,8 +18,6 @@ import (
 	"errors"
 	"net/http"
 	"sort"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/kubestellar/dibs/pkg/history"
@@ -83,32 +81,23 @@ type RepoTicker struct {
 	Activity int     `json:"activity"` // events in the window — sort key
 }
 
-// repoSymbols assigns each registered repo a deterministic, uniquified
-// ticker symbol derived from its name ("kubestellar/hive" → HIVE). Repos
-// are processed in sorted RepoID order so the assignment is stable across
-// requests without persisting anything.
+// repoSymbols returns each repo's persisted ticker symbol. The fallback path
+// keeps older tests/fakes with zero-value RepoProfiles deterministic, but
+// production symbols are assigned and persisted by registry.Registry.
 func repoSymbols(repos []registry.RepoProfile) map[string]string {
+	byID := map[string]registry.RepoProfile{}
 	ids := make([]string, 0, len(repos))
 	for _, rp := range repos {
+		byID[rp.RepoID] = rp
 		ids = append(ids, rp.RepoID)
 	}
 	sort.Strings(ids)
 	taken := map[string]bool{}
 	out := map[string]string{}
 	for _, id := range ids {
-		name := id
-		if i := strings.LastIndexByte(id, '/'); i >= 0 {
-			name = id[i+1:]
-		}
-		base := store.TickerSymbol(name)
-		sym := base
-		for n := 2; taken[sym]; n++ {
-			suffix := strconv.Itoa(n)
-			stem := base
-			if len(stem)+len(suffix) > store.MaxSymbolLen {
-				stem = stem[:store.MaxSymbolLen-len(suffix)]
-			}
-			sym = stem + suffix
+		sym := byID[id].Symbol
+		if sym == "" {
+			sym = registry.UniqueRepoTickerSymbol(id, func(s string) bool { return taken[s] })
 		}
 		taken[sym] = true
 		out[id] = sym
