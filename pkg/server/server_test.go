@@ -329,13 +329,54 @@ func TestNormalizeBasePath(t *testing.T) {
 
 // TestMeEndpoint: identity round-trips for the UI header.
 func TestMeEndpoint(t *testing.T) {
+	t.Setenv("DIBS_ADMINS", "alice")
 	h := newTestServer(t, "/ideas")
 	rec := doJSON(t, h, "GET", "/ideas/api/me", "alice-session", nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("me: %d", rec.Code)
 	}
 	me := decode[auth.Identity](t, rec)
-	if me.Username != "alice" || me.DisplayName != "Alice A" {
+	if me.Username != "alice" || me.DisplayName != "Alice A" || !me.Admin {
 		t.Fatalf("me: %+v", me)
+	}
+}
+
+func TestAdminIdeasEndpoint(t *testing.T) {
+	t.Setenv("DIBS_ADMINS", " ALICE ")
+	h := newTestServer(t, "/ideas")
+
+	rec := doJSON(t, h, "POST", "/ideas/api/ideas", "bob-session",
+		map[string]string{"title": "Private draft", "body": "secret body", "visibility": "private"})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create private draft: %d %s", rec.Code, rec.Body.String())
+	}
+
+	rec = doJSON(t, h, "GET", "/ideas/api/admin/ideas", "bob-session", nil)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("non-admin admin ideas: want 403, got %d %s", rec.Code, rec.Body.String())
+	}
+
+	rec = doJSON(t, h, "GET", "/ideas/api/admin/ideas", "alice-session", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("admin ideas: %d %s", rec.Code, rec.Body.String())
+	}
+	ideas := decode[[]struct {
+		Author     string `json:"author"`
+		Title      string `json:"title"`
+		Visibility string `json:"visibility"`
+		Status     string `json:"status"`
+		Matches    struct {
+			Count int `json:"count"`
+		} `json:"matches"`
+	}](t, rec)
+	if len(ideas) != 1 {
+		t.Fatalf("admin ideas length = %d, want 1: %+v", len(ideas), ideas)
+	}
+	got := ideas[0]
+	if got.Author != "bob" || got.Title != "Private draft" || got.Visibility != store.VisibilityPrivate || got.Status != store.StatusDraft {
+		t.Fatalf("admin did not see bob's private draft: %+v", got)
+	}
+	if got.Matches.Count != 0 {
+		t.Fatalf("matches summary count = %d, want 0", got.Matches.Count)
 	}
 }

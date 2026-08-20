@@ -240,6 +240,17 @@ footer { text-align: center; color: var(--muted); font-size: .8rem; padding: 24p
 .confirm-box { border-top: 1px solid var(--line); margin-top: 20px; padding-top: 16px; }
 /* ── logged-out (landing) mode ── */
 body.anon [data-auth] { display: none !important; }
+[data-admin] { display: none !important; }
+body.admin [data-admin] { display: revert !important; }
+.admin-table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); }
+.admin-table { width: 100%; border-collapse: collapse; min-width: 760px; font-variant-numeric: tabular-nums; }
+.admin-table th, .admin-table td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.admin-table th { color: var(--muted); font-family: var(--font-mono); font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; }
+.admin-table tr:last-child td { border-bottom: none; }
+.admin-table .title { color: var(--text); font-weight: 700; }
+.admin-table .tldr { color: var(--muted); font-size: .82rem; margin-top: 3px; max-width: 58ch; }
+.admin-chip { display: inline-block; border: 1px solid var(--line); border-radius: 4px; color: var(--muted); padding: 2px 8px; font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
+.admin-chip.amber { border-color: var(--amber); color: var(--amber); background: rgba(244,199,95,.06); }
 #signin { display: none; background: var(--amber); color: #080b0f; font-weight: 700; text-decoration: none; padding: 7px 16px; border-radius: var(--radius); font-size: .85rem; white-space: nowrap; }
 body.anon #signin { display: inline-block; }
 .landing-extra { display: none; }
@@ -548,6 +559,7 @@ details.how-details .how-body { padding: 16px 18px; }
     <span class="hdr-spacer"></span>
     <button id="nav-list-cta" aria-label="List an idea">＋ List an idea</button>
     <button id="nav-donate-cta" aria-label="Donate tokens">Donate tokens</button>
+    <button class="pill small" id="nav-admin" data-auth data-admin data-goto="admin" aria-label="Admin all ideas">Admin</button>
     <a id="signin" href="__HUB_URL__" target="_blank" rel="noopener">Sign in</a>
     <button id="level-chip" data-auth data-goto="mine" aria-label="Score and level. Open profile."></button>
     <div id="bell-wrap" data-auth>
@@ -669,6 +681,16 @@ details.how-details .how-body { padding: 16px 18px; }
   <div id="zone-activity" role="tabpanel" aria-labelledby="tab-activity" tabindex="0" hidden>
     <div class="empty">Loading activity…</div>
   </div>
+</section>
+
+<section class="sheet" id="sec-admin" data-auth data-admin aria-label="Admin all ideas">
+  <div class="toolbar">
+    <div>
+      <h2 class="page-title">All ideas</h2>
+      <p class="page-sub" style="margin:0">Admin read-only oversight across the exchange.</p>
+    </div>
+  </div>
+  <div id="admin-ideas"><div class="empty">Loading…</div></div>
 </section>
 
 <section class="sheet" id="sec-ideas" aria-label="Live idea board">
@@ -1008,6 +1030,7 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
   'use strict';
   var editingId = null;
   var anon = false; // flipped when /api/me says we're not signed in
+  var isAdmin = false;
   var reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   var FLY_MS = reducedMotion ? 0 : 260;
 
@@ -1062,8 +1085,8 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
 
   /* ── navigation: ONE page. Old view names map to section anchors
      (smooth scroll) or modals — show()/data-goto stay compatible. ── */
-  var authViews = { desk: 1, mine: 1, repos: 1, edit: 1, match: 1, feed: 1, launch: 1, idea: 1 };
-  var SECTION_OF = { home: 'sec-market', desk: 'sec-desk', mine: 'sec-desk', browse: 'sec-ideas', repos: 'sec-repos', credits: 'sec-board' };
+  var authViews = { desk: 1, mine: 1, repos: 1, admin: 1, edit: 1, match: 1, feed: 1, launch: 1, idea: 1 };
+  var SECTION_OF = { home: 'sec-market', desk: 'sec-desk', mine: 'sec-desk', admin: 'sec-admin', browse: 'sec-ideas', repos: 'sec-repos', credits: 'sec-board' };
   var MODAL_OF = { edit: 'modal-edit', idea: 'modal-idea', match: 'modal-match', launch: 'modal-launch', feed: 'modal-feed', donate: 'modal-donate' };
 
   /* modals: flows float over the one page */
@@ -1102,6 +1125,7 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
   var SECTION_LOADERS = {
     'sec-market': function () { loadTerminal(); if (!anon) loadDeskSummary(); },
     'sec-desk':   function () { loadDesk(); loadStats(); },
+    'sec-admin':  function () { if (isAdmin) loadAdminIdeas(); },
     'sec-ideas':  function () { loadBoard(); if (!anon) loadBrowse(); },
     'sec-repos':  function () { loadRepos(); },
     'sec-board':  function () { loadCredits(); }
@@ -1128,6 +1152,7 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
 
   function show(view) {
     if (anon && authViews[view]) view = 'home';
+    if (view === 'admin' && !isAdmin) view = 'home';
     showErr(''); showOk('');
     if (MODAL_OF[view]) { openModal(MODAL_OF[view]); return; }
     closeModal();
@@ -1152,6 +1177,7 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
     { label: 'My desk', kind: 'go', auth: true, hint: 'Positions, matches, activity', run: function () { show('desk'); } },
     { label: 'Idea board', kind: 'go', hint: 'Every public idea, live', run: function () { show('browse'); } },
     { label: 'Repos', kind: 'go', auth: true, hint: 'Opt in, set appetite', run: function () { show('repos'); } },
+    { label: 'All ideas', kind: 'go', auth: true, admin: true, hint: 'Admin oversight, read only', run: function () { show('admin'); } },
     { label: 'Leaderboard', kind: 'go', hint: 'Rankings and credit wall', run: function () { show('credits'); } },
     { label: 'Donate tokens', kind: 'do', hint: 'Contribute spare AI capacity to a hive', run: function () { openDonate(); } },
     { label: 'List an idea', kind: 'do', hint: 'Guided 3-step listing', run: function () {
@@ -1166,6 +1192,7 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
     var q = $('jump-input').value.trim().toLowerCase();
     jumpMatches = JUMP_ITEMS.filter(function (it) {
       if (it.auth && anon) return false;
+      if (it.admin && !isAdmin) return false;
       return !q || (it.label + ' ' + it.hint).toLowerCase().indexOf(q) !== -1;
     });
     if (jumpActive >= jumpMatches.length) jumpActive = 0;
@@ -1244,6 +1271,8 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
 
   /* ── identity ── */
   function applyIdentity(me) {
+    isAdmin = !!me.admin;
+    document.body.classList.toggle('admin', isAdmin);
     var w = $('who');
     w.innerHTML = (me.avatar_url ? '<img src="' + esc(me.avatar_url) + '" alt="">' : '') +
       '<span>' + esc(me.display_name || me.username) + '</span>';
@@ -2036,6 +2065,29 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
     if (!ideas.length) { el.innerHTML = '<div class="empty">' + emptyMsg + '</div>'; return; }
     ideas.forEach(function (i) { el.appendChild(ideaCard(i, mine)); });
   }
+
+  function renderAdminIdeas(ideas) {
+    var el = $('admin-ideas');
+    if (!ideas.length) { el.innerHTML = '<div class="empty">No ideas on the exchange.</div>'; return; }
+    el.innerHTML = '<div class="admin-table-wrap"><table class="admin-table">' +
+      '<thead><tr><th>Author</th><th>Title</th><th>Status</th><th>Visibility</th><th>Created</th></tr></thead><tbody>' +
+      ideas.map(function (idea) {
+        var privateDraft = idea.visibility === 'private' && idea.status === 'draft';
+        var vis = privateDraft ? 'private draft' : idea.visibility;
+        return '<tr>' +
+          '<td>' + esc(idea.authorDisplay || idea.author) + '<div class="meta">' + esc(idea.author) + '</div></td>' +
+          '<td><div class="title">' + symChip(idea.symbol) + esc(idea.title) + '</div>' +
+            (idea.tldr ? '<div class="tldr">' + esc(idea.tldr) + '</div>' : '') + '</td>' +
+          '<td><span class="admin-chip">' + esc(idea.status || 'unknown') + '</span></td>' +
+          '<td><span class="admin-chip' + (privateDraft ? ' amber' : '') + '">' + esc(vis || 'unknown') + '</span></td>' +
+          '<td>' + new Date(idea.createdAt).toLocaleDateString() + '</td>' +
+        '</tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+  function loadAdminIdeas() {
+    api('GET', 'admin/ideas').then(renderAdminIdeas).catch(function (e) { showErr(e.message); });
+  }
+
   function loadBrowse() {
     api('GET', 'ideas?scope=public').then(function (ideas) {
       renderList($('browse-list'), ideas, false, 'No public ideas.');
