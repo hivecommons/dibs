@@ -18,7 +18,8 @@
 html { font-size: 16px; }
 body { background: var(--bg); color: var(--text); font-family: var(--font-ui); font-size: 1rem; line-height: 1.5; font-variant-numeric: tabular-nums; }
 a { color: var(--blue); }
-header { display: flex; align-items: center; gap: 14px; padding: 14px 24px; border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; position: sticky; top: 0; z-index: 60; }
+header { padding: 14px 24px; border-bottom: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; z-index: 60; }
+.header-shell { width: min(100%, 1600px); margin: 0 auto; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 header .logo { font-weight: 800; font-size: 1.15rem; letter-spacing: .02em; background: none; border: none; color: var(--text); cursor: pointer; font-family: inherit; padding: 0; }
 header .logo span { color: var(--amber); }
 .hdr-spacer { flex: 1; }
@@ -62,12 +63,12 @@ header .logo span { color: var(--amber); }
 #level-chip .lc-top .pts { color: var(--amber); }
 #level-chip .lc-bar { height: 4px; background: var(--line); border-radius: 999px; margin-top: 4px; overflow: hidden; }
 #level-chip .lc-bar i { display: block; height: 100%; background: var(--amber); border-radius: 999px; transition: width .4s ease; }
-main { max-width: 900px; margin: 0 auto; padding: 28px 24px 64px; }
+main { width: min(100%, 1600px); margin: 0 auto; padding: 28px clamp(24px, 3vw, 36px) 64px; }
 .hero { text-align: center; padding: 40px 0 28px; }
 .hero h1 { font-size: 2.1rem; margin-bottom: 10px; }
 .hero h1 em { color: var(--amber); font-style: normal; }
 .hero p.tagline { color: var(--amber); font-weight: 800; font-size: 1.1rem; margin-bottom: 12px; }
-.hero p.sub { color: var(--muted); font-size: 1.05rem; max-width: 540px; margin: 0 auto 24px; line-height: 1.6; }
+.hero p.sub { color: var(--muted); font-size: 1.05rem; max-width: 70ch; margin: 0 auto 24px; line-height: 1.6; }
 .hero-actions { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; }
 .panel h3 { font-size: 1.05rem; margin-bottom: 8px; }
@@ -244,13 +245,13 @@ details.how-details .how-body { padding: 16px 18px; }
 .level-banner .lb-next { color: var(--muted); font-size: .82rem; }
 .level-banner .lb-badges { width: 100%; }
 /* ── ideator stats ── */
-.stats-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
+.stats-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; width: 100%; }
 @media (max-width: 640px) { .stats-strip { grid-template-columns: repeat(2, 1fr); } }
-.stat { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; text-align: center; }
-.stat .num { font-size: 1.5rem; font-weight: 800; color: var(--amber); }
+.stat { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 14px; text-align: center; }
+.stat .num { font-size: clamp(1.5rem, 2vw, 2.1rem); font-weight: 800; color: var(--amber); }
 .stat .lbl { font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-top: 2px; }
 /* ── leaderboard + credit wall ── */
-.lb-row { display: flex; align-items: center; gap: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 18px; margin-bottom: 8px; flex-wrap: wrap; }
+.lb-row { display: flex; align-items: center; gap: 18px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 22px; margin-bottom: 8px; flex-wrap: wrap; }
 .lb-row.top1 { border-color: var(--amber); box-shadow: 0 0 20px rgba(244,199,95,.12); }
 .lb-row .rank { font-weight: 800; font-size: 1.1rem; color: var(--muted); min-width: 34px; text-align: center; }
 .lb-row.top1 .rank { color: var(--amber); }
@@ -258,13 +259,13 @@ details.how-details .how-body { padding: 16px 18px; }
 .lb-row .who { flex: 1; min-width: 160px; }
 .lb-row .who .handle { font-weight: 800; color: var(--text); }
 .lb-row .who .lvl { color: var(--muted); font-size: .82rem; }
-.lb-row .score-col { text-align: right; }
+.lb-row .score-col { text-align: right; min-width: 130px; }
 .lb-row .score-col .pts { font-weight: 800; font-size: 1.15rem; color: var(--amber); }
 .lb-row .score-col .settled-n { color: var(--muted); font-size: .78rem; }
 .lb-row .lb-badge-list { width: 100%; }
 .credit-row { display: flex; align-items: baseline; gap: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 18px; margin-bottom: 10px; flex-wrap: wrap; }
 .credit-row .handle { font-weight: 800; color: var(--amber); white-space: nowrap; }
-.credit-row .what { flex: 1; min-width: 220px; }
+.credit-row .what { flex: 1; min-width: 360px; }
 .credit-row .what .t { font-weight: 700; }
 .credit-row .what .tldr { color: var(--muted); font-size: .84rem; line-height: 1.45; margin-top: 3px; font-style: italic; }
 .credit-row .where { font-size: .82rem; color: var(--muted); white-space: nowrap; }
@@ -287,10 +288,10 @@ details.how-details .how-body { padding: 16px 18px; }
 /* ── ticker symbol chip ── */
 .tsym { font-family: var(--font-mono); font-weight: 700; font-size: .78rem; color: var(--amber); background: rgba(244,199,95,.09); border: 1px solid rgba(244,199,95,.35); border-radius: 4px; padding: 1px 6px; white-space: nowrap; letter-spacing: .02em; margin-right: 4px; }
 /* ── market stats strip ── */
-.mkt-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; margin: 26px auto 0; max-width: 720px; }
+.mkt-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; margin: 26px 0 0; width: 100%; }
 @media (max-width: 640px) { .mkt-stats { grid-template-columns: repeat(2, 1fr); } }
-.mkt-stats .cell { background: var(--panel); padding: 14px 10px; text-align: center; }
-.mkt-stats .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 1.7rem; font-weight: 800; color: var(--text); }
+.mkt-stats .cell { background: var(--panel); padding: 18px 10px; text-align: center; }
+.mkt-stats .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: clamp(1.8rem, 2.4vw, 2.6rem); font-weight: 800; color: var(--text); }
 .mkt-stats .num .up { color: var(--green); font-size: .95rem; vertical-align: 2px; margin-left: 3px; }
 .mkt-stats .lbl { font-size: .68rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-top: 3px; font-variant-caps: all-small-caps; }
 /* ── live markets board ── */
@@ -324,7 +325,7 @@ details.how-details .how-body { padding: 16px 18px; }
 /* ── how the market works: two-capital strip ── */
 .how-market { margin: 34px 0 6px; }
 .how-market h3 { text-align: center; font-size: 1.15rem; margin-bottom: 4px; }
-.how-market p.hm-sub { text-align: center; color: var(--muted); font-size: .9rem; max-width: 620px; margin: 0 auto 18px; line-height: 1.55; }
+.how-market p.hm-sub { text-align: center; color: var(--muted); font-size: .9rem; max-width: 70ch; margin: 0 auto 18px; line-height: 1.55; }
 .cap-grid { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: 10px; align-items: stretch; }
 @media (max-width: 640px) { .cap-grid { grid-template-columns: 1fr; } .cap-arrow { transform: rotate(90deg); } }
 .cap-grid .panel { background: linear-gradient(rgba(48,54,61,.35) 1px, transparent 1px) 0 0 / 100% 28px, var(--panel); }
@@ -336,14 +337,14 @@ details.how-details .how-body { padding: 16px 18px; }
 .cap-status { display: inline-block; font-family: var(--font-mono); font-size: .66rem; font-weight: 700; letter-spacing: .1em; padding: 2px 8px; border-radius: 4px; margin-top: 10px; }
 .cap-status.live { color: var(--green); border: 1px solid rgba(116,223,154,.5); background: rgba(116,223,154,.07); }
 .cap-status.soon { color: var(--blue); border: 1px solid rgba(128,191,255,.5); background: rgba(128,191,255,.07); }
-.backing-teaser { text-align: center; margin: 18px auto 0; color: var(--muted); font-size: .9rem; line-height: 1.6; max-width: 560px; }
+.backing-teaser { text-align: center; margin: 18px auto 0; color: var(--muted); font-size: .9rem; line-height: 1.6; max-width: 70ch; }
 .backing-teaser b { color: var(--text); }
 /* ── the terminal: repo value-index chart ── */
 .hero.compact { padding: 26px 0 18px; }
 .hero.compact h1 { font-size: 1.8rem; }
-.market-layout { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 14px; align-items: stretch; margin: 18px 0 0; }
+.market-layout { display: grid; grid-template-columns: minmax(280px, 320px) minmax(0, 1fr); gap: 16px; align-items: stretch; margin: 18px 0 0; }
 .watchlist-panel, .chart-panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
-.watchlist-panel { display: flex; flex-direction: column; min-height: 0; max-height: 418px; overflow: hidden; }
+.watchlist-panel { display: flex; flex-direction: column; min-height: 0; height: min(60vh, 720px); max-height: 720px; overflow: hidden; }
 .watchlist-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 12px 12px 8px; border-bottom: 1px solid var(--line); font-size: .72rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
 .watchlist-count { font-family: var(--font-mono); font-weight: 700; letter-spacing: 0; text-transform: none; }
 #watchlist-filter { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: var(--bg); font-family: var(--font-mono); font-size: .78rem; padding: 9px 11px; }
@@ -377,7 +378,7 @@ details.how-details .how-body { padding: 16px 18px; }
 .chart-quote .ex { color: var(--muted); font-style: italic; font-size: .72rem; font-weight: 400; margin-left: 8px; }
 @media (max-width: 800px) {
   .market-layout { grid-template-columns: 1fr; }
-  .watchlist-panel { max-height: none; }
+  .watchlist-panel { height: auto; max-height: none; }
   .watchlist-list { display: flex; gap: 6px; overflow-x: auto; overflow-y: hidden; padding: 6px; }
   .watch-row { grid-template-columns: minmax(92px, 1fr) 58px; grid-template-areas: "meta price" "spark spark"; flex: 0 0 188px; }
   .watch-meta { grid-area: meta; }
@@ -427,6 +428,18 @@ details.how-details .how-body { padding: 16px 18px; }
 .news-tldr { color: var(--text); font-size: .86rem; line-height: 1.45; }
 .news-note { margin-top: 7px; color: var(--muted); font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: .68rem; }
 .repo-news-empty { color: var(--muted); font-size: .82rem; padding: 4px 0; }
+#browse-list, #myrepos-list, #repos-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
+#browse-list .card, #myrepos-list .card, #repos-list .card { margin-bottom: 0; }
+@media (min-width: 1100px) {
+  .repo-news-list { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+  .repo-news-empty { grid-column: 1 / -1; }
+  .board-head, .board-row { grid-template-columns: 120px minmax(260px, 1fr) 112px minmax(180px, 260px) 56px; }
+}
+@media (max-width: 800px) {
+  main { padding: 28px 24px 64px; }
+  #browse-list, #myrepos-list, #repos-list { grid-template-columns: 1fr; }
+  .credit-row .what { min-width: 220px; }
+}
 /* ── guided listing wizard: stepper + compare + matches ── */
 .stepper { display: flex; gap: 8px; list-style: none; margin: 16px 0 18px; flex-wrap: wrap; }
 .stepper li { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); border-radius: var(--radius); padding: 7px 16px; font-weight: 700; font-size: .88rem; }
@@ -473,21 +486,23 @@ details.how-details .how-body { padding: 16px 18px; }
   <div class="tape-viewport"><div class="tape-track" id="tape-track" aria-hidden="false"></div></div>
 </div>
 <header>
-  <button class="logo" data-goto="home" aria-label="Dibs home">Di<span>bs</span></button>
-  <button id="jump-btn" aria-haspopup="dialog" aria-controls="jump-overlay" title="Jump anywhere">Jump<kbd id="jump-kbd">⌘K</kbd></button>
-  <span class="hdr-spacer"></span>
-  <button id="nav-list-cta" aria-label="List an idea">＋ List an idea</button>
-  <button id="nav-donate-cta" aria-label="Donate tokens">Donate tokens</button>
-  <a id="signin" href="__HUB_URL__" target="_blank" rel="noopener">Sign in</a>
-  <button id="level-chip" data-auth data-goto="mine" aria-label="Score and level. Open profile."></button>
-  <div id="bell-wrap" data-auth>
-    <button id="bell" title="Notifications" aria-label="Notifications"><svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 16a2 2 0 0 0 1.985-1.75c.017-.137-.097-.25-.235-.25h-3.5c-.138 0-.252.113-.235.25A2 2 0 0 0 8 16ZM3 5a5 5 0 0 1 10 0v2.947c0 .05.015.098.042.139l1.703 2.555A1.519 1.519 0 0 1 13.482 13H2.518a1.516 1.516 0 0 1-1.263-2.36l1.703-2.554A.255.255 0 0 0 3 7.947Z"/></svg><span class="badge" id="bell-badge"></span></button>
-    <div id="notif-panel">
-      <div class="np-head"><span>Notifications</span><button class="pill small" id="np-readall">Mark all read</button></div>
-      <div id="np-list"></div>
+  <div class="header-shell">
+    <button class="logo" data-goto="home" aria-label="Dibs home">Di<span>bs</span></button>
+    <button id="jump-btn" aria-haspopup="dialog" aria-controls="jump-overlay" title="Jump anywhere">Jump<kbd id="jump-kbd">⌘K</kbd></button>
+    <span class="hdr-spacer"></span>
+    <button id="nav-list-cta" aria-label="List an idea">＋ List an idea</button>
+    <button id="nav-donate-cta" aria-label="Donate tokens">Donate tokens</button>
+    <a id="signin" href="__HUB_URL__" target="_blank" rel="noopener">Sign in</a>
+    <button id="level-chip" data-auth data-goto="mine" aria-label="Score and level. Open profile."></button>
+    <div id="bell-wrap" data-auth>
+      <button id="bell" title="Notifications" aria-label="Notifications"><svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 16a2 2 0 0 0 1.985-1.75c.017-.137-.097-.25-.235-.25h-3.5c-.138 0-.252.113-.235.25A2 2 0 0 0 8 16ZM3 5a5 5 0 0 1 10 0v2.947c0 .05.015.098.042.139l1.703 2.555A1.519 1.519 0 0 1 13.482 13H2.518a1.516 1.516 0 0 1-1.263-2.36l1.703-2.554A.255.255 0 0 0 3 7.947Z"/></svg><span class="badge" id="bell-badge"></span></button>
+      <div id="notif-panel">
+        <div class="np-head"><span>Notifications</span><button class="pill small" id="np-readall">Mark all read</button></div>
+        <div id="np-list"></div>
+      </div>
     </div>
+    <div id="who"></div>
   </div>
-  <div id="who"></div>
 </header>
 
 <!-- jump menu: keyboard-first command palette (⌘K / Ctrl-K / "/") -->
@@ -1244,6 +1259,9 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
   var repoNewsCache = {};     // repoID → news cards
   var repoNewsLoading = {};   // repoID → in-flight news fetch
   var chartCurrent = null;    // repoID being shown (null = example mode)
+  var chartLastData = null;    // payload last rendered, for responsive redraws
+  var chartLastWidth = 0;
+  var chartResizeQueued = false;
   var seriesOn = { ideas: true, agent: true };
   var CHART_ROTATE_MS = 45000;
   var CHART_RESUME_MS = 120000;
@@ -1437,12 +1455,16 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
     syncWatchlistSelection();
     ensureRepoNews(repoID);
     if (chartCache[repoID]) { renderChart(chartCache[repoID]); renderWatchlistSpark(repoID); ensureRepoNews(repoID); return; }
+    chartLastData = null;
+    chartLastWidth = 0;
     $('chart-stage').innerHTML = '<div class="chart-empty">Loading…</div>';
     api('GET', 'repos/' + repoID + '/index').then(function (d) {
       chartCache[repoID] = d;
       renderWatchlistSpark(repoID);
       if (chartCurrent === repoID) { renderChart(d); ensureRepoNews(repoID); }
     }).catch(function () {
+      chartLastData = null;
+      chartLastWidth = 0;
       $('chart-stage').innerHTML = '<div class="chart-empty">Chart unavailable.</div>';
     });
   }
@@ -1489,7 +1511,13 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
     }).join('');
   }
   var TREND_COLOR = { up: '#74df9a', down: '#ff7e7e', flat: '#f4c75f' };
+  function chartStageWidth() {
+    var stage = $('chart-stage');
+    if (!stage || !stage.getBoundingClientRect) return 820;
+    return Math.round(stage.getBoundingClientRect().width || stage.clientWidth || 820);
+  }
   function renderChart(d) {
+    chartLastData = d;
     var trend = d.delta > 0 ? 'up' : d.delta < 0 ? 'down' : 'flat';
     $('chart-sym').textContent = '$' + d.symbol;
     $('chart-repo').textContent = d.repoID;
@@ -1501,8 +1529,10 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
       ? 'Example data. Real charts appear when repos list.'
       : 'Index derived from weighted issue and PR activity.';
 
-    var W = 820, H = 300, L = 46, R = 806;
-    var plotTop = 14, plotBot = 192, barTop = 210, barBot = 278;
+    var W = Math.max(620, chartStageWidth());
+    var H = Math.max(300, Math.min(380, Math.round(W * 0.26))), L = 46, R = W - 14;
+    chartLastWidth = W;
+    var plotTop = 14, plotBot = Math.round(H * 0.64), barTop = plotBot + 18, barBot = H - 22;
     var pts = d.points, n = pts.length;
     var min = Infinity, max = -Infinity;
     pts.forEach(function (p) { if (p.value < min) min = p.value; if (p.value > max) max = p.value; });
@@ -1563,6 +1593,21 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
       ' <tspan class="quote-delta ' + trend + '">' + dtext + '</tspan></text>';
     svg += '</svg>';
     $('chart-stage').innerHTML = svg;
+  }
+  function scheduleChartResizeRedraw() {
+    if (chartResizeQueued) return;
+    chartResizeQueued = true;
+    requestAnimationFrame(function () {
+      chartResizeQueued = false;
+      if (!chartLastData) return;
+      var w = Math.max(620, chartStageWidth());
+      if (Math.abs(w - chartLastWidth) >= 12) renderChart(chartLastData);
+    });
+  }
+  if ('ResizeObserver' in window) {
+    new ResizeObserver(scheduleChartResizeRedraw).observe($('chart-stage'));
+  } else {
+    window.addEventListener('resize', scheduleChartResizeRedraw);
   }
   function shortDate(t) {
     var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t);
