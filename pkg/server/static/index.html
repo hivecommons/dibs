@@ -562,8 +562,8 @@ details.how-details .how-body { padding: 16px 18px; }
       </div>
       <div id="chart-stage"></div>
       <div class="chart-legend" id="chart-legend">
-        <button class="legend-chip on" data-series="issuesHuman" aria-pressed="true" title="Non-bot GitHub issues, including Dibs idea issues filed by the ideator through GitHub."><span class="sw sw-issues-human"></span>issues (human)</button>
-        <button class="legend-chip on" data-series="prsClanker" aria-pressed="true" title="ClankeR pull requests matched by hive bot, branch, label, or body markers and bucketed by creation date."><span class="sw sw-prs-clanker"></span>clanker PRs</button>
+        <button class="legend-chip on" data-series="issuesHuman" aria-pressed="true" title="Issues filed by humans — new innovation entering the market."><span class="sw sw-issues-human"></span>issues (human)</button>
+        <button class="legend-chip on" data-series="prsClanker" aria-pressed="true" title="PRs from donated AI capacity (ClankeR) implementing it."><span class="sw sw-prs-clanker"></span>clanker PRs</button>
         <span class="chart-note" id="chart-note">Index derived from weighted issue and PR activity.</span>
       </div>
       <div class="chart-formula">index = 1·issue + 3·PR merged + 5·clanker PR + 8·idea filed + 10·clanker merged</div>
@@ -1580,8 +1580,8 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
       var cx = x(i);
       var y0 = barBot, x0 = cx - bw / 2;
       [
-        { on: seriesOn.issuesHuman, n: Number(b.issuesHuman) || 0, cls: 'bar-issues-human', label: 'human issue(s), including human-filed Dibs idea issues' },
-        { on: seriesOn.prsClanker, n: Number(b.prsClanker) || 0, cls: 'bar-prs-clanker', label: 'ClankeR PR(s) created' }
+        { on: seriesOn.issuesHuman, n: Number(b.issuesHuman) || 0, cls: 'bar-issues-human', label: 'issue(s) filed by humans — new innovation entering the market' },
+        { on: seriesOn.prsClanker, n: Number(b.prsClanker) || 0, cls: 'bar-prs-clanker', label: 'PR(s) from donated AI capacity (ClankeR) implementing it' }
       ].forEach(function (seg) {
         if (!seg.on || seg.n <= 0) return;
         var h = (barBot - barTop) * seg.n / bmax;
