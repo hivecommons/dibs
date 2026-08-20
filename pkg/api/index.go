@@ -37,13 +37,12 @@ const (
 
 // repoEvent is one weighted activity event against a repo.
 type repoEvent struct {
-	at     time.Time
-	weight float64
-	count  int
-	// kind buckets the sub-chart bars: "ideas" (offers — listing/match
-	// interest) or "agent" (accept/settle — implementation activity; an
-	// honest PROXY until real token metering exists).
-	kind string
+	at          time.Time
+	weight      float64
+	count       int
+	issuesHuman int
+	prsHuman    int
+	prsClanker  int
 }
 
 func (e repoEvent) barCount() int {
@@ -61,9 +60,10 @@ type IndexPoint struct {
 
 // IndexBar is one day's activity bars for the sub-chart.
 type IndexBar struct {
-	T     string `json:"t"`
-	Ideas int    `json:"ideas"` // regular issues plus Dibs-filed ideas
-	Agent int    `json:"agent"` // regular and ClankeR PR activity
+	T           string `json:"t"`
+	IssuesHuman int    `json:"issuesHuman"` // non-bot issues, including human Dibs idea filings
+	PRsHuman    int    `json:"prsHuman"`    // non-bot, non-ClankeR PRs by creation day
+	PRsClanker  int    `json:"prsClanker"`  // ClankeR PRs by creation day
 }
 
 // RepoIndex is the full chart payload for one repo.
@@ -130,7 +130,10 @@ func repoEvents(ideas []*store.Idea, repoID string, coveredIdeas *ideaCoverage) 
 			if coveredIdeas.covers(date, idea.UpdatedAt) {
 				continue
 			}
-			evs = append(evs, repoEvent{at: idea.UpdatedAt, weight: indexformula.Contribution(indexformula.Counts{IdeasFiled: 1}), kind: "ideas"})
+			evs = append(evs, repoEvent{
+				at: idea.UpdatedAt, weight: indexformula.Contribution(indexformula.Counts{IdeasFiled: 1}),
+				issuesHuman: 1,
+			})
 		}
 	}
 	sort.Slice(evs, func(i, j int) bool { return evs[i].at.Before(evs[j].at) })
@@ -215,15 +218,19 @@ func historyEvents(hist *history.Store, repoID string) []repoEvent {
 		}
 		issueCounts := indexformula.Counts{RegularIssuesCreated: d.RegularIssuesCreated, IdeasFiled: d.IdeasFiled}
 		if w := indexformula.Contribution(issueCounts); w != 0 {
-			evs = append(evs, repoEvent{at: at, weight: w, count: indexformula.Activity(issueCounts), kind: "ideas"})
+			evs = append(evs, repoEvent{at: at, weight: w, count: indexformula.Activity(issueCounts), issuesHuman: d.IssuesHuman})
 		}
 		prCounts := indexformula.Counts{
 			RegularPRsMerged:  d.MergedPRs,
 			ClankerPRsCreated: d.ClankerPRsCreated,
 			ClankerPRsMerged:  d.ClankerPRsMerged,
 		}
-		if w := indexformula.Contribution(prCounts); w != 0 {
-			evs = append(evs, repoEvent{at: at, weight: w, count: indexformula.Activity(prCounts), kind: "agent"})
+		if w := indexformula.Contribution(prCounts); w != 0 || d.PRsHuman != 0 || d.PRsClanker != 0 {
+			count := indexformula.Activity(prCounts)
+			if barCount := d.PRsHuman + d.PRsClanker; barCount > count {
+				count = barCount
+			}
+			evs = append(evs, repoEvent{at: at, weight: w, count: count, prsHuman: d.PRsHuman, prsClanker: d.PRsClanker})
 		}
 	}
 	return evs
@@ -253,11 +260,9 @@ func buildIndex(evs []repoEvent, now time.Time) ([]IndexPoint, []IndexBar, float
 			i := int(d.Sub(start).Hours() / 24)
 			daily[i] += e.weight
 			activity += e.barCount()
-			if e.kind == "ideas" {
-				bars[i].Ideas += e.barCount()
-			} else {
-				bars[i].Agent += e.barCount()
-			}
+			bars[i].IssuesHuman += e.issuesHuman
+			bars[i].PRsHuman += e.prsHuman
+			bars[i].PRsClanker += e.prsClanker
 		}
 	}
 

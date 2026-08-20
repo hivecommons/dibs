@@ -29,10 +29,10 @@ func TestBuildIndexDeterminism(t *testing.T) {
 	d5b := ts(t, "2026-08-15T18:00:00Z")   // same day
 	today := ts(t, "2026-08-19T01:00:00Z") // last bucket
 	evs := []repoEvent{
-		{at: old, weight: indexformula.Contribution(indexformula.Counts{ClankerPRsMerged: 1}), kind: "agent"},
-		{at: d5, weight: indexformula.Contribution(indexformula.Counts{RegularIssuesCreated: 1}), kind: "ideas"},
-		{at: d5b, weight: indexformula.Contribution(indexformula.Counts{RegularPRsMerged: 1}), kind: "agent"},
-		{at: today, weight: indexformula.Contribution(indexformula.Counts{IdeasFiled: 1}), kind: "ideas"},
+		{at: old, weight: indexformula.Contribution(indexformula.Counts{ClankerPRsMerged: 1})},
+		{at: d5, weight: indexformula.Contribution(indexformula.Counts{RegularIssuesCreated: 1}), issuesHuman: 1},
+		{at: d5b, weight: indexformula.Contribution(indexformula.Counts{RegularPRsMerged: 1}), prsHuman: 1},
+		{at: today, weight: indexformula.Contribution(indexformula.Counts{IdeasFiled: 1}), issuesHuman: 1},
 	}
 
 	p1, b1, cur1, delta1, act1 := buildIndex(evs, now)
@@ -64,11 +64,11 @@ func TestBuildIndexDeterminism(t *testing.T) {
 	}
 	// Bars land in the right buckets and kinds.
 	aug15 := b1[len(b1)-5] // 2026-08-15 is 4 days before the last bucket
-	if aug15.T != "2026-08-15" || aug15.Ideas != 1 || aug15.Agent != 1 {
+	if aug15.T != "2026-08-15" || aug15.IssuesHuman != 1 || aug15.PRsHuman != 1 || aug15.PRsClanker != 0 {
 		t.Fatalf("aug15 bar wrong: %+v", aug15)
 	}
 	last := b1[len(b1)-1]
-	if last.T != "2026-08-19" || last.Ideas != 1 || last.Agent != 0 {
+	if last.T != "2026-08-19" || last.IssuesHuman != 1 || last.PRsHuman != 0 || last.PRsClanker != 0 {
 		t.Fatalf("last bar wrong: %+v", last)
 	}
 }
@@ -85,7 +85,7 @@ func TestBuildIndexQuietRepo(t *testing.T) {
 		}
 	}
 	for _, b := range bars {
-		if b.Ideas != 0 || b.Agent != 0 {
+		if b.IssuesHuman != 0 || b.PRsHuman != 0 || b.PRsClanker != 0 {
 			t.Fatalf("quiet repo should have empty bars, got %+v", b)
 		}
 	}
@@ -146,8 +146,8 @@ func TestRepoEventsWeights(t *testing.T) {
 		t.Fatalf("want 1 idea-filed event, got %d: %+v", len(evs), evs)
 	}
 	wantWeight := indexformula.Contribution(indexformula.Counts{IdeasFiled: 1})
-	if evs[0].weight != wantWeight || evs[0].kind != "ideas" {
-		t.Fatalf("event = %+v, want weight %v kind ideas", evs[0], wantWeight)
+	if evs[0].weight != wantWeight || evs[0].issuesHuman != 1 {
+		t.Fatalf("event = %+v, want weight %v human issue bar", evs[0], wantWeight)
 	}
 	if evs := repoEvents(ideas, "org/uninvolved", nil); len(evs) != 0 {
 		t.Fatalf("uninvolved repo should have no events, got %+v", evs)
@@ -161,6 +161,7 @@ func TestHistoryEventsUseNativeIndexSemantics(t *testing.T) {
 	}
 	if err := hist.Upsert("org/repo", []history.DayActivity{{
 		Date: "2026-08-18", RegularIssuesCreated: 2, IdeasFiled: 1, MergedPRs: 3, ClankerPRsCreated: 1, ClankerPRsMerged: 1,
+		IssuesHuman: 2, PRsHuman: 4, PRsClanker: 1,
 	}}, ts(t, "2026-08-19T12:00:00Z")); err != nil {
 		t.Fatalf("Upsert: %v", err)
 	}
@@ -170,19 +171,40 @@ func TestHistoryEventsUseNativeIndexSemantics(t *testing.T) {
 	}
 	wantIssueWeight := indexformula.Contribution(indexformula.Counts{RegularIssuesCreated: 2, IdeasFiled: 1})
 	wantPRWeight := indexformula.Contribution(indexformula.Counts{RegularPRsMerged: 3, ClankerPRsCreated: 1, ClankerPRsMerged: 1})
-	if evs[0].weight != wantIssueWeight || evs[0].kind != "ideas" || evs[0].count != 3 {
-		t.Fatalf("history issue event = %+v, want weight %v kind ideas count 3", evs[0], wantIssueWeight)
+	if evs[0].weight != wantIssueWeight || evs[0].count != 3 || evs[0].issuesHuman != 2 {
+		t.Fatalf("history issue event = %+v, want weight %v count 3 issuesHuman 2", evs[0], wantIssueWeight)
 	}
-	if evs[1].weight != wantPRWeight || evs[1].kind != "agent" || evs[1].count != 5 {
-		t.Fatalf("history PR event = %+v, want weight %v kind agent count 5", evs[1], wantPRWeight)
+	if evs[1].weight != wantPRWeight || evs[1].count != 5 || evs[1].prsHuman != 4 || evs[1].prsClanker != 1 {
+		t.Fatalf("history PR event = %+v, want weight %v count 5 prsHuman 4 prsClanker 1", evs[1], wantPRWeight)
 	}
 	_, bars1, cur1, _, act1 := buildIndex(evs, ts(t, "2026-08-19T12:00:00Z"))
 	_, bars2, cur2, _, act2 := buildIndex(historyEvents(hist, "org/repo"), ts(t, "2026-08-19T12:00:00Z"))
 	if cur1 != cur2 || act1 != act2 || !reflect.DeepEqual(bars1, bars2) {
 		t.Fatalf("same persisted backfill should produce same series")
 	}
-	if bars1[len(bars1)-2].Ideas != 3 || bars1[len(bars1)-2].Agent != 5 {
-		t.Fatalf("bars = %+v, want ideas 3 agent 5", bars1[len(bars1)-2])
+	if bars1[len(bars1)-2].IssuesHuman != 2 || bars1[len(bars1)-2].PRsHuman != 4 || bars1[len(bars1)-2].PRsClanker != 1 {
+		t.Fatalf("bars = %+v, want issuesHuman 2 prsHuman 4 prsClanker 1", bars1[len(bars1)-2])
+	}
+}
+
+func TestHistoryEventsExposeCreatedHumanPRBarsWithoutMovingIndex(t *testing.T) {
+	hist, err := history.NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	if err := hist.Upsert("org/repo", []history.DayActivity{{Date: "2026-08-18", PRsHuman: 2}}, ts(t, "2026-08-19T12:00:00Z")); err != nil {
+		t.Fatalf("Upsert: %v", err)
+	}
+	evs := historyEvents(hist, "org/repo")
+	if len(evs) != 1 || evs[0].weight != 0 || evs[0].prsHuman != 2 {
+		t.Fatalf("human created PRs should be bar-only events: %+v", evs)
+	}
+	_, bars, current, _, activity := buildIndex(evs, ts(t, "2026-08-19T12:00:00Z"))
+	if current != indexBase || activity != 2 {
+		t.Fatalf("bar-only PRs changed index/activity wrong: current=%v activity=%d", current, activity)
+	}
+	if bars[len(bars)-2].PRsHuman != 2 {
+		t.Fatalf("human PR bar missing: %+v", bars[len(bars)-2])
 	}
 }
 
@@ -206,7 +228,7 @@ func TestCombinedRepoEventsDedupesBackfilledIdeas(t *testing.T) {
 		t.Fatalf("combined events len=%d, want only the backfilled idea despite next-day confirmation: %+v", len(evs), evs)
 	}
 	want := indexformula.Contribution(indexformula.Counts{IdeasFiled: 1})
-	if evs[0].weight != want || evs[0].kind != "ideas" {
+	if evs[0].weight != want || evs[0].issuesHuman != 0 {
 		t.Fatalf("event = %+v, want backfilled idea weight %v", evs[0], want)
 	}
 }

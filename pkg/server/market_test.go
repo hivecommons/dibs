@@ -158,9 +158,10 @@ type repoIndexResp struct {
 		Value float64 `json:"value"`
 	} `json:"points"`
 	Bars []struct {
-		T     string `json:"t"`
-		Ideas int    `json:"ideas"`
-		Agent int    `json:"agent"`
+		T           string `json:"t"`
+		IssuesHuman int    `json:"issuesHuman"`
+		PRsHuman    int    `json:"prsHuman"`
+		PRsClanker  int    `json:"prsClanker"`
 	} `json:"bars"`
 }
 
@@ -203,7 +204,7 @@ func TestRepoIndexEndpoint(t *testing.T) {
 		t.Fatalf("busy index should be above base with positive delta: %+v", busy)
 	}
 	last := busy.Bars[len(busy.Bars)-1]
-	if last.Ideas < 1 || last.Agent != 0 {
+	if last.IssuesHuman < 1 || last.PRsHuman != 0 || last.PRsClanker != 0 {
 		t.Fatalf("today's bars should show the idea-filed activity only: %+v", last)
 	}
 

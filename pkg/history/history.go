@@ -31,7 +31,7 @@ const (
 	maxBodyBytes   = 4 << 20
 	maxConcurrent  = 4
 
-	BackfillVersion = 2
+	BackfillVersion = 3
 
 	// EnvClankerMarkers optionally overrides the comma-separated, case-insensitive
 	// markers matched against PR branch, labels, body, and author login.
@@ -46,8 +46,14 @@ type DayActivity struct {
 	ClankerPRsCreated    int    `json:"clankerPRsCreated"`
 	ClankerPRsMerged     int    `json:"clankerPRsMerged"`
 	IdeasFiled           int    `json:"ideasFiled"`
-	Commits              int    `json:"commits,omitempty"` // legacy; ignored by the composite formula
-	Backfilled           bool   `json:"backfilled"`
+	// Bar-series counts: human-filed Dibs idea issues count as human issues
+	// because Dibs opens a prefilled GitHub URL that the ideator files under
+	// their own account; bot-filed footer issues are excluded here.
+	IssuesHuman int  `json:"issuesHuman"`
+	PRsHuman    int  `json:"prsHuman"`
+	PRsClanker  int  `json:"prsClanker"`
+	Commits     int  `json:"commits,omitempty"` // legacy; ignored by the composite formula
+	Backfilled  bool `json:"backfilled"`
 }
 
 // RepoHistory is the persisted aggregate history for one repo.
@@ -288,6 +294,7 @@ func (b *Backfiller) Backfill(ctx context.Context, repoID string) error {
 		if d, ok := days[date]; ok {
 			d.RegularIssuesCreated = counts.RegularIssuesCreated
 			d.IdeasFiled = counts.IdeasFiled
+			d.IssuesHuman = counts.IssuesHuman
 			days[date] = d
 		}
 	}
@@ -296,6 +303,8 @@ func (b *Backfiller) Backfill(ctx context.Context, repoID string) error {
 			d.MergedPRs += counts.RegularPRsMerged
 			d.ClankerPRsCreated += counts.ClankerPRsCreated
 			d.ClankerPRsMerged += counts.ClankerPRsMerged
+			d.PRsHuman += counts.PRsHuman
+			d.PRsClanker += counts.PRsClanker
 			days[date] = d
 		}
 	}
@@ -342,14 +351,24 @@ func sortedDays(days map[string]DayActivity) []DayActivity {
 	return out
 }
 
-func (b *Backfiller) fetchIssueActivity(ctx context.Context, repoID string, since time.Time) (map[string]indexformula.Counts, error) {
-	out := map[string]indexformula.Counts{}
+type activityCounts struct {
+	indexformula.Counts
+	IssuesHuman int
+	PRsHuman    int
+	PRsClanker  int
+}
+
+func (b *Backfiller) fetchIssueActivity(ctx context.Context, repoID string, since time.Time) (map[string]activityCounts, error) {
+	out := map[string]activityCounts{}
 	for page := 1; page <= maxPullPages; page++ {
 		path := fmt.Sprintf("/repos/%s/issues?state=all&since=%s&per_page=%d&page=%d", repoID, since.UTC().Format(time.RFC3339), perPage, page)
 		var issues []struct {
 			CreatedAt   time.Time        `json:"created_at"`
 			Body        string           `json:"body"`
 			PullRequest *json.RawMessage `json:"pull_request"`
+			User        struct {
+				Login string `json:"login"`
+			} `json:"user"`
 		}
 		if err := b.getJSON(ctx, path, &issues); err != nil {
 			return nil, err
@@ -364,6 +383,9 @@ func (b *Backfiller) fetchIssueActivity(ctx context.Context, repoID string, sinc
 				counts.IdeasFiled++
 			} else {
 				counts.RegularIssuesCreated++
+			}
+			if isHumanLogin(issue.User.Login) {
+				counts.IssuesHuman++
 			}
 			out[date] = counts
 		}
@@ -406,8 +428,8 @@ func (b *Backfiller) FetchMergedPullRequests(ctx context.Context, repoID string)
 	return out, nil
 }
 
-func (b *Backfiller) fetchPullActivity(ctx context.Context, repoID string) (map[string]indexformula.Counts, error) {
-	out := map[string]indexformula.Counts{}
+func (b *Backfiller) fetchPullActivity(ctx context.Context, repoID string) (map[string]activityCounts, error) {
+	out := map[string]activityCounts{}
 	for page := 1; page <= maxPullPages; page++ {
 		path := fmt.Sprintf("/repos/%s/pulls?state=all&sort=updated&direction=desc&per_page=%d&page=%d", repoID, perPage, page)
 		var pulls []pullActivity
@@ -420,6 +442,11 @@ func (b *Backfiller) fetchPullActivity(ctx context.Context, repoID string) (map[
 			if clanker {
 				counts := out[createdDate]
 				counts.ClankerPRsCreated++
+				counts.PRsClanker++
+				out[createdDate] = counts
+			} else if isHumanLogin(pr.User.Login) {
+				counts := out[createdDate]
+				counts.PRsHuman++
 				out[createdDate] = counts
 			}
 			if pr.MergedAt == nil {
@@ -439,6 +466,14 @@ func (b *Backfiller) fetchPullActivity(ctx context.Context, repoID string) (map[
 		}
 	}
 	return out, nil
+}
+
+func isHumanLogin(login string) bool {
+	login = strings.ToLower(strings.TrimSpace(login))
+	if login == "" {
+		return false
+	}
+	return login != "kubestellar-hive[bot]" && !strings.HasSuffix(login, "[bot]")
 }
 
 type pullActivity struct {
