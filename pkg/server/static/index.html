@@ -33,6 +33,12 @@ header .logo span { color: var(--amber); }
   font-weight: 800; white-space: nowrap;
 }
 #nav-list-cta:hover, #nav-list-cta:focus-visible { background: #ffd97a; border-color: #ffd97a; }
+#nav-donate-cta {
+  background: transparent; color: var(--text); border: 1px solid var(--line);
+  padding: 7px 16px; border-radius: var(--radius); cursor: pointer; font: inherit;
+  font-weight: 800; white-space: nowrap;
+}
+#nav-donate-cta:hover, #nav-donate-cta:focus-visible { border-color: var(--amber); color: var(--amber); }
 /* ── jump menu overlay ── */
 #jump-overlay { position: fixed; inset: 0; background: rgba(8,11,15,.72); z-index: 120; display: flex; align-items: flex-start; justify-content: center; padding: 12vh 16px 16px; }
 #jump-overlay[hidden] { display: none; }
@@ -62,6 +68,7 @@ main { max-width: 900px; margin: 0 auto; padding: 28px 24px 64px; }
 .hero h1 em { color: var(--amber); font-style: normal; }
 .hero p.tagline { color: var(--amber); font-weight: 800; font-size: 1.1rem; margin-bottom: 12px; }
 .hero p.sub { color: var(--muted); font-size: 1.05rem; max-width: 540px; margin: 0 auto 24px; line-height: 1.6; }
+.hero-actions { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; }
 .panel h3 { font-size: 1.05rem; margin-bottom: 8px; }
 .panel p { color: var(--muted); line-height: 1.55; }
@@ -132,6 +139,14 @@ main section.sheet:first-of-type { border-top: none; margin-top: 0; padding-top:
 .modal-close { position: absolute; top: 12px; right: 12px; width: 32px; height: 32px; background: var(--panel-2); border: 1px solid var(--line); color: var(--muted); border-radius: var(--radius); cursor: pointer; font: inherit; line-height: 1; }
 .modal-close:hover { color: var(--text); border-color: var(--amber); }
 body.modal-open { overflow: hidden; }
+.donate-copy { color: var(--muted); line-height: 1.6; margin-bottom: 18px; }
+.donate-fallback { border-left: 3px solid var(--amber); background: var(--panel); padding: 14px 18px; border-radius: 0 var(--radius) var(--radius) 0; color: var(--muted); line-height: 1.55; margin: 16px 0; }
+.donate-hives { border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--panel); margin: 10px 0 18px; }
+.donate-hive { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.donate-hive:last-child { border-bottom: none; }
+.donate-hive .name { font-weight: 800; }
+.donate-hive .meta { color: var(--muted); font-size: .82rem; margin-top: 3px; }
+.donate-code { display: block; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; color: var(--text); font-family: var(--font-mono); font-size: .86rem; line-height: 1.7; white-space: pre-wrap; overflow-x: auto; }
 /* ── notifications bell ── */
 #bell-wrap { position: relative; }
 #bell { background: transparent; border: 1px solid transparent; color: var(--muted); font: inherit; padding: 7px 10px 4px; border-radius: var(--radius); cursor: pointer; position: relative; }
@@ -422,6 +437,7 @@ details.how-details .how-body { padding: 16px 18px; }
   <button id="jump-btn" aria-haspopup="dialog" aria-controls="jump-overlay" title="Jump anywhere">Jump<kbd id="jump-kbd">⌘K</kbd></button>
   <span class="hdr-spacer"></span>
   <button id="nav-list-cta" aria-label="List an idea">＋ List an idea</button>
+  <button id="nav-donate-cta" aria-label="Donate tokens">Donate tokens</button>
   <a id="signin" href="__HUB_URL__" target="_blank" rel="noopener">Sign in</a>
   <button id="level-chip" data-auth data-goto="mine" aria-label="Score and level. Open profile."></button>
   <div id="bell-wrap" data-auth>
@@ -459,6 +475,7 @@ details.how-details .how-body { padding: 16px 18px; }
     <span class="ds-spacer"></span>
     <button class="pill small" data-goto="desk">Open desk</button>
     <button class="pill small primary" id="btn-home-new">＋ List an idea</button>
+    <button class="pill small" id="btn-home-donate">Donate tokens</button>
   </div>
   <!-- The pitch — visible to everyone; only the sign-in CTA is anon-gated. -->
   <div class="hero compact">
@@ -466,8 +483,12 @@ details.how-details .how-body { padding: 16px 18px; }
     <p class="sub">Repos are the listed companies. Two kinds of capital move the market:
     ideas and spare AI tokens. You list an idea. A repo with agent capacity accepts it.
     You file the GitHub issue under your own name and keep the credit.</p>
-    <span class="landing-extra"><a class="pill primary" href="__HUB_URL__">Sign in</a></span>
-    <button class="pill" data-goto="credits" style="margin-left:8px">Leaderboard</button>
+    <div class="hero-actions">
+      <button class="pill primary" id="btn-hero-new">＋ List an idea</button>
+      <button class="pill" id="btn-hero-donate">Donate tokens</button>
+      <span class="landing-extra"><a class="pill" href="__HUB_URL__">Sign in</a></span>
+      <button class="pill" data-goto="credits">Leaderboard</button>
+    </div>
   </div>
   <!-- the terminal: everyone's home — derived repo value-index chart -->
   <div class="chart-panel" aria-label="Repo value index chart">
@@ -494,7 +515,10 @@ details.how-details .how-body { padding: 16px 18px; }
     <div>
       <h2 class="page-title">Your desk</h2>
     </div>
-    <button class="pill primary" id="btn-desk-new">＋ List an idea</button>
+    <div class="form-actions" style="margin-top:0">
+      <button class="pill primary" id="btn-desk-new">＋ List an idea</button>
+      <button class="pill" id="btn-desk-donate">Donate tokens</button>
+    </div>
   </div>
   <div class="level-banner panel" id="level-banner" style="display:none"></div>
   <div class="stats-strip" id="my-stats"></div>
@@ -787,6 +811,23 @@ details.how-details .how-body { padding: 16px 18px; }
   </div>
 </div>
 
+<div class="modal" id="modal-donate" hidden role="dialog" aria-modal="true" aria-labelledby="donate-title">
+  <div class="modal-card">
+    <button class="modal-close" data-close-modal aria-label="Close token donation">✕</button>
+    <h2 class="page-title" id="donate-title">Donate tokens</h2>
+    <p class="donate-copy">Supply the second kind of market capital. Your AI CLI runs a public hive's agents through ClankeR, the contributor relay. Work lands under your GitHub username on that hive and its leaderboard.</p>
+    <div class="donate-fallback">
+      Pick a public hive, then connect your CLI. If no hive contribute URL is listed here, use the public hive directory.
+      <div style="margin-top:10px"><a class="pill small" href="https://hive.kubestellar.io/#public-hives" target="_blank" rel="noopener">Pick a hive</a></div>
+    </div>
+    <h3 style="margin:20px 0 10px;font-size:1rem">Public hives</h3>
+    <div id="donate-hives" aria-live="polite"><div class="empty">Loading public hives…</div></div>
+    <h3 style="margin:22px 0 10px;font-size:1rem">CLI</h3>
+    <code class="donate-code">npx @kubestellar/hive-contribute
+hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
+  </div>
+</div>
+
 <!-- celebration overlay -->
 <div id="match-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="mo-title">
   <div class="mo-burst" id="mo-burst" aria-hidden="true"></div>
@@ -861,7 +902,7 @@ details.how-details .how-body { padding: 16px 18px; }
      (smooth scroll) or modals — show()/data-goto stay compatible. ── */
   var authViews = { desk: 1, mine: 1, repos: 1, edit: 1, match: 1, feed: 1, launch: 1, idea: 1 };
   var SECTION_OF = { home: 'sec-market', desk: 'sec-desk', mine: 'sec-desk', browse: 'sec-ideas', repos: 'sec-repos', credits: 'sec-board' };
-  var MODAL_OF = { edit: 'modal-edit', idea: 'modal-idea', match: 'modal-match', launch: 'modal-launch', feed: 'modal-feed' };
+  var MODAL_OF = { edit: 'modal-edit', idea: 'modal-idea', match: 'modal-match', launch: 'modal-launch', feed: 'modal-feed', donate: 'modal-donate' };
 
   /* modals: flows float over the one page */
   var openModalId = null, modalReturnFocus = null;
@@ -950,6 +991,7 @@ details.how-details .how-body { padding: 16px 18px; }
     { label: 'Idea board', kind: 'go', hint: 'Every public idea, live', run: function () { show('browse'); } },
     { label: 'Repos', kind: 'go', auth: true, hint: 'Opt in, set appetite', run: function () { show('repos'); } },
     { label: 'Leaderboard', kind: 'go', hint: 'Rankings and credit wall', run: function () { show('credits'); } },
+    { label: 'Donate tokens', kind: 'do', hint: 'Contribute spare AI capacity to a hive', run: function () { openDonate(); } },
     { label: 'List an idea', kind: 'do', hint: 'Guided 3-step listing', run: function () {
         if (anon) { $('signin-overlay').hidden = false; $('so-signin').focus(); } else openEdit(null);
       } },
@@ -1706,15 +1748,51 @@ details.how-details .how-body { padding: 16px 18px; }
     show('edit');
     $('f-title').focus();
   }
-  $('btn-home-new').addEventListener('click', function () { openEdit(null); });
+  function startListing() {
+    if (anon) { $('signin-overlay').hidden = false; $('so-signin').focus(); }
+    else openEdit(null);
+  }
+  function getContributeURL(repo) {
+    return repo && repo.contributeURL ? repo.contributeURL : '';
+  }
+  function renderDonateHives(repos) {
+    var el = $('donate-hives');
+    if (!repos.length) {
+      el.innerHTML = '<div class="empty">No public hives are listed yet. Check back soon.</div>';
+      return;
+    }
+    el.innerHTML = '<div class="donate-hives">' + repos.map(function (repo) {
+      var url = getContributeURL(repo);
+      var href = url || 'https://hive.kubestellar.io/#public-hives';
+      var label = url ? 'Contribute' : 'Pick a hive';
+      return '<div class="donate-hive">' +
+        '<div><div class="name">' + esc(repo.repoID) + '</div>' +
+        '<div class="meta">hive: ' + esc(repo.hiveID || 'unknown') +
+        (repo.owner ? ' · owner: ' + esc(repo.owner) : '') + '</div>' +
+        (repo.description ? '<div class="meta">' + esc(repo.description) + '</div>' : '') +
+        '</div>' +
+        '<a class="pill small" href="' + esc(href) + '" target="_blank" rel="noopener">' + label + '</a>' +
+        '</div>';
+    }).join('') + '</div>';
+  }
+  function openDonate() {
+    show('donate');
+    $('donate-hives').innerHTML = '<div class="empty">Loading public hives…</div>';
+    api('GET', 'repos?scope=all')
+      .then(renderDonateHives)
+      .catch(function () { renderDonateHives([]); });
+  }
+  $('btn-home-new').addEventListener('click', startListing);
+  $('btn-hero-new').addEventListener('click', startListing);
   $('btn-desk-new').addEventListener('click', function () { openEdit(null); });
+  $('btn-desk-donate').addEventListener('click', openDonate);
+  $('btn-home-donate').addEventListener('click', openDonate);
+  $('btn-hero-donate').addEventListener('click', openDonate);
+  $('nav-donate-cta').addEventListener('click', openDonate);
   $('btn-cancel').addEventListener('click', function () { closeModal(); });
   // The ever-present navbar CTA — THE action of the site. Signed out, it
   // routes to a friendly sign-in interstitial instead of a dead end.
-  $('nav-list-cta').addEventListener('click', function () {
-    if (anon) { $('signin-overlay').hidden = false; $('so-signin').focus(); }
-    else openEdit(null);
-  });
+  $('nav-list-cta').addEventListener('click', startListing);
   $('so-close').addEventListener('click', function () {
     $('signin-overlay').hidden = true;
     $('nav-list-cta').focus();
