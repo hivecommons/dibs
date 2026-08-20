@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/kubestellar/dibs/pkg/auth"
@@ -123,5 +125,31 @@ func TestSubmitIdeaRequiresAuthentication(t *testing.T) {
 	tls := newTestTools(t)
 	if _, _, err := tls.submitIdea(context.Background(), callReq(""), submitIdeaInput{Title: "Nope", Description: "No token"}); !errors.Is(err, auth.ErrUnauthenticated) {
 		t.Fatalf("submitIdea unauthenticated err = %v, want ErrUnauthenticated", err)
+	}
+}
+
+func TestBrowserGETServesInstructions(t *testing.T) {
+	h := NewHandler(Config{})
+	req := httptest.NewRequest(http.MethodGet, "https://dibs.kubestellar.io/mcp", nil)
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,*/*;q=0.8")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("browser GET /mcp = %d, want 200", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "claude mcp add") || !strings.Contains(body, "https://dibs.kubestellar.io/mcp") {
+		t.Fatalf("instructions page missing connect snippet:\n%s", body)
+	}
+}
+
+func TestMCPClientGETNotHijacked(t *testing.T) {
+	h := NewHandler(Config{})
+	req := httptest.NewRequest(http.MethodGet, "https://dibs.kubestellar.io/mcp", nil)
+	req.Header.Set("Accept", "text/event-stream")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if strings.Contains(rec.Body.String(), "claude mcp add") {
+		t.Fatal("SSE GET was served the HTML instructions page")
 	}
 }
