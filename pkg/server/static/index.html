@@ -270,6 +270,9 @@ body.admin [data-admin] { display: revert !important; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .admin-progress { border: 1px solid var(--line); border-radius: 6px; background: rgba(15,20,28,.55); padding: 8px; }
 .admin-progress-log { max-height: 240px; overflow-y: auto; display: grid; gap: 4px; margin-top: 8px; font-family: var(--font-mono); font-size: .78rem; }
+.admin-progress-bar { height: 6px; background: var(--line); border-radius: 999px; overflow: hidden; margin-top: 8px; }
+.admin-progress-bar i { display: block; height: 100%; width: 0; background: var(--amber); border-radius: 999px; transition: width .2s ease; }
+.admin-progress-text { color: var(--muted); font-size: .82rem; margin-top: 6px; }
 .admin-progress-phase { color: var(--amber); text-transform: uppercase; letter-spacing: .08em; font-size: .68rem; margin-top: 6px; }
 .admin-progress-row { color: var(--muted); border-top: 1px solid rgba(139,148,158,.12); padding-top: 4px; }
 .admin-progress-row b { color: var(--text); }
@@ -2144,11 +2147,13 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
     var hive = matches.hive || [];
     var cncf = matches.cncf || [];
     if (!hive.length && !cncf.length) return '<div class="empty">No suggestions yet.</div>';
-    var hiveHTML = hive.length ? '<h4>Hive matches</h4><div class="admin-match-list">' + hive.map(function (m) {
+    hive = hive.slice(0, 2);
+    cncf = cncf.slice(0, 2);
+    var hiveHTML = hive.length ? '<h4>Hive-managed (' + hive.length + ')</h4><div class="admin-match-list">' + hive.map(function (m) {
       return '<div class="admin-match-item"><b>' + esc(m.repoID) + '</b> · score ' + scoreText(m.score) +
         (m.reason ? '<div class="why">' + esc(m.reason) + (m.byLLM ? ' · scored by LLM' : ' · keyword match') + '</div>' : '') + '</div>';
     }).join('') + '</div>' : '';
-    var cncfHTML = cncf.length ? '<h4>CNCF suggestions</h4><div class="admin-match-list">' + cncf.map(function (m) {
+    var cncfHTML = cncf.length ? '<h4>CNCF suggestions (' + cncf.length + ')</h4><div class="admin-match-list">' + cncf.map(function (m) {
       return '<div class="admin-match-item"><b>' + esc(m.name || m.repoID) + '</b> · score ' + scoreText(m.score) +
         '<div class="why">' + esc(m.repoID || '') + (m.category ? ' · ' + esc(m.category) : '') + '</div>' +
         (m.reason ? '<div class="why">' + esc(m.reason) + (m.byLLM ? ' · scored by LLM' : ' · BM25 match') + '</div>' : '') + '</div>';
@@ -2166,6 +2171,7 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
       tldr_done: 'TLDR',
       hive_start: 'Hive scoring',
       hive_score: 'Hive scoring',
+      hive_rerank: 'Hive LLM rerank',
       cncf_bm25_start: 'CNCF BM25 shortlist',
       cncf_bm25: 'CNCF BM25 shortlist',
       cncf_score: 'CNCF rerank',
@@ -2176,13 +2182,24 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
   function ensureProgressLog(out) {
     var log = out.querySelector('.admin-progress-log');
     if (log) return log;
-    out.innerHTML = '<div class="admin-progress"><div class="admin-spinner">Rematch running…</div><div class="admin-progress-log" aria-live="polite"></div></div>';
+    out.innerHTML = '<div class="admin-progress"><div class="admin-spinner">Rematch running…</div><div class="admin-progress-bar" aria-hidden="true"><i></i></div><div class="admin-progress-text"></div><div class="admin-progress-log" aria-live="polite"></div></div>';
     return out.querySelector('.admin-progress-log');
+  }
+  function updateAdminProgress(out, ev) {
+    if (!out || !ev || !ev.total) return;
+    var text = out.querySelector('.admin-progress-text');
+    var bar = out.querySelector('.admin-progress-bar i');
+    var pct = Math.max(0, Math.min(100, Math.round((ev.done || 0) * 100 / ev.total)));
+    var label = progressLabel(ev.phase) + ' ' + (ev.done || 0) + '/' + ev.total + ' (' + pct + '%)';
+    if (ev.note && ev.phase === 'cncf_score') label += ' · ' + ev.note;
+    if (text) text.textContent = label;
+    if (bar) bar.style.width = pct + '%';
   }
   function appendAdminEvents(out, events) {
     if (!out || !events || !events.length) return;
     var log = ensureProgressLog(out);
     events.forEach(function (ev) {
+      updateAdminProgress(out, ev);
       var label = progressLabel(ev.phase);
       if (label !== log.dataset.lastPhase) {
         var h = document.createElement('div');
@@ -2197,7 +2214,7 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
         var name = ev.repoID || ev.note || '';
         var symbol = ev.symbol ? ev.symbol + '/' : '';
         var score = ev.score ? ' · score ' + scoreText(ev.score) : '';
-        var mode = (ev.phase === 'hive_score' || ev.phase === 'cncf_score') ? ' · ' + (ev.byLLM ? 'LLM' : 'fallback') : '';
+        var mode = (ev.phase === 'hive_score' || ev.phase === 'hive_rerank' || ev.phase === 'cncf_score') ? ' · ' + (ev.byLLM ? 'LLM' : 'fallback') : '';
         d.innerHTML = '<b>' + esc(symbol + name) + '</b>' + score + mode +
           (ev.note && ev.repoID ? '<div class="why">' + esc(ev.note) + '</div>' : '');
         log.appendChild(d);
@@ -2237,7 +2254,7 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
     var detail = row.nextElementSibling;
     if (!detail) return;
     var out = detail.querySelector('.admin-output');
-    if (out) out.innerHTML = '<div class="admin-progress"><div class="admin-spinner">Starting rematch…</div><div class="admin-progress-log" aria-live="polite"></div></div>';
+    if (out) out.innerHTML = '<div class="admin-progress"><div class="admin-spinner">Starting rematch…</div><div class="admin-progress-bar" aria-hidden="true"><i></i></div><div class="admin-progress-text">Waiting for progress…</div><div class="admin-progress-log" aria-live="polite"></div></div>';
     setAdminButtons(detail, true);
     api('POST', 'admin/ideas/' + id + '/rematch' + (dry ? '?dry=1' : '')).then(function (res) {
       appendAdminEvents(out, res.events || []);

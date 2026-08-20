@@ -138,7 +138,7 @@ func main() {
 
 	// Background hub→registry sync. Failures are logged, never fatal: the
 	// registry keeps serving its last-known (or seeded) state.
-	hubRepos := &registry.HTTPHubClient{BaseURL: hubURL}
+	hubRepos := &registry.HTTPHubClient{BaseURL: hubURL, Token: envOr(settle.EnvGitHubToken, "")}
 	go func() {
 		for {
 			ctx, cancel := context.WithTimeout(context.Background(), hubSyncTimeout)

@@ -388,6 +388,8 @@ func TestAdminRematchDryApplyAndPayload(t *testing.T) {
 	t.Setenv("DIBS_ADMINS", "alice")
 	f := newWave2Server(t, nil,
 		catalog.Project{Name: "Envoy", RepoID: "envoyproxy/envoy", RepoURL: "https://github.com/envoyproxy/envoy", Maturity: "graduated", Category: "Service Proxy", Description: "kubernetes marketplace matching proxy"},
+		catalog.Project{Name: "Istio", RepoID: "istio/istio", RepoURL: "https://github.com/istio/istio", Maturity: "graduated", Category: "Service Mesh", Description: "kubernetes service mesh marketplace"},
+		catalog.Project{Name: "Vitess", RepoID: "vitessio/vitess", RepoURL: "https://github.com/vitessio/vitess", Maturity: "graduated", Category: "Database", Description: "database clustering"},
 	)
 	idea := f.createIdea(t, "bob-session", "Kubernetes marketplace matching",
 		"kubernetes marketplace matching for open source repos", "public")
@@ -439,7 +441,7 @@ func TestAdminRematchDryApplyAndPayload(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	if dry.Status != "done" || !dry.Dry || len(dry.Matches.Hive) == 0 || len(dry.Matches.CNCF) == 0 {
+	if dry.Status != "done" || !dry.Dry || len(dry.Matches.Hive) != 2 || len(dry.Matches.CNCF) != 2 {
 		t.Fatalf("dry rematch missing output: %+v", dry)
 	}
 	if dry.JobID == "" {
@@ -505,7 +507,7 @@ func TestAdminRematchDryApplyAndPayload(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	got, _ = f.store.Get(idea.ID)
-	if len(got.Matches) == 0 || len(got.CNCFMatches) == 0 || got.MatchesUpdatedAt.IsZero() {
+	if len(got.Matches) != 2 || len(got.CNCFMatches) != 2 || got.MatchesUpdatedAt.IsZero() {
 		t.Fatalf("apply did not persist suggestions: %+v", got)
 	}
 
@@ -524,7 +526,7 @@ func TestAdminRematchDryApplyAndPayload(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&ideas); err != nil {
 		t.Fatalf("decode admin ideas: %v", err)
 	}
-	if len(ideas) != 1 || ideas[0].ID != idea.ID || len(ideas[0].Matches.Hive) == 0 || len(ideas[0].Matches.CNCF) == 0 {
+	if len(ideas) != 1 || ideas[0].ID != idea.ID || len(ideas[0].Matches.Hive) != 2 || len(ideas[0].Matches.CNCF) != 2 {
 		t.Fatalf("admin payload missing stored matches: %+v", ideas)
 	}
 }
