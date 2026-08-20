@@ -79,6 +79,9 @@ type RepoTicker struct {
 	Value    float64 `json:"value"`
 	Delta    float64 `json:"delta"`
 	Activity int     `json:"activity"` // events in the window — sort key
+	// ContributeURL is the hive's public /contribute page, so market
+	// surfaces can link straight there (public, hub-fed).
+	ContributeURL string `json:"contributeURL,omitempty"`
 }
 
 // repoSymbols returns each repo's persisted ticker symbol. The fallback path
@@ -303,6 +306,7 @@ func (a *API) repoTickers() ([]RepoTicker, error) {
 		out = append(out, RepoTicker{
 			RepoID: rp.RepoID, Symbol: syms[rp.RepoID],
 			Value: current, Delta: delta, Activity: activity,
+			ContributeURL: rp.ContributeURL,
 		})
 	}
 	sort.Slice(out, func(i, j int) bool {
