@@ -64,11 +64,11 @@ header .logo span { color: var(--amber); }
 #level-chip .lc-bar { height: 4px; background: var(--line); border-radius: 999px; margin-top: 4px; overflow: hidden; }
 #level-chip .lc-bar i { display: block; height: 100%; background: var(--amber); border-radius: 999px; transition: width .4s ease; }
 main { width: min(100%, 1600px); margin: 0 auto; padding: 28px clamp(24px, 3vw, 36px) 64px; }
-.hero { text-align: center; padding: 40px 0 28px; }
+.hero { text-align: center; padding: 28px 0 20px; }
 .hero h1 { font-size: 2.1rem; margin-bottom: 10px; }
 .hero h1 em { color: var(--amber); font-style: normal; }
 .hero p.tagline { color: var(--amber); font-weight: 800; font-size: 1.1rem; margin-bottom: 12px; }
-.hero p.sub { color: var(--muted); font-size: 1.05rem; max-width: 70ch; margin: 0 auto 24px; line-height: 1.6; }
+.hero p.sub { color: var(--muted); font-size: 1.02rem; max-width: 100ch; margin: 0 auto 20px; line-height: 1.55; }
 .hero-actions { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; }
 .panel h3 { font-size: 1.05rem; margin-bottom: 8px; }
@@ -559,12 +559,10 @@ details.how-details .how-body { padding: 16px 18px; }
   <div class="hero compact">
     <h1>The open-source idea exchange.</h1>
     <p class="sub">Repos are the listed companies. Two kinds of capital move the market:
-    ideas and spare AI tokens. An idea can be a spec, a requirement, a feature, or something
-    you wish existed. You list it. A repo with agent capacity accepts it. You file the
-    GitHub issue under your own name and keep the credit.</p>
-    <p class="sub">Everyone has great ideas — that doesn't mean every idea needs a brand-new
-    project. Dibs finds your idea a home in a project that's already alive, so you don't
-    burn your own time and tokens building it from scratch.</p>
+    ideas and spare AI tokens. An idea can be a spec, a requirement, or something you wish
+    existed — list it, a repo with agent capacity accepts it, and the GitHub issue is filed
+    under your name. Your idea finds a home in a living project instead of costing you a
+    brand-new one.</p>
     <div class="hero-actions">
       <button class="pill primary" id="btn-hero-new">＋ List an idea</button>
       <button class="pill" id="btn-hero-donate">Donate tokens</button>
