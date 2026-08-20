@@ -4,10 +4,12 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/kubestellar/dibs/pkg/auth"
@@ -28,6 +30,8 @@ var timeNow = func() time.Time { return time.Now().UTC() }
 // generous headroom for JSON framing and other fields.
 const maxRequestBody = store.MaxBodyBytes + 64*1024
 
+const adminRematchTimeout = 5 * time.Minute
+
 // API wires the store, registry, match engine, settler, and notifications
 // into HTTP handlers.
 type API struct {
@@ -42,6 +46,9 @@ type API struct {
 	Settler *settle.Settler
 	// Notify is the in-app notification store (nil disables).
 	Notify *notify.Store
+
+	rematchMu   sync.Mutex
+	rematchJobs map[string]*adminRematchJob
 }
 
 // Register mounts the API routes onto mux under basePath — "" for the root,
@@ -51,6 +58,7 @@ func (a *API) Register(mux *http.ServeMux, basePath string) {
 	mux.HandleFunc("GET "+basePath+"/api/me/stats", a.handleMyStats)
 	mux.HandleFunc("GET "+basePath+"/api/admin/ideas", a.handleAdminIdeas)
 	mux.HandleFunc("POST "+basePath+"/api/admin/ideas/{id}/rematch", a.handleAdminRematch)
+	mux.HandleFunc("GET "+basePath+"/api/admin/ideas/{id}/rematch", a.handleAdminRematchStatus)
 	mux.HandleFunc("GET "+basePath+"/api/intake/config", intake.HandleConfig)
 	mux.HandleFunc("POST "+basePath+"/api/intake", intake.HandleUpload)
 	mux.HandleFunc("GET "+basePath+"/api/ideas", a.handleListIdeas)
@@ -78,6 +86,15 @@ func identity(r *http.Request) *auth.Identity {
 	return auth.FromContext(r.Context())
 }
 
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
 func ideaForViewer(idea *store.Idea, viewer string) *store.Idea {
 	cp := *idea
 	if cp.Author != viewer {
@@ -101,17 +118,48 @@ type adminMatchSummary struct {
 }
 
 type adminIdea struct {
-	ID            string            `json:"id"`
-	Author        string            `json:"author"`
-	AuthorDisplay string            `json:"authorDisplay,omitempty"`
-	Title         string            `json:"title"`
-	TLDR          string            `json:"tldr,omitempty"`
-	Symbol        string            `json:"symbol,omitempty"`
-	Visibility    string            `json:"visibility"`
-	Status        string            `json:"status"`
-	CreatedAt     time.Time         `json:"createdAt"`
-	UpdatedAt     time.Time         `json:"updatedAt"`
-	Matches       adminMatchSummary `json:"matches"`
+	ID             string            `json:"id"`
+	Author         string            `json:"author"`
+	AuthorDisplay  string            `json:"authorDisplay,omitempty"`
+	AuthorAvatar   string            `json:"authorAvatar,omitempty"`
+	AuthorProvider string            `json:"authorProvider,omitempty"`
+	Title          string            `json:"title"`
+	TLDR           string            `json:"tldr,omitempty"`
+	Symbol         string            `json:"symbol,omitempty"`
+	Visibility     string            `json:"visibility"`
+	Status         string            `json:"status"`
+	CreatedAt      time.Time         `json:"createdAt"`
+	UpdatedAt      time.Time         `json:"updatedAt"`
+	Matches        adminMatchSummary `json:"matches"`
+}
+
+type adminRematchJob struct {
+	Status     string
+	Dry        bool
+	TLDR       string
+	Matches    adminMatchSummary
+	Error      string
+	FinishedAt time.Time
+}
+
+type adminRematchResponse struct {
+	Status     string            `json:"status"`
+	Dry        bool              `json:"dry"`
+	TLDR       string            `json:"tldr,omitempty"`
+	Matches    adminMatchSummary `json:"matches,omitempty"`
+	Error      string            `json:"error,omitempty"`
+	FinishedAt time.Time         `json:"finishedAt,omitempty"`
+}
+
+func (j *adminRematchJob) response() adminRematchResponse {
+	return adminRematchResponse{
+		Status:     j.Status,
+		Dry:        j.Dry,
+		TLDR:       j.TLDR,
+		Matches:    j.Matches,
+		Error:      j.Error,
+		FinishedAt: j.FinishedAt,
+	}
 }
 
 func summarizeMatches(matches []store.Match, cncf []store.CNCFMatch) adminMatchSummary {
@@ -149,17 +197,19 @@ func (a *API) handleAdminIdeas(w http.ResponseWriter, r *http.Request) {
 	out := make([]adminIdea, 0, len(ideas))
 	for _, idea := range ideas {
 		out = append(out, adminIdea{
-			ID:            idea.ID,
-			Author:        idea.Author,
-			AuthorDisplay: idea.AuthorDisplay,
-			Title:         idea.Title,
-			TLDR:          idea.TLDR,
-			Symbol:        idea.Symbol,
-			Visibility:    idea.Visibility,
-			Status:        idea.Status,
-			CreatedAt:     idea.CreatedAt,
-			UpdatedAt:     idea.UpdatedAt,
-			Matches:       summarizeMatches(idea.Matches, idea.CNCFMatches),
+			ID:             idea.ID,
+			Author:         idea.Author,
+			AuthorDisplay:  idea.AuthorDisplay,
+			AuthorAvatar:   idea.AuthorAvatar,
+			AuthorProvider: firstNonEmpty(idea.AuthorProvider, store.AuthorProvider(idea.Author)),
+			Title:          idea.Title,
+			TLDR:           idea.TLDR,
+			Symbol:         idea.Symbol,
+			Visibility:     idea.Visibility,
+			Status:         idea.Status,
+			CreatedAt:      idea.CreatedAt,
+			UpdatedAt:      idea.UpdatedAt,
+			Matches:        summarizeMatches(idea.Matches, idea.CNCFMatches),
 		})
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -180,16 +230,60 @@ func (a *API) handleAdminRematch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	persist := r.URL.Query().Get("dry") != "1"
-	tldr, hive, cncf, err := a.Engine.RematchIdea(r.Context(), idea, persist)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal error")
+	dry := !persist
+
+	a.rematchMu.Lock()
+	if a.rematchJobs == nil {
+		a.rematchJobs = map[string]*adminRematchJob{}
+	}
+	if existing := a.rematchJobs[idea.ID]; existing != nil && existing.Status == "running" {
+		a.rematchMu.Unlock()
+		writeError(w, http.StatusConflict, "rematch already running")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"dry":     !persist,
-		"tldr":    tldr,
-		"matches": adminMatchSummary{Count: len(hive) + len(cncf), Hive: hive, CNCF: cncf},
-	})
+	job := &adminRematchJob{Status: "running", Dry: dry}
+	a.rematchJobs[idea.ID] = job
+	res := job.response()
+	a.rematchMu.Unlock()
+
+	go a.runAdminRematch(context.WithoutCancel(r.Context()), idea, persist, job)
+	writeJSON(w, http.StatusAccepted, res)
+}
+
+func (a *API) runAdminRematch(parent context.Context, idea *store.Idea, persist bool, job *adminRematchJob) {
+	ctx, cancel := context.WithTimeout(parent, adminRematchTimeout)
+	defer cancel()
+	tldr, hive, cncf, err := a.Engine.RematchIdea(ctx, idea, persist)
+	a.rematchMu.Lock()
+	defer a.rematchMu.Unlock()
+	job.FinishedAt = timeNow()
+	if err != nil {
+		job.Status = "error"
+		job.Error = "rematch failed"
+		return
+	}
+	job.Status = "done"
+	job.TLDR = tldr
+	job.Matches = adminMatchSummary{Count: len(hive) + len(cncf), Hive: hive, CNCF: cncf}
+}
+
+func (a *API) handleAdminRematchStatus(w http.ResponseWriter, r *http.Request) {
+	if !a.requireAdmin(w, r) {
+		return
+	}
+	id := r.PathValue("id")
+	a.rematchMu.Lock()
+	job := a.rematchJobs[id]
+	var res adminRematchResponse
+	if job != nil {
+		res = job.response()
+	}
+	a.rematchMu.Unlock()
+	if job == nil {
+		writeError(w, http.StatusNotFound, "rematch job not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
 }
 
 // ideaInput is the client-writable subset of an idea.
@@ -269,12 +363,14 @@ func (a *API) handleCreateIdea(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	idea := &store.Idea{
-		Author:        id.Username,
-		AuthorDisplay: id.DisplayName,
-		Title:         in.Title,
-		Body:          in.Body,
-		Visibility:    in.Visibility,
-		Status:        in.Status,
+		Author:         id.Username,
+		AuthorDisplay:  id.DisplayName,
+		AuthorAvatar:   id.AvatarURL,
+		AuthorProvider: store.AuthorProvider(id.Username),
+		Title:          in.Title,
+		Body:           in.Body,
+		Visibility:     in.Visibility,
+		Status:         in.Status,
 	}
 	if idea.AuthorDisplay == "" {
 		idea.AuthorDisplay = id.Username

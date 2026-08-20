@@ -127,20 +127,22 @@ type CNCFMatch struct {
 
 // Idea is one ideator-authored idea.
 type Idea struct {
-	ID            string      `json:"id"`
-	Author        string      `json:"author"`        // identity key (github login / provider:sub)
-	AuthorDisplay string      `json:"authorDisplay"` // human name for credit
-	Title         string      `json:"title"`
-	Tags          []string    `json:"tags,omitempty"`
-	Symbol        string      `json:"symbol,omitempty"` // $TICKER-style display symbol, assigned at creation
-	Body          string      `json:"body"`             // markdown
-	TLDR          string      `json:"tldr,omitempty"`   // filled by the matching wave
-	Visibility    string      `json:"visibility"`       // public | private
-	Status        string      `json:"status"`
-	CreatedAt     time.Time   `json:"createdAt"`
-	UpdatedAt     time.Time   `json:"updatedAt"`
-	Matches       []Match     `json:"matches"`
-	CNCFMatches   []CNCFMatch `json:"cncfMatches,omitempty"`
+	ID             string      `json:"id"`
+	Author         string      `json:"author"`        // identity key (github login / provider:sub)
+	AuthorDisplay  string      `json:"authorDisplay"` // human name for credit
+	AuthorAvatar   string      `json:"authorAvatar,omitempty"`
+	AuthorProvider string      `json:"authorProvider,omitempty"`
+	Title          string      `json:"title"`
+	Tags           []string    `json:"tags,omitempty"`
+	Symbol         string      `json:"symbol,omitempty"` // $TICKER-style display symbol, assigned at creation
+	Body           string      `json:"body"`             // markdown
+	TLDR           string      `json:"tldr,omitempty"`   // filled by the matching wave
+	Visibility     string      `json:"visibility"`       // public | private
+	Status         string      `json:"status"`
+	CreatedAt      time.Time   `json:"createdAt"`
+	UpdatedAt      time.Time   `json:"updatedAt"`
+	Matches        []Match     `json:"matches"`
+	CNCFMatches    []CNCFMatch `json:"cncfMatches,omitempty"`
 	// MatchesUpdatedAt is bumped whenever stored hive/CNCF suggestions change.
 	MatchesUpdatedAt time.Time `json:"matchesUpdatedAt,omitempty"`
 	// SuggestionsSeenAt records when the author last opened this idea's suggestions.
@@ -152,6 +154,15 @@ type Idea struct {
 	PassedRepos []string `json:"passedRepos,omitempty"`
 	TargetRepo  string   `json:"targetRepo,omitempty"`
 	IssueURL    string   `json:"issueURL,omitempty"`
+}
+
+// AuthorProvider infers the identity provider for legacy ideas. GitHub users
+// predate provider prefixes, so an unprefixed author is a GitHub login.
+func AuthorProvider(author string) string {
+	if i := strings.Index(author, ":"); i > 0 {
+		return author[:i]
+	}
+	return "github"
 }
 
 // OfferTo returns the idea's offer to repoID, or nil.
@@ -342,6 +353,9 @@ func (s *Store) Create(idea *Idea) error {
 	if idea.Matches == nil {
 		idea.Matches = []Match{}
 	}
+	if idea.AuthorProvider == "" {
+		idea.AuthorProvider = AuthorProvider(idea.Author)
+	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -392,6 +406,11 @@ func (s *Store) Update(idea *Idea) error {
 	idea.Author = existing.Author
 	idea.Tags = existing.Tags
 	idea.Symbol = existing.Symbol
+	idea.AuthorAvatar = existing.AuthorAvatar
+	idea.AuthorProvider = existing.AuthorProvider
+	if idea.AuthorProvider == "" {
+		idea.AuthorProvider = AuthorProvider(idea.Author)
+	}
 	idea.CreatedAt = existing.CreatedAt
 	idea.UpdatedAt = time.Now().UTC()
 	idea.Offers = existing.Offers
