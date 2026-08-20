@@ -96,12 +96,12 @@ func TestLandingPagePublic(t *testing.T) {
 		t.Fatalf("landing: %d", rec.Code)
 	}
 	body := rec.Body.String()
-	for _, want := range []string{"Your <em>idea</em>, your <em>credit</em>, their code", "Credit wall",
+	for _, want := range []string{"The open-source idea exchange.", "Credit wall",
 		"Why not just open an issue?", "never implemented at all", "raise the odds your idea gets used",
-		"Accepted = implemented", "open-source idea exchange", "How the market works",
-		"Innovators invest ideas", "BACKING OPENS SOON", "put idle tokens to work",
+		"Accepted = implemented", "How the market works",
+		"Innovators invest ideas", "BACKING OPENS SOON", "Put idle tokens to work",
 		"Repo value index chart", "agent activity (est.)",
-		"Live idea board", "New listings", "Trending",
+		">Markets</h2>", "New listings", "Trending",
 		"https://hive.kubestellar.io"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("landing page missing %q", want)

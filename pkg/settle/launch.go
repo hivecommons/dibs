@@ -17,13 +17,13 @@ import (
 
 // Footer is the attribution line issues filed on HIVE-MANAGED repos end
 // with — they already have agent capacity, so no pitch is needed.
-const Footer = "🐝 Matched via [Dibs](https://dibs.kubestellar.io) (dibs.kubestellar.io)"
+const Footer = "Matched via [Dibs](https://dibs.kubestellar.io)"
 
 // ExternalFooter is the growth-loop call-to-action appended to issues filed
 // on repos NOT managed by a hive: every idea filed externally advertises
 // hive to that repo's maintainers.
-const ExternalFooter = "🐝 **This idea was matched via [Dibs](https://dibs.kubestellar.io)** — the open-source idea exchange.\n" +
-	"⚡ Want AI agents to implement ideas like this automatically? **[Request a hive for this repo →](https://hive.kubestellar.io)**"
+const ExternalFooter = "Matched via [Dibs](https://dibs.kubestellar.io), the open-source idea exchange.\n" +
+	"AI agents can implement ideas like this automatically. [Request a hive for this repo](https://hive.kubestellar.io)."
 
 // footerFor picks the footer by hive membership of the target repo.
 func footerFor(hiveManaged bool) string {
@@ -42,7 +42,7 @@ const MaxIssueURLLen = 7500
 
 // truncationNote is appended (before the footer) when the body had to be
 // cut to fit the URL budget.
-const truncationNote = "\n\n_(Draft truncated to fit the URL — paste the full text from Dibs over this section.)_"
+const truncationNote = "\n\n_(Draft truncated to fit the URL. Paste the full text from Dibs over this section.)_"
 
 // LaunchBody returns body terminated by the Dibs footer (idempotent).
 // hiveManaged selects the footer: the short attribution for hive-managed

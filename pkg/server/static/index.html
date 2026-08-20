@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤝</text></svg>">
-<title>Dibs — a marketplace of ideas</title>
+<title>Dibs — the open-source idea exchange</title>
 <style>
 :root {
   --bg: #0d1117; --panel: #1c2128; --panel-2: #22272e; --line: #30363d;
@@ -390,8 +390,6 @@ details.how-details .how-body { padding: 16px 18px; }
 .compare-orig-title { font-weight: 700; margin-bottom: 8px; }
 .compare-orig-body { color: var(--muted); font-family: var(--font-mono); font-size: .85rem; white-space: pre-wrap; word-break: break-word; max-height: 320px; overflow-y: auto; }
 .embellish-wait { text-align: center; color: var(--purple); padding: 42px 12px; font-size: 1.05rem; font-weight: 700; }
-.embellish-wait .spark { display: inline-block; animation: spark-spin 1.2s linear infinite; }
-@keyframes spark-spin { to { transform: rotate(360deg); } }
 .embellish-note { border-left: 3px solid var(--purple); background: var(--panel); padding: 14px 18px; border-radius: 0 var(--radius) var(--radius) 0; color: var(--muted); line-height: 1.55; margin-top: 14px; }
 .wiz-offer-note { color: var(--muted); font-size: .85rem; margin: 10px 0 14px; line-height: 1.5; }
 /* ── market desk tabs ── */
@@ -457,21 +455,20 @@ details.how-details .how-body { padding: 16px 18px; }
 <section class="sheet" id="sec-market" aria-label="Market terminal">
   <!-- Signed in: slim desk summary — the terminal below is the page. -->
   <div class="desk-strip" data-auth>
-    <span class="ds-nums" id="ds-nums">Loading your desk…</span>
+    <span class="ds-nums" id="ds-nums">Loading…</span>
     <span class="ds-spacer"></span>
-    <button class="pill small" data-goto="desk">Open your desk →</button>
+    <button class="pill small" data-goto="desk">Open desk</button>
     <button class="pill small primary" id="btn-home-new">＋ List an idea</button>
   </div>
   <!-- Logged out: the pitch, exchange-style. -->
   <div class="landing-extra">
     <div class="hero compact">
-      <h1>Your <em>idea</em>, your <em>credit</em>, their code.</h1>
-      <p class="tagline">The open-source idea exchange.</p>
+      <h1>The open-source idea exchange.</h1>
       <p class="sub">Repos are the listed companies. Two kinds of capital move the market:
-      <b>ideas</b> and <b>spare AI tokens</b>. Shipped ideas pay dividends in credit —
-      the GitHub issue is filed <b>by you, under your name</b>, forever.</p>
-      <a class="pill primary" href="__HUB_URL__">Sign in with your Hive Hub account</a>
-      <button class="pill" data-goto="credits" style="margin-left:8px">See The Board</button>
+      ideas and spare AI tokens. You list an idea. A repo with agent capacity accepts it.
+      You file the GitHub issue under your own name and keep the credit.</p>
+      <a class="pill primary" href="__HUB_URL__">Sign in</a>
+      <button class="pill" data-goto="credits" style="margin-left:8px">Leaderboard</button>
     </div>
   </div>
   <!-- the terminal: everyone's home — derived repo value-index chart -->
@@ -488,7 +485,7 @@ details.how-details .how-body { padding: 16px 18px; }
       <div class="chart-legend" id="chart-legend">
         <button class="legend-chip on" data-series="ideas" aria-pressed="true"><span class="sw sw-ideas"></span>ideas listed/matched</button>
         <button class="legend-chip on" data-series="agent" aria-pressed="true"><span class="sw sw-agent"></span>agent activity (est.)</button>
-        <span class="chart-note" id="chart-note">index derived from market activity — offers, bids hit, settlements</span>
+        <span class="chart-note" id="chart-note">Index derived from offers, acceptances, and settlements.</span>
       </div>
     </div>
   <div class="mkt-stats" id="mkt-stats" aria-label="Exchange statistics"></div>
@@ -498,7 +495,6 @@ details.how-details .how-body { padding: 16px 18px; }
   <div class="toolbar">
     <div>
       <h2 class="page-title">Your desk</h2>
-      <p class="page-sub" style="margin:0">Everything that needs you, in one place.</p>
     </div>
     <button class="pill primary" id="btn-desk-new">＋ List an idea</button>
   </div>
@@ -506,14 +502,14 @@ details.how-details .how-body { padding: 16px 18px; }
   <div class="stats-strip" id="my-stats"></div>
   <div class="desk-tabs" role="tablist" aria-label="Desk zones">
     <button role="tab" id="tab-ideas" aria-selected="true" aria-controls="zone-ideas">My ideas<span class="tab-badge" id="badge-ideas"></span></button>
-    <button role="tab" id="tab-matches" aria-selected="false" aria-controls="zone-matches">Matches to review<span class="tab-badge" id="badge-matches"></span></button>
+    <button role="tab" id="tab-matches" aria-selected="false" aria-controls="zone-matches">Matches<span class="tab-badge" id="badge-matches"></span></button>
     <button role="tab" id="tab-activity" aria-selected="false" aria-controls="zone-activity">Activity<span class="tab-badge" id="badge-activity"></span></button>
   </div>
   <div id="zone-ideas" role="tabpanel" aria-labelledby="tab-ideas" tabindex="0">
-    <div class="empty">Loading your ideas…</div>
+    <div class="empty">Loading…</div>
   </div>
   <div id="zone-matches" role="tabpanel" aria-labelledby="tab-matches" tabindex="0" hidden>
-    <div class="swipe-stage" id="home-stage"><div class="empty">Loading your matches…</div></div>
+    <div class="swipe-stage" id="home-stage"><div class="empty">Loading…</div></div>
     <p class="key-hint" id="home-key-hint" style="display:none"><kbd>←</kbd> pass · <kbd>→</kbd> accept</p>
   </div>
   <div id="zone-activity" role="tabpanel" aria-labelledby="tab-activity" tabindex="0" hidden>
@@ -524,8 +520,8 @@ details.how-details .how-body { padding: 16px 18px; }
 <section class="sheet" id="sec-ideas" aria-label="Live idea board">
   <div class="toolbar">
     <div>
-      <h2 class="page-title">Live idea board</h2>
-      <p class="page-sub" style="margin:0">Every public idea on the exchange — phase, listing venue, momentum.</p>
+      <h2 class="page-title">Markets</h2>
+      <p class="page-sub" style="margin:0">Public ideas by phase, venue, and activity.</p>
     </div>
   </div>
   <div class="markets" aria-label="Live markets">
@@ -536,7 +532,6 @@ details.how-details .how-body { padding: 16px 18px; }
   </div>
   <div data-auth>
     <h3 style="margin:26px 0 4px;font-size:1rem">All public ideas</h3>
-    <p class="page-sub" style="font-size:.9rem">Every public idea from the community, full cards.</p>
     <div id="browse-list"></div>
   </div>
 </section>
@@ -544,80 +539,72 @@ details.how-details .how-body { padding: 16px 18px; }
 <div class="landing-extra">
     <div class="how-market" aria-label="How the market works">
       <h3>How the market works</h3>
-      <p class="hm-sub">A stock market where <b>repos are the listed companies</b> — and two
-      investor classes provide the capital that gets ideas built.</p>
+      <p class="hm-sub">Repos are the listed companies. Two kinds of capital get ideas built.</p>
       <div class="cap-grid">
         <div class="panel">
           <span class="cap-tag">INTELLECTUAL CAPITAL</span>
           <h4>Innovators invest ideas</h4>
-          <p>You know what a project needs — even if you'll never open a PR. List the idea;
-          the exchange finds the repos where it can <b>thrive</b>.</p>
+          <p>List an idea. The exchange scores its fit against every opted-in repo.
+          No pull request required.</p>
           <span class="cap-status live">● LIVE</span>
         </div>
         <div class="cap-arrow" aria-hidden="true">→</div>
         <div class="panel">
           <span class="cap-tag">COMPUTE CAPITAL</span>
           <h4>Investors back them</h4>
-          <p>Your AI subscription's spare tokens <b>expire weekly</b>. Pledge that idle capacity
-          to repos and ideas you believe in — it powers the agents that build them.</p>
+          <p>Spare AI subscription tokens reset weekly. Pledged capacity powers the
+          agents that build accepted ideas.</p>
           <span class="cap-status soon">BACKING OPENS SOON</span>
         </div>
         <div class="cap-arrow" aria-hidden="true">→</div>
         <div class="panel">
           <span class="cap-tag">EXECUTION</span>
           <h4>Repos ship them</h4>
-          <p>Agent swarms implement the idea; the credited GitHub issue carries the innovator's
-          name. <b>Dividends are paid in credit</b> — everyone's name on the result.</p>
+          <p>Agent swarms implement the idea. The GitHub issue carries the
+          ideator's name.</p>
           <span class="cap-status live">● LIVE</span>
         </div>
       </div>
-      <p class="backing-teaser"><b>Backing opens soon</b> — put idle tokens to work on ideas you
-      believe in, before they reset. <a href="__HUB_URL__">Join the board now</a> and be ready on
-      day one.</p>
+      <p class="backing-teaser">Backing opens soon. Put idle tokens to work before they reset.
+      <a href="__HUB_URL__">Join now</a>.</p>
     </div>
     <div class="why-not">
       <h3>Why not just open an issue?</h3>
-      <p class="why-hook">Tired of filing an issue into an open-source queue — and watching it get
-      <b>ignored, misunderstood, or never implemented at all</b>?<br>
-      What if you could <b>raise the odds your idea gets used</b> — without building it yourself?</p>
+      <p class="why-hook">Most issues filed into open-source queues are ignored, misunderstood,
+      or never implemented at all. Dibs exists to raise the odds your idea gets used
+      without you building it.</p>
       <div class="why-grid">
         <div class="panel">
           <h4><span class="tag">MARKET REACH</span>Discovery</h4>
-          <p>Dibs finds the venues where your idea can <b>thrive</b> — including ones you didn't
-          know existed. No guessing which repo to file against.</p>
+          <p>Your idea is scored against every opted-in repo. No guessing where to file.</p>
         </div>
         <div class="panel">
           <h4><span class="tag">EXECUTION GUARANTEE</span>Accepted = implemented</h4>
-          <p>A repo that bids on your idea has <b>AI agent capacity ready to build it</b>.
-          An ordinary issue can sit stale in a queue for years.</p>
+          <p>A repo that accepts your idea has agent capacity ready to build it.</p>
         </div>
         <div class="panel">
           <h4><span class="tag">DIVIDENDS</span>Credit, in writing</h4>
-          <p>The issue is filed <b>by you, under your name</b> — natively attributed,
-          traceable forever.</p>
+          <p>You file the issue under your own name. Attribution is native and permanent.</p>
         </div>
       </div>
     </div>
     <details class="how-details">
       <summary>How it works</summary>
       <div class="how-body">
-        <p style="text-align:center;color:var(--muted);margin:0 0 14px">Like dating, minus the
-        heartbreak: your idea matches a repo, they accept, you get the credit — in writing.</p>
         <div class="how">
           <div class="step"><span class="n">1</span><h4>Write the idea</h4>
-            <p>A title and a short write-up: the problem, who benefits, what “done” looks like.
-            An LLM distills a TLDR and scores its fit against every opted-in repo.</p></div>
-          <div class="step"><span class="n">2</span><h4>Match &amp; offer</h4>
-            <p>Swipe through matched repos and offer the idea to the ones you choose.
-            Both sides must say yes.</p></div>
-          <div class="step"><span class="n">3</span><h4>File it — with your name on it</h4>
-            <p>On acceptance, Dibs hands you a prefilled GitHub issue. You file it from your own
-            account, labeled <code>ideated</code>. Natively attributed to you, forever.</p></div>
+            <p>A title and a short body: the problem, who benefits, what done looks like.
+            The idea is scored against every opted-in repo.</p></div>
+          <div class="step"><span class="n">2</span><h4>Match and offer</h4>
+            <p>Review matched repos and offer the idea to the ones you choose.
+            Both sides must accept.</p></div>
+          <div class="step"><span class="n">3</span><h4>File the issue</h4>
+            <p>On acceptance, Dibs builds a prefilled GitHub issue. You file it from your
+            own account with the <code>ideated</code> label.</p></div>
         </div>
         <div class="credit-note">
-          Open source has always credited ideas — the all-contributors spec has a 💡 <b>“ideas”</b>
-          emoji; academia's CRediT taxonomy credits <b>“Conceptualization”</b>. Dibs makes that credit
-          real and public: <b>creators get credit, agents do the work, projects take the bow.</b>
+          The all-contributors spec credits ideas. The CRediT taxonomy credits
+          conceptualization. Dibs records that credit publicly.
         </div>
       </div>
     </details>
@@ -627,7 +614,7 @@ details.how-details .how-body { padding: 16px 18px; }
   <div class="toolbar">
     <div>
       <h2 class="page-title">For repos</h2>
-      <p class="page-sub" style="margin:0">Opt your hive-managed repo in. Set topics &amp; appetite. Review your feed.</p>
+      <p class="page-sub" style="margin:0">Opt a repo in. Set topics and appetite. Review incoming ideas.</p>
     </div>
   </div>
   <h3 style="margin:18px 0 10px;font-size:1rem">My repos</h3>
@@ -636,16 +623,16 @@ details.how-details .how-body { padding: 16px 18px; }
   <div id="repos-list"></div>
 </section>
 
-<section class="sheet" id="sec-board" aria-label="The Board">
+<section class="sheet" id="sec-board" aria-label="Leaderboard">
   <div class="toolbar">
     <div>
-      <h2 class="page-title">The Board</h2>
-      <p class="page-sub" style="margin:0">Top ideators by portfolio — ranked by dividends earned as ideas ship.</p>
+      <h2 class="page-title">Leaderboard</h2>
+      <p class="page-sub" style="margin:0">Ranked by credit earned as ideas ship.</p>
     </div>
   </div>
   <div id="leaderboard-list"></div>
   <h3 style="margin:30px 0 6px;font-size:1.05rem">Credit wall</h3>
-  <p class="page-sub" style="font-size:.9rem">Every settled idea, credited to the person who thought of it.</p>
+  <p class="page-sub" style="font-size:.9rem">Settled ideas and the ideators credited on them.</p>
   <div id="credits-list"></div>
 </section>
 </main>
@@ -659,7 +646,7 @@ details.how-details .how-body { padding: 16px 18px; }
   <ol class="stepper" id="wiz-stepper" aria-label="Listing steps">
     <li id="step-tab-1" class="current" aria-current="step"><span class="sn" aria-hidden="true">1</span>Write</li>
     <li class="step-arrow" aria-hidden="true">→</li>
-    <li id="step-tab-2"><span class="sn" aria-hidden="true">2</span>Embellish</li>
+    <li id="step-tab-2"><span class="sn" aria-hidden="true">2</span>Refine</li>
     <li class="step-arrow" aria-hidden="true">→</li>
     <li id="step-tab-3"><span class="sn" aria-hidden="true">3</span>Match</li>
   </ol>
@@ -667,9 +654,9 @@ details.how-details .how-body { padding: 16px 18px; }
   <!-- step ① write -->
   <form id="idea-form" class="panel wiz-step" aria-label="Step 1 of 3: write your idea">
     <label for="f-title">Title</label>
-    <input type="text" id="f-title" maxlength="200" placeholder="One line that sells the idea" required>
+    <input type="text" id="f-title" maxlength="200" placeholder="One-line summary" required>
     <label for="f-body">Body (markdown)</label>
-    <textarea id="f-body" class="md" placeholder="What problem does it solve? Who benefits? What would 'done' look like?" required></textarea>
+    <textarea id="f-body" class="md" placeholder="The problem, who benefits, what done looks like." required></textarea>
     <div class="meter-wrap">
       <div class="meter" id="idea-meter" role="progressbar" aria-label="Idea completeness" aria-valuemin="0" aria-valuemax="4" aria-valuenow="0">
         <i title="Title"></i><i title="Problem"></i><i title="Beneficiaries"></i><i title="Acceptance criteria"></i>
@@ -677,16 +664,16 @@ details.how-details .how-body { padding: 16px 18px; }
       <p class="meter-hint" id="meter-hint"></p>
     </div>
     <div class="form-actions">
-      <button type="submit" class="pill primary" id="btn-wiz-next">Next: Embellish →</button>
-      <button type="button" class="pill" id="btn-save">Save draft &amp; exit</button>
+      <button type="submit" class="pill primary" id="btn-wiz-next">Next: Refine</button>
+      <button type="button" class="pill" id="btn-save">Save draft</button>
       <button type="button" class="pill" id="btn-cancel">Cancel</button>
     </div>
   </form>
 
-  <!-- step ② embellish: the LLM proposes a polished draft; the USER
-       decides — nothing is overwritten silently. -->
-  <div id="wiz-step-2" class="wiz-step" hidden aria-label="Step 2 of 3: embellish with AI">
-    <div class="embellish-wait" id="embellish-wait" role="status"><span class="spark" aria-hidden="true">✨</span> Polishing your idea with AI…</div>
+  <!-- step ② refine: the LLM proposes a revision; the USER decides —
+       nothing is overwritten silently. -->
+  <div id="wiz-step-2" class="wiz-step" hidden aria-label="Step 2 of 3: refine">
+    <div class="embellish-wait" id="embellish-wait" role="status">Refining…</div>
     <div class="compare-grid" id="embellish-compare" hidden>
       <div class="panel">
         <h4>Your draft</h4>
@@ -694,18 +681,18 @@ details.how-details .how-body { padding: 16px 18px; }
         <div class="compare-orig-body" id="cmp-orig-body"></div>
       </div>
       <div class="panel polished">
-        <h4>AI-polished — edit freely, it’s yours</h4>
+        <h4>Refined draft — editable</h4>
         <label for="rf-title">Refined title</label>
         <input type="text" id="rf-title" maxlength="200">
         <label for="rf-body">Refined body (markdown)</label>
         <textarea id="rf-body" class="md"></textarea>
       </div>
     </div>
-    <div class="embellish-note" id="embellish-unavail" hidden>AI polish unavailable — your draft is ready. Continue to matching.</div>
+    <div class="embellish-note" id="embellish-unavail" hidden>Refinement unavailable. Continue with your draft.</div>
     <div class="form-actions" id="embellish-actions" hidden>
-      <button type="button" class="pill primary" id="btn-use-refined">Use refined → Match</button>
-      <button type="button" class="pill" id="btn-keep-mine">Keep mine → Match</button>
-      <button type="button" class="pill" id="btn-wiz-back2">← Back to writing</button>
+      <button type="button" class="pill primary" id="btn-use-refined">Use refined</button>
+      <button type="button" class="pill" id="btn-keep-mine">Keep mine</button>
+      <button type="button" class="pill" id="btn-wiz-back2">Back</button>
     </div>
   </div>
 
@@ -714,26 +701,25 @@ details.how-details .how-body { padding: 16px 18px; }
     <label id="vis-label">Visibility</label>
     <div class="vis-toggle" id="f-vis" role="radiogroup" aria-labelledby="vis-label">
       <label class="opt selected"><input type="radio" name="vis" value="public" checked><b>Public listing</b>
-        <small>Visible to signed-in users, matchable by any opted-in repo. Your name stays on it.</small></label>
+        <small>Visible to signed-in users. Matchable by any opted-in repo.</small></label>
       <label class="opt"><input type="radio" name="vis" value="private"><b>Private until offered</b>
-        <small>Only you can see it — until you offer it to a repo you choose.</small></label>
+        <small>Visible only to you until you offer it.</small></label>
     </div>
     <p class="wiz-offer-note" id="wiz-saved-note"></p>
     <div id="wiz-matches" aria-live="polite"><div class="empty">Scoring repos…</div></div>
     <div class="panel" id="wiz-external" style="margin-top:16px">
-      <h3 style="font-size:1rem;margin-bottom:4px">…or send it to any repo</h3>
-      <p style="color:var(--muted);font-size:.88rem;line-height:1.55">Target any open-source GitHub repo — not just hive-managed ones.
-      <span class="chip">external repo</span> not hive-managed — implementation not guaranteed… yet.
-      Your filed issue invites the maintainers to request a hive.</p>
+      <h3 style="font-size:1rem;margin-bottom:4px">Send to any repo</h3>
+      <p style="color:var(--muted);font-size:.88rem;line-height:1.55">Target any public GitHub repo.
+      <span class="chip">external repo</span> External repos are not hive-managed; implementation is not guaranteed.</p>
       <div class="row" style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap">
         <input type="text" id="ext-repo" placeholder="org/repo" aria-label="Any GitHub repo, org/repo format" style="flex:1;min-width:180px">
-        <button type="button" class="pill small primary" id="btn-ext-offer" aria-label="Offer this idea to the repo you typed">Offer this idea</button>
+        <button type="button" class="pill small primary" id="btn-ext-offer" aria-label="Offer this idea to the repo you typed">Offer</button>
       </div>
       <div class="wiz-offer-note" id="ext-result" style="margin-bottom:0"></div>
     </div>
     <div class="form-actions">
-      <button type="button" class="pill primary" id="btn-wiz-finish">Done → idea status</button>
-      <button type="button" class="pill" id="btn-wiz-back3">← Back to Embellish</button>
+      <button type="button" class="pill primary" id="btn-wiz-finish">Done</button>
+      <button type="button" class="pill" id="btn-wiz-back3">Back</button>
     </div>
   </div>
   </div>
@@ -751,8 +737,8 @@ details.how-details .how-body { padding: 16px 18px; }
 <div class="modal" id="modal-match" hidden role="dialog" aria-modal="true" aria-labelledby="match-title">
   <div class="modal-card">
     <button class="modal-close" data-close-modal aria-label="Close matching">✕</button>
-    <h2 class="page-title" id="match-title">Find a home for your idea</h2>
-    <p class="page-sub">Offer it, or pass.</p>
+    <h2 class="page-title" id="match-title">Match</h2>
+    <p class="page-sub">Offer to a repo, or pass.</p>
     <div id="match-tldr" class="tldr-banner"></div>
     <div class="swipe-stage" id="match-stage"></div>
     <p class="key-hint"><kbd>←</kbd> pass · <kbd>→</kbd> offer</p>
@@ -763,26 +749,26 @@ details.how-details .how-body { padding: 16px 18px; }
   <div class="modal-card">
     <button class="modal-close" data-close-modal aria-label="Close issue filing">✕</button>
     <h2 class="page-title" id="launch-title">File the issue</h2>
-    <p class="page-sub">Your account, your name, your credit. We're just the matchmaker.</p>
+    <p class="page-sub">Filed from your GitHub account, under your name.</p>
     <form class="panel" id="launch-form">
     <label for="l-title">Issue title</label>
     <input type="text" id="l-title" maxlength="200" required>
     <label for="l-body">Issue body (markdown — the Dibs footer is added automatically)</label>
     <textarea id="l-body" class="md" required></textarea>
     <div class="form-actions">
-      <button type="submit" class="pill primary" id="btn-launch">Open GitHub’s prefilled issue form ↗</button>
-      <button type="button" class="pill" id="btn-expand">Expand with AI for this repo</button>
+      <button type="submit" class="pill primary" id="btn-launch">Open prefilled GitHub issue</button>
+      <button type="button" class="pill" id="btn-expand">Expand for this repo</button>
     </div>
-    <div class="trunc-warn" id="launch-trunc">The draft is too long for a prefilled URL, so GitHub will
-      open with a truncated body. <button type="button" class="pill small" id="btn-copy-body">Copy the full
+    <div class="trunc-warn" id="launch-trunc">The body exceeds the prefilled-URL limit; GitHub will
+      open truncated. <button type="button" class="pill small" id="btn-copy-body">Copy full
       body</button> and paste it over the draft before submitting.</div>
-    <p class="launch-url-note">GitHub opens with the title, body, and the <code>ideated</code> label
-    prefilled. Review, submit — then paste the issue link below. <b>+100 points</b> on confirmation.</p>
+    <p class="launch-url-note">GitHub opens with the title, body, and <code>ideated</code> label
+    prefilled. Submit, then paste the issue link below. +100 points on confirmation.</p>
     <div class="confirm-box">
-      <label for="l-issue-url">I filed it — here's the link</label>
+      <label for="l-issue-url">Filed issue URL</label>
       <div class="row" style="display:flex;gap:10px">
         <input type="text" id="l-issue-url" placeholder="https://github.com/org/repo/issues/123" style="flex:1">
-        <button type="button" class="pill primary" id="btn-confirm">✓ Confirm &amp; claim credit</button>
+        <button type="button" class="pill primary" id="btn-confirm">Confirm</button>
       </div>
     </div>
   </form>
@@ -793,8 +779,8 @@ details.how-details .how-body { padding: 16px 18px; }
   <div class="modal-card">
     <button class="modal-close" data-close-modal aria-label="Close repo feed">✕</button>
     <h2 class="page-title" id="feed-title">Idea feed</h2>
-    <p class="page-sub">Incoming offers and matched public ideas for your repo.</p>
-    <h3 style="margin:6px 0 10px;font-size:1rem">Offers to you</h3>
+    <p class="page-sub">Offers and matched public ideas for this repo.</p>
+    <h3 style="margin:6px 0 10px;font-size:1rem">Offers</h3>
     <div id="feed-offers"></div>
     <h3 style="margin:26px 0 10px;font-size:1rem">Matched public ideas</h3>
     <div class="swipe-stage" id="feed-stage"></div>
@@ -802,29 +788,28 @@ details.how-details .how-body { padding: 16px 18px; }
   </div>
 </div>
 
-<!-- It's a match! celebration -->
+<!-- celebration overlay -->
 <div id="match-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="mo-title">
   <div class="mo-burst" id="mo-burst" aria-hidden="true"></div>
   <div class="mo-card">
-    <h2 id="mo-title">It's a match!</h2>
+    <h2 id="mo-title">Matched</h2>
     <p id="mo-text"></p>
-    <button class="pill primary" id="mo-close">Keep going</button>
+    <button class="pill primary" id="mo-close">Continue</button>
   </div>
 </div>
 
 <!-- sign-in interstitial: the signed-out "＋ List an idea" path -->
 <div id="signin-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="so-title">
   <div class="mo-card">
-    <h2 id="so-title">Ready to list your idea?</h2>
-    <p>Listing takes one quick sign-in — your idea goes on the market with
-    <b>your name on it, forever</b>. Sign in opens in a new tab; this one
-    picks up your session the moment you come back.</p>
-    <a class="pill primary" id="so-signin" href="__HUB_URL__" target="_blank" rel="noopener">Sign in with Hive Hub</a>
-    <button class="pill" id="so-close">Maybe later</button>
+    <h2 id="so-title">Sign in to list an idea</h2>
+    <p>Dibs uses your Hive Hub account. Sign-in opens in a new tab; this page
+    picks up the session automatically.</p>
+    <a class="pill primary" id="so-signin" href="__HUB_URL__" target="_blank" rel="noopener">Sign in</a>
+    <button class="pill" id="so-close">Cancel</button>
   </div>
 </div>
 
-<footer>Dibs · a KubeStellar project · creators get credit, agents do the work, projects take the bow</footer>
+<footer>Dibs · a KubeStellar project</footer>
 
 <script>
 /* All URLs are RELATIVE so the app works at the root (dibs.kubestellar.io)
@@ -964,11 +949,11 @@ details.how-details .how-body { padding: 16px 18px; }
     { label: 'My desk', kind: 'go', auth: true, hint: 'Positions, matches, activity', run: function () { show('desk'); } },
     { label: 'Idea board', kind: 'go', hint: 'Every public idea, live', run: function () { show('browse'); } },
     { label: 'Repos', kind: 'go', auth: true, hint: 'Opt in, set appetite', run: function () { show('repos'); } },
-    { label: 'The Board', kind: 'go', hint: 'Leaderboard + credit wall', run: function () { show('credits'); } },
+    { label: 'Leaderboard', kind: 'go', hint: 'Rankings and credit wall', run: function () { show('credits'); } },
     { label: 'List an idea', kind: 'do', hint: 'Guided 3-step listing', run: function () {
         if (anon) { $('signin-overlay').hidden = false; $('so-signin').focus(); } else openEdit(null);
       } },
-    { label: 'Review matches', kind: 'do', auth: true, hint: 'Swipe your match queue', run: function () {
+    { label: 'Review matches', kind: 'do', auth: true, hint: 'Open your match queue', run: function () {
         show('desk'); selectDeskTab('matches');
       } }
   ];
@@ -1207,12 +1192,12 @@ details.how-details .how-body { padding: 16px 18px; }
       b.setAttribute('aria-selected', String(b.dataset.repo === repoID));
     });
     if (chartCache[repoID]) { renderChart(chartCache[repoID]); return; }
-    $('chart-stage').innerHTML = '<div class="chart-empty">Loading the tape…</div>';
+    $('chart-stage').innerHTML = '<div class="chart-empty">Loading…</div>';
     api('GET', 'repos/' + repoID + '/index').then(function (d) {
       chartCache[repoID] = d;
       if (chartCurrent === repoID) renderChart(d);
     }).catch(function () {
-      $('chart-stage').innerHTML = '<div class="chart-empty">Chart unavailable — markets are warming up.</div>';
+      $('chart-stage').innerHTML = '<div class="chart-empty">Chart unavailable.</div>';
     });
   }
   var TREND_COLOR = { up: '#74df9a', down: '#ff7e7e', flat: '#f4c75f' };
@@ -1226,7 +1211,7 @@ details.how-details .how-body { padding: 16px 18px; }
       (d.example ? '<span class="ex">(example data — no repos listed yet)</span>' : '');
     $('chart-note').textContent = d.example
       ? 'example data — real charts appear when repos list on the exchange'
-      : 'index derived from market activity — offers, bids hit, settlements';
+      : 'Index derived from offers, acceptances, and settlements.';
 
     var W = 820, H = 300, L = 46, R = 806;
     var plotTop = 14, plotBot = 192, barTop = 210, barBot = 278;
@@ -1322,7 +1307,7 @@ details.how-details .how-body { padding: 16px 18px; }
     }).catch(function () { $('mkt-stats').innerHTML = ''; });
   }
   function boardRowHTML(r) {
-    var label = '$' + r.symbol + ' — ' + r.title + ', ' + r.phase + (r.repoID ? ', listed on ' + r.repoID : '') +
+    var label = '$' + r.symbol + ', ' + r.title + ', ' + r.phase + (r.repoID ? ', listed on ' + r.repoID : '') +
       (anon ? '. Sign in to trade.' : '. Open public ideas.');
     return '<a class="board-row" role="listitem" href="' + (anon ? esc(HUB_URL) : '#') + '"' +
       (anon ? '' : ' data-board-link') +
@@ -1352,11 +1337,11 @@ details.how-details .how-body { padding: 16px 18px; }
         .sort(function (a, b) { return new Date(b.updatedAt) - new Date(a.updatedAt); }).slice(0, 8);
       var fresh = rows.slice()
         .sort(function (a, b) { return new Date(b.createdAt) - new Date(a.createdAt); }).slice(0, 8);
-      renderBoard($('board-trending'), trending, 'No movers yet — the first listing starts the market.');
-      renderBoard($('board-new'), fresh, 'No listings yet. Sign in and be the first: $YOURIDEA could open the market.');
+      renderBoard($('board-trending'), trending, 'No recent activity.');
+      renderBoard($('board-new'), fresh, 'No listings.');
     }).catch(function () {
-      renderBoard($('board-trending'), [], 'Markets are warming up…');
-      renderBoard($('board-new'), [], 'Markets are warming up…');
+      renderBoard($('board-trending'), [], 'Board unavailable.');
+      renderBoard($('board-new'), [], 'Board unavailable.');
     });
   }
   function loadTerminal(refresh) { loadTape(refresh); loadMktStats(); }
@@ -1400,9 +1385,10 @@ details.how-details .how-body { padding: 16px 18px; }
   }
   $('level-chip').addEventListener('click', function () { show('mine'); });
 
-  /* ── it's-a-match celebration ── */
+  /* ── celebration overlay ── */
   var COLORS = ['#f4c75f', '#74df9a', '#80bfff', '#c0a6f0', '#ff7e7e', '#f6f8fb'];
-  function celebrate(text) {
+  function celebrate(text, title) {
+    $('mo-title').textContent = title || 'Matched';
     $('mo-text').innerHTML = text;
     var burst = $('mo-burst'); burst.innerHTML = '';
     if (!reducedMotion) {
@@ -1438,7 +1424,7 @@ details.how-details .how-body { padding: 16px 18px; }
       if (res.unread > 0) { badge.textContent = res.unread > 99 ? '99+' : res.unread; badge.style.display = 'block'; }
       else { badge.style.display = 'none'; }
       var list = $('np-list'); list.innerHTML = '';
-      if (!res.notifications.length) { list.innerHTML = '<div class="np-empty">Nothing yet — post an idea or opt a repo in.</div>'; return; }
+      if (!res.notifications.length) { list.innerHTML = '<div class="np-empty">No notifications.</div>'; return; }
       res.notifications.forEach(function (n) {
         var d = document.createElement('div');
         d.className = 'np-item' + (n.read ? '' : ' unread');
@@ -1515,7 +1501,7 @@ details.how-details .how-body { padding: 16px 18px; }
   }
   function loadBrowse() {
     api('GET', 'ideas?scope=public').then(function (ideas) {
-      renderList($('browse-list'), ideas, false, 'No public ideas yet — be the first.');
+      renderList($('browse-list'), ideas, false, 'No public ideas.');
     }).catch(function (e) { showErr(e.message); });
   }
 
@@ -1531,11 +1517,11 @@ details.how-details .how-body { padding: 16px 18px; }
           '<div class="lb-bar" role="progressbar" aria-label="Progress to next level" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + s.pct + '"><i style="width:' + Math.max(2, s.pct) + '%"></i></div>' +
           '<div class="lb-next">' + (s.nextLevel
             ? s.toNext + ' pts to ' + esc(s.nextLevel.emoji) + ' ' + esc(s.nextLevel.name)
-            : '👑 Top of the hive') + '</div>' +
+            : 'Top level') + '</div>' +
         '</div>' +
         '<div class="lb-badges">' + (s.badges && s.badges.length
           ? badgeChips(s.badges)
-          : '<span style="color:var(--muted);font-size:.84rem">No badges yet — post an idea to earn 🥇 First Dibs.</span>') + '</div>';
+          : '<span style="color:var(--muted);font-size:.84rem">No badges.</span>') + '</div>';
       $('my-stats').innerHTML = [
         ['posted', s.posted], ['offered', s.offered], ['accepted', s.accepted], ['settled', s.settled]
       ].map(function (p) {
@@ -1549,7 +1535,7 @@ details.how-details .how-body { padding: 16px 18px; }
     api('GET', 'leaderboard').then(function (res) {
       var el = $('leaderboard-list'); el.innerHTML = '';
       if (!res.leaderboard.length) {
-        el.innerHTML = '<div class="empty">The throne is empty. 👑<br>Settle the first idea and claim rank #1.</div>';
+        el.innerHTML = '<div class="empty">No settled ideas.</div>';
         return;
       }
       res.leaderboard.forEach(function (e) {
@@ -1588,7 +1574,7 @@ details.how-details .how-body { padding: 16px 18px; }
     }).catch(function (e) { showErr(e.message); });
   }
 
-  /* ── guided listing wizard: ① Write → ② Embellish → ③ Match ── */
+  /* ── guided listing wizard: ① Write → ② Refine → ③ Match ── */
   var wizIdea = null; // the saved idea once step ③ is reached
   function setVis(v) {
     document.querySelectorAll('#f-vis label.opt').forEach(function (l) {
@@ -1632,8 +1618,8 @@ details.how-details .how-body { padding: 16px 18px; }
     });
     $('idea-meter').setAttribute('aria-valuenow', on);
     $('meter-hint').innerHTML = on === 4
-      ? 'Complete idea — strong ideas match better. Step ② adds <b>AI polish</b> next.'
-      : on + '/4 — add ' + esc(missing[0]) + '. Or let step ② <b>Embellish</b> structure it for you.';
+      ? '4/4. Complete ideas match better.'
+      : on + '/4. Add ' + esc(missing[0]) + ', or continue to Refine.';
   }
   $('f-title').addEventListener('input', updateMeter);
   $('f-body').addEventListener('input', updateMeter);
@@ -1694,14 +1680,14 @@ details.how-details .how-body { padding: 16px 18px; }
   $('idea-form').addEventListener('submit', function (ev) {
     ev.preventDefault();
     setWizStep(2);
-    runEmbellish();
+    runRefine();
   });
 
-  /* ── step ② Embellish: POST /api/refine runs automatically; the
+  /* ── step ② Refine: POST /api/refine runs automatically; the
      result is ONLY a suggestion — side-by-side with the original, editable
      in place, and the user picks. LLM down → friendly skip. ── */
   var embellishSeq = 0;
-  function runEmbellish() {
+  function runRefine() {
     var seq = ++embellishSeq;
     $('embellish-wait').hidden = false;
     $('embellish-compare').hidden = true;
@@ -1746,7 +1732,7 @@ details.how-details .how-body { padding: 16px 18px; }
   $('btn-wiz-back3').addEventListener('click', function () {
     setWizStep(2);
     // Re-run only if the step never finished (no repeat LLM spend).
-    if ($('embellish-actions').hidden) runEmbellish();
+    if ($('embellish-actions').hidden) runRefine();
   });
 
   /* ── step ③ Match: save the idea, then fetch matches immediately ── */
@@ -1757,7 +1743,7 @@ details.how-details .how-body { padding: 16px 18px; }
     $('wiz-matches').innerHTML = '<div class="empty">Scoring repos…</div>';
     saveIdea().then(function (idea) {
       $('wiz-saved-note').innerHTML = 'Saved ' + symChip(idea.symbol) + '<b>' + esc(idea.title) +
-        '</b> — it\u2019s on the market. Offer it to any repo below; both sides must say yes.';
+        '</b>. Offer it to a repo below. Both sides must accept.';
       return api('GET', 'ideas/' + idea.id + '/matches').then(function (res) {
         renderWizMatches(idea, res.matches || []);
       });
@@ -1767,14 +1753,14 @@ details.how-details .how-body { padding: 16px 18px; }
     var el = $('wiz-matches');
     el.innerHTML = '';
     if (!matches.length) {
-      el.innerHTML = '<div class="empty">No repos are listed yet — your idea is on the market; matches appear as repos join.</div>';
+      el.innerHTML = '<div class="empty">No repos listed yet. Matches appear as repos join.</div>';
       return;
     }
     matches.forEach(function (m) {
       var d = document.createElement('div'); d.className = 'card';
       d.innerHTML =
         '<div class="row"><h4>' + esc(m.repo.repoID) + '</h4>' +
-        '<span class="badge-chip mini" title="Hive-managed: accepted ideas are implemented by AI agent swarms">hive-powered — agent capacity ready</span>' +
+        '<span class="badge-chip mini" title="Hive-managed: accepted ideas are implemented by AI agent swarms">hive-managed · agent capacity</span>' +
         scorePill(m.score) + '</div>' +
         (m.repo.description ? '<div class="body-preview">' + esc(m.repo.description) + '</div>' : '') +
         '<div class="topics">' + (m.repo.topics || []).map(function (t) { return '<span class="t">' + esc(t) + '</span>'; }).join('') + '</div>' +
@@ -1788,7 +1774,7 @@ details.how-details .how-body { padding: 16px 18px; }
         api('POST', 'ideas/' + idea.id + '/offer', { repoID: m.repo.repoID })
           .then(function () {
             b.textContent = 'Offered ✓';
-            showOk('Offered \u201c' + esc(idea.title) + '\u201d to ' + esc(m.repo.repoID) + ' — you\u2019ll hear when they decide. +25 points!');
+            showOk('Offered to ' + esc(m.repo.repoID) + '. +25 points.');
             loadGamebar();
           })
           .catch(function (e) { b.disabled = false; showErr(e.message); });
@@ -1810,7 +1796,7 @@ details.how-details .how-body { padding: 16px 18px; }
   $('btn-ext-offer').addEventListener('click', function () {
     if (!wizIdea) { showErr('Save the idea first — go back a step.'); return; }
     var repoID = $('ext-repo').value.trim();
-    if (!EXT_REPO_RE.test(repoID)) { showErr('Use the org/repo format — e.g. kubernetes/kubernetes.'); return; }
+    if (!EXT_REPO_RE.test(repoID)) { showErr('Use org/repo format.'); return; }
     var b = $('btn-ext-offer');
     b.disabled = true;
     api('POST', 'ideas/' + wizIdea.id + '/offer', { repoID: repoID })
@@ -1830,14 +1816,14 @@ details.how-details .how-body { padding: 16px 18px; }
   /* ── idea detail / status view: what happened, what's next ── */
   function nextStepHint(idea) {
     switch (idea.status) {
-      case 'draft': return 'Next: find repos for this idea and offer it — both sides must say yes.';
+      case 'draft': return 'Draft. Offer it to repos to enter matching.';
       case 'offered': return externalTarget(idea)
-        ? 'Aimed at ' + idea.targetRepo + ' (external repo) — file the credited GitHub issue; no acceptance needed.'
-        : 'Offers are out — you\u2019ll hear when a repo decides. Offer more repos to raise the odds.';
-      case 'declined': return 'Declined this round — sharpen the idea or offer it to more repos.';
-      case 'accepted': return 'Accepted. Next: file the credited GitHub issue to claim your credit (+100 points).';
-      case 'issue_launched': return 'Issue launched — paste the GitHub link to confirm and settle (+100 points).';
-      case 'settled': return 'Settled — your name is on the shipped issue. List another idea.';
+        ? 'Aimed at ' + idea.targetRepo + ' (external). File the GitHub issue; no acceptance needed.'
+        : 'Offers out. Repos decide next.';
+      case 'declined': return 'Declined. Revise or offer to more repos.';
+      case 'accepted': return 'Accepted. File the GitHub issue to settle (+100 points).';
+      case 'issue_launched': return 'Issue launched. Paste the GitHub link to settle (+100 points).';
+      case 'settled': return 'Settled. The issue carries your name.';
       default: return '';
     }
   }
@@ -1903,8 +1889,8 @@ details.how-details .how-body { padding: 16px 18px; }
   $('btn-copy-body').addEventListener('click', function () {
     var text = launchFullBody || $('l-body').value;
     navigator.clipboard.writeText(text).then(function () {
-      showOk('Full issue body copied — paste it over the truncated draft on GitHub.');
-    }, function () { showErr('Copy failed — select the body text manually.'); });
+      showOk('Copied. Paste it over the truncated draft on GitHub.');
+    }, function () { showErr('Copy failed. Select the body text manually.'); });
   });
   $('btn-confirm').addEventListener('click', function () {
     if (!launchIdea) return;
@@ -1913,8 +1899,7 @@ details.how-details .how-body { padding: 16px 18px; }
     api('POST', 'ideas/' + launchIdea.id + '/confirm-issue', { issueURL: url })
       .then(function () {
         show('desk');
-        celebrate('<b>Settled!</b> Your idea is a GitHub issue with your name on it. ' +
-          '<b>+100 points</b> — welcome to the leaderboard.');
+        celebrate('The issue is filed under your name. +100 points.', 'Settled');
       })
       .catch(function (e) { showErr(e.message); });
   });
@@ -2011,7 +1996,7 @@ details.how-details .how-body { padding: 16px 18px; }
     api('GET', 'ideas').then(function (ideas) {
       $('badge-ideas').textContent = ideas.length ? String(ideas.length) : '';
       renderList($('zone-ideas'), ideas, true,
-        'No ideas on your desk yet.<br>List your first idea — earn the First Dibs badge.<br><button class="pill primary" data-new-idea>＋ List an idea</button>');
+        'No ideas listed.<br><button class="pill primary" data-new-idea>＋ List an idea</button>');
       wireNewIdeaButtons($('zone-ideas'));
     }).catch(function (e) { showErr(e.message); });
   }
@@ -2021,7 +2006,7 @@ details.how-details .how-body { padding: 16px 18px; }
       var el = $('zone-activity');
       el.innerHTML = '';
       if (!res.notifications.length) {
-        el.innerHTML = '<div class="empty">Quiet so far — offers, acceptances, and settlements land here.<br>List your first idea — earn First Dibs.<br><button class="pill primary" data-new-idea>＋ List an idea</button></div>';
+        el.innerHTML = '<div class="empty">No activity.</div>';
         wireNewIdeaButtons(el);
         return;
       }
@@ -2038,7 +2023,7 @@ details.how-details .how-body { padding: 16px 18px; }
   /* ── desk match deck: everything you can swipe on, in one stack ──
      For ideators: matched repos for your open ideas (yes = offer).
      For repo owners: incoming offers first, then matched public ideas
-     (yes = accept → it's a match). */
+     (yes = accept). */
   function loadHomeDeck() {
     var stage = $('home-stage');
     stage.innerHTML = '<div class="empty">Finding your matches…</div>';
@@ -2081,8 +2066,8 @@ details.how-details .how-body { padding: 16px 18px; }
           return bs - as;
         });
         var emptyMsg = ideas.length
-          ? 'All caught up. New matches appear as repos opt in.<br><button class="pill" data-new-idea>＋ List another idea</button>'
-          : 'No ideas yet — list your first and earn the First Dibs badge.<br><button class="pill primary" data-new-idea>＋ List your idea</button>';
+          ? 'Nothing to review.'
+          : 'No ideas listed.<br><button class="pill primary" data-new-idea>＋ List an idea</button>';
         $('badge-matches').textContent = items.length ? String(items.length) : '';
         $('home-key-hint').style.display = items.length ? 'block' : 'none';
         renderDeck(stage, items, function (card, item) {
@@ -2109,7 +2094,7 @@ details.how-details .how-body { padding: 16px 18px; }
       { cls: 'yes', icon: '✓', label: 'offer', aria: 'Offer this idea to ' + m.repo.repoID,
         run: function () {
           return api('POST', 'ideas/' + idea.id + '/offer', { repoID: m.repo.repoID }).then(function () {
-            showOk('Offered “' + esc(idea.title) + '” to ' + esc(m.repo.repoID) + ' — you\u2019ll hear when they decide. +25 points!');
+            showOk('Offered to ' + esc(m.repo.repoID) + '. +25 points.');
             loadGamebar();
           });
         } }
@@ -2119,8 +2104,8 @@ details.how-details .how-body { padding: 16px 18px; }
   function ideaMatchCard(card, item) {
     var v = item.view, repo = item.repo;
     card.innerHTML =
-      (item.isOffer ? '<div class="for-line"><b>offered to you</b> — the ideator picked ' + esc(repo.repoID) + '</div>'
-                    : '<div class="for-line">matched with your repo <b>' + esc(repo.repoID) + '</b></div>') +
+      (item.isOffer ? '<div class="for-line"><b>offered to you</b> by the ideator</div>'
+                    : '<div class="for-line">matched with <b>' + esc(repo.repoID) + '</b></div>') +
       feedIdeaHTML(v);
     return [
       { cls: 'no', icon: '✕', label: item.isOffer ? 'decline' : 'pass',
@@ -2129,9 +2114,9 @@ details.how-details .how-body { padding: 16px 18px; }
       { cls: 'yes', icon: '✓', label: 'accept', aria: 'Accept idea ' + v.idea.title,
         run: function () {
           return decide(repo.repoID, v.idea.id, 'accept').then(function (res) {
-            celebrate('<b>' + esc(v.idea.title) + '</b> ✕ <b>' + esc(repo.repoID) + '</b><br>' +
-              'Both sides said yes. ' + esc(v.idea.authorDisplay || v.idea.author) +
-              ' files the credited GitHub issue next.');
+            celebrate('<b>' + esc(v.idea.title) + '</b> · <b>' + esc(repo.repoID) + '</b><br>' +
+              esc(v.idea.authorDisplay || v.idea.author) +
+              ' files the GitHub issue next.', 'Accepted');
             return res;
           });
         } }
@@ -2145,11 +2130,10 @@ details.how-details .how-body { padding: 16px 18px; }
     $('match-tldr').innerHTML = 'Loading TLDR…';
     $('match-stage').innerHTML = '<div class="empty">Scoring repos…</div>';
     api('GET', 'ideas/' + idea.id + '/matches').then(function (res) {
-      $('match-tldr').innerHTML = '<b>' + esc(idea.authorDisplay || idea.author) +
-        ' has an idea — let me TLDR it for you:</b><br>' + esc(res.tldr || idea.body.slice(0, 200));
+      $('match-tldr').innerHTML = '<b>TLDR</b><br>' + esc(res.tldr || idea.body.slice(0, 200));
       renderDeck($('match-stage'), res.matches.map(function (m) { return { kind: 'repo', idea: idea, m: m }; }),
         repoMatchCard,
-        'No more matches for this idea. Check back as repos opt in — or sharpen the idea.<br><button class="pill" data-goto="desk">← Your desk</button>');
+        'No more matches for this idea.<br><button class="pill" data-goto="desk">Your desk</button>');
     }).catch(function (e) { showErr(e.message); });
   }
 
@@ -2157,11 +2141,11 @@ details.how-details .how-body { padding: 16px 18px; }
   function decide(repoID, ideaID, decision) {
     return api('POST', 'repos/' + repoID + '/decide', { ideaID: ideaID, decision: decision }).then(function (res) {
       if (res && res.issueURL) {
-        showOk('Idea accepted and settled — credited issue opened: <a href="' + esc(res.issueURL) + '" target="_blank" rel="noopener">' + esc(res.issueURL) + '</a>');
+        showOk('Accepted and settled. Issue: <a href="' + esc(res.issueURL) + '" target="_blank" rel="noopener">' + esc(res.issueURL) + '</a>');
       } else if (res && res.warning) {
         showOk(esc(res.warning));
       } else if (res && res.result === 'accepted') {
-        showOk('Accepted — the ideator files the credited GitHub issue themselves (their name goes on it).');
+        showOk('Accepted. The ideator files the GitHub issue next.');
       }
       return res;
     });
@@ -2182,7 +2166,7 @@ details.how-details .how-body { padding: 16px 18px; }
     $('feed-stage').innerHTML = '<div class="empty">Scoring ideas…</div>';
     api('GET', 'repos/' + repo.repoID + '/feed').then(function (res) {
       var offers = $('feed-offers'); offers.innerHTML = '';
-      if (!res.offers.length) offers.innerHTML = '<div class="empty">No offers yet — matched ideators will find you.</div>';
+      if (!res.offers.length) offers.innerHTML = '<div class="empty">No offers.</div>';
       res.offers.forEach(function (v) {
         var d = document.createElement('div'); d.className = 'card';
         d.innerHTML = feedIdeaHTML(v) +
@@ -2191,8 +2175,8 @@ details.how-details .how-body { padding: 16px 18px; }
           '<button class="pill small danger" data-act="decline" aria-label="Decline idea ' + esc(v.idea.title) + '">Decline</button></div>';
         d.querySelector('[data-act=accept]').addEventListener('click', function () {
           decide(repo.repoID, v.idea.id, 'accept').then(function () {
-            celebrate('<b>' + esc(v.idea.title) + '</b> ✕ <b>' + esc(repo.repoID) + '</b><br>Both sides said yes. ' +
-              esc(v.idea.authorDisplay || v.idea.author) + ' files the credited GitHub issue next.');
+            celebrate('<b>' + esc(v.idea.title) + '</b> · <b>' + esc(repo.repoID) + '</b><br>' +
+              esc(v.idea.authorDisplay || v.idea.author) + ' files the GitHub issue next.', 'Accepted');
             openFeed(repo);
           }).catch(function (e) { showErr(e.message); });
         });
@@ -2203,7 +2187,7 @@ details.how-details .how-body { padding: 16px 18px; }
       });
       renderDeck($('feed-stage'), res.candidates.map(function (v) { return { kind: 'idea', repo: repo, view: v, isOffer: false }; }),
         ideaMatchCard,
-        'No matched public ideas right now — the bell will ring when one lands.');
+        'No matched public ideas.');
     }).catch(function (e) { showErr(e.message); });
   }
 

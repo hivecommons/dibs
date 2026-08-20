@@ -24,25 +24,25 @@ func TestGuidedFlowUIStrings(t *testing.T) {
 			// 1. the ever-present primary CTA + signed-out interstitial
 			`id="nav-list-cta"`,
 			"＋ List an idea",
-			"Ready to list your idea?",
+			"Sign in to list an idea",
 			// 2. the 3-step wizard stepper
 			`id="wiz-stepper"`,
-			"Polishing your idea with AI",
-			"AI polish unavailable — your draft is ready",
+			"Refining…",
+			"Refinement unavailable. Continue with your draft.",
 			// 3. the desk (a stacked section since the one-page collapse) zones
 			`id="sec-desk"`,
 			"Your desk",
 			"My ideas",
-			"Matches to review",
+			">Matches<span",
 			`id="zone-activity"`,
 			// 4. the explicit per-idea match action
 			"Find repos for this idea",
 			// step-3 honest empty state
-			"No repos are listed yet — your idea is on the market; matches appear as repos join.",
+			"No repos listed yet. Matches appear as repos join.",
 			// external (non-hive) targeting in step 3
-			"…or send it to any repo",
-			"hive-powered — agent capacity ready",
-			"not hive-managed — implementation not guaranteed… yet",
+			"Send to any repo",
+			"hive-managed · agent capacity",
+			"implementation is not guaranteed",
 		} {
 			if !strings.Contains(body, want) {
 				t.Errorf("UI page (session=%q) missing %q", session, want)

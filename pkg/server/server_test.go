@@ -99,14 +99,14 @@ func TestBasePathRouting(t *testing.T) {
 
 			// UI page, authenticated.
 			rec = doJSON(t, h, "GET", base+"/", "alice-session", nil)
-			if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "creators get credit, agents do the work") {
+			if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "Dibs · a KubeStellar project") {
 				t.Fatalf("UI page: %d", rec.Code)
 			}
 
 			// UI page, unauthenticated → same public page (landing mode);
 			// the hub sign-in origin is substituted in.
 			rec = doJSON(t, h, "GET", base+"/", "", nil)
-			if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "creators get credit, agents do the work") ||
+			if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "Dibs · a KubeStellar project") ||
 				!strings.Contains(rec.Body.String(), "https://hive.kubestellar.io") {
 				t.Fatalf("public landing: %d", rec.Code)
 			}

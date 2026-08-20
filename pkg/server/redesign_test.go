@@ -40,7 +40,7 @@ func TestTerminalHomeForEveryone(t *testing.T) {
 		`data-close-modal`,
 		// home carries a slim desk summary strip for signed-in users
 		`class="desk-strip" data-auth`,
-		"Open your desk",
+		"Open desk",
 		// jump menu: dialog + combobox/listbox semantics + header affordance
 		`id="jump-overlay" hidden role="dialog" aria-modal="true"`,
 		`id="jump-input"`,
@@ -69,8 +69,10 @@ func TestTerminalHomeForEveryone(t *testing.T) {
 
 // TestEmojiStripSerious pins the founder's tone directive: decorative emojis
 // are gone from nav, headers, buttons, tabs, and log lines. Gamification
-// emojis (medals, crown, badge emojis from the API), the handshake favicon,
-// and the AI-polish spark spinner are the only intentional survivors.
+// emojis (medals, badge emojis from the API) and the handshake favicon are
+// the only intentional survivors. The copy itself must read like a terse
+// financial product: no sparkle language, no cutesy microcopy, no
+// exclamation-point enthusiasm.
 func TestEmojiStripSerious(t *testing.T) {
 	h := newTestServer(t, "/")
 	rec := doJSON(t, h, "GET", "/", "", nil)
@@ -82,10 +84,21 @@ func TestEmojiStripSerious(t *testing.T) {
 		"🔥", "💼", "🌍", "🐝", "📊", "🏦", "🎯", "🚀", "💌", "📬",
 		"🤔", "🏛️", "📈", "🔭", "🔔", "🌐", "🔒", "💜", "🕳️", "🎉",
 		"⚠️", "📋", "🏷️", "❌", "✅", "🙂", "📝", "🔗", "✍️", "🍯",
-		"🌼", "🔸", "🌧️", "💪", "💾", "🏆", "🆕",
+		"🌼", "🔸", "🌧️", "💪", "💾", "🏆", "🆕", "✨", "💡", "👑",
 	} {
 		if strings.Contains(body, banned) {
 			t.Errorf("UI page still contains decorative emoji %q", banned)
+		}
+	}
+	// Banned AI-slop copy: sparkle language, cutesy microcopy, hype.
+	for _, slop := range []string{
+		"Embellish", "Polishing your idea", "It's a match", "Ready to list your idea",
+		"Maybe later", "Keep going", "First Dibs badge", "heartbreak",
+		"points!", "welcome to the leaderboard", "Top of the hive",
+		"the throne is empty", "warming up", "sells the idea",
+	} {
+		if strings.Contains(body, slop) {
+			t.Errorf("UI page still contains AI-slop copy %q", slop)
 		}
 	}
 	// Intentional keeps: favicon handshake + gamification medals.

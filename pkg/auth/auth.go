@@ -180,14 +180,13 @@ var interstitialTmpl = template.Must(template.New("interstitial").Parse(`<!DOCTY
 <style>
 body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
 background:#0d1117;color:#f6f8fb;font-family:Inter,ui-sans-serif,system-ui,-apple-system,sans-serif}
-.card{background:#1c2128;border:1px solid #30363d;border-radius:12px;padding:40px 48px;max-width:460px;text-align:center}
+.card{background:#1c2128;border:1px solid #30363d;border-radius:6px;padding:40px 48px;max-width:460px;text-align:center}
 h1{font-size:1.3rem;margin:0 0 12px}p{color:#a8b3c2;line-height:1.5;margin:0 0 24px}
 a.pill{display:inline-block;background:#f4c75f;color:#080b0f;font-weight:700;text-decoration:none;
-padding:10px 24px;border-radius:999px}
+padding:10px 24px;border-radius:6px}
 </style></head><body>
 <div class="card">
-<div style="font-size:2rem;margin-bottom:8px">&#128161;</div>
 <h1>Sign in to Dibs</h1>
-<p>Dibs uses your Hive Hub account. Sign in at hive.kubestellar.io (opens in a new tab), then reload this page &mdash; your session carries over automatically.</p>
-<a class="pill" href="{{.HubURL}}" target="_blank" rel="noopener">Sign in at hive.kubestellar.io</a>
+<p>Dibs uses your Hive Hub account. Sign-in opens in a new tab. Reload this page after signing in.</p>
+<a class="pill" href="{{.HubURL}}" target="_blank" rel="noopener">Sign in</a>
 </div></body></html>`))
