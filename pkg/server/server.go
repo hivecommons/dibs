@@ -20,6 +20,7 @@ import (
 	"github.com/kubestellar/dibs/pkg/history"
 	"github.com/kubestellar/dibs/pkg/match"
 	"github.com/kubestellar/dibs/pkg/mcpserver"
+	"github.com/kubestellar/dibs/pkg/news"
 	"github.com/kubestellar/dibs/pkg/notify"
 	"github.com/kubestellar/dibs/pkg/registry"
 	"github.com/kubestellar/dibs/pkg/settle"
@@ -44,6 +45,7 @@ type Config struct {
 	Store   *store.Store
 	Repos   *registry.Registry
 	History *history.Store
+	News    *news.Store
 	// Engine scores idea↔repo matches (nil disables matching).
 	Engine *match.Engine
 	// Settler opens credited GitHub issues on accept (nil-GitHub records
@@ -90,7 +92,7 @@ func New(cfg Config) http.Handler {
 
 	// Authenticated routes.
 	authed := http.NewServeMux()
-	dibsAPI := &api.API{Store: cfg.Store, Registry: cfg.Repos, History: cfg.History, Engine: cfg.Engine, Settler: cfg.Settler, Notify: cfg.Notify}
+	dibsAPI := &api.API{Store: cfg.Store, Registry: cfg.Repos, History: cfg.History, News: cfg.News, Engine: cfg.Engine, Settler: cfg.Settler, Notify: cfg.Notify}
 	dibsAPI.Register(authed, base)
 
 	// Public routes + the auth-guarded rest. The UI page itself is public:
@@ -118,6 +120,7 @@ func New(cfg Config) http.Handler {
 	// The repo value-index chart series (see pkg/api/index.go): derived,
 	// aggregate-only numbers per listed repo.
 	root.HandleFunc("GET "+base+"/api/repos/{org}/{repo}/index", dibsAPI.HandleRepoIndex)
+	root.HandleFunc("GET "+base+"/api/repos/{org}/{repo}/news", dibsAPI.HandleRepoNews)
 	root.HandleFunc("GET "+base+"/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"status":"ok","version":"` + cfg.Version + `"}` + "\n"))

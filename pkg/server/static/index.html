@@ -417,6 +417,15 @@ details.how-details .how-body { padding: 16px 18px; }
 .legend-chip:hover, .legend-chip:focus-visible { border-color: var(--amber); color: var(--text); }
 .chart-note { color: var(--muted); font-size: .7rem; font-style: italic; margin-left: auto; }
 .chart-empty { color: var(--muted); text-align: center; padding: 40px 12px; font-size: .88rem; }
+.repo-news { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 12px; }
+.repo-news-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+.repo-news-title { font-size: .78rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.repo-news-list { display: grid; gap: 8px; }
+.news-card { border: 1px solid var(--line); border-radius: 6px; background: rgba(15, 20, 28, .62); padding: 10px 11px; }
+.news-date { display: block; font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--muted); font-size: .7rem; margin-bottom: 6px; }
+.news-tldr { color: var(--text); font-size: .86rem; line-height: 1.45; }
+.news-note { margin-top: 7px; color: var(--muted); font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: .68rem; }
+.repo-news-empty { color: var(--muted); font-size: .82rem; padding: 4px 0; }
 /* ── guided listing wizard: stepper + compare + matches ── */
 .stepper { display: flex; gap: 8px; list-style: none; margin: 16px 0 18px; flex-wrap: wrap; }
 .stepper li { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); border-radius: var(--radius); padding: 7px 16px; font-weight: 700; font-size: .88rem; }
@@ -540,6 +549,10 @@ details.how-details .how-body { padding: 16px 18px; }
         <button class="legend-chip on" data-series="ideas" aria-pressed="true"><span class="sw sw-ideas"></span>ideas listed/matched</button>
         <button class="legend-chip on" data-series="agent" aria-pressed="true"><span class="sw sw-agent"></span>agent activity (est.)</button>
         <span class="chart-note" id="chart-note">Index derived from offers, acceptances, and settlements.</span>
+      </div>
+      <div class="repo-news" id="repo-news" aria-live="polite">
+        <div class="repo-news-head"><span class="repo-news-title">News</span></div>
+        <div class="repo-news-list" id="repo-news-list"><div class="repo-news-empty">No recent merges.</div></div>
       </div>
     </div>
   </div>
@@ -1227,6 +1240,8 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
      honest proxy until real token metering exists. */
   var chartRepos = [];        // repo tickers, most active first
   var chartCache = {};        // repoID → index payload
+  var repoNewsCache = {};     // repoID → news cards
+  var repoNewsLoading = {};   // repoID → in-flight news fetch
   var chartCurrent = null;    // repoID being shown (null = example mode)
   var seriesOn = { ideas: true, agent: true };
   var CHART_ROTATE_MS = 45000;
@@ -1271,6 +1286,7 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
     if (!repos.length) {
       chartCurrent = null;
       renderChart(CHART_EXAMPLE);
+      renderRepoNews(null, []);
       scheduleChartRotation();
       return;
     }
@@ -1418,15 +1434,58 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
   function showChart(repoID) {
     chartCurrent = repoID;
     syncWatchlistSelection();
-    if (chartCache[repoID]) { renderChart(chartCache[repoID]); renderWatchlistSpark(repoID); return; }
+    ensureRepoNews(repoID);
+    if (chartCache[repoID]) { renderChart(chartCache[repoID]); renderWatchlistSpark(repoID); ensureRepoNews(repoID); return; }
     $('chart-stage').innerHTML = '<div class="chart-empty">Loading…</div>';
     api('GET', 'repos/' + repoID + '/index').then(function (d) {
       chartCache[repoID] = d;
       renderWatchlistSpark(repoID);
-      if (chartCurrent === repoID) renderChart(d);
+      if (chartCurrent === repoID) { renderChart(d); ensureRepoNews(repoID); }
     }).catch(function () {
       $('chart-stage').innerHTML = '<div class="chart-empty">Chart unavailable.</div>';
     });
+  }
+  function ensureRepoNews(repoID) {
+    if (!repoID || !chartPanelVisible) return;
+    if (repoNewsCache[repoID]) {
+      renderRepoNews(repoID, repoNewsCache[repoID]);
+      return;
+    }
+    if (repoNewsLoading[repoID]) {
+      if (chartCurrent === repoID) renderRepoNewsLoading();
+      return;
+    }
+    repoNewsLoading[repoID] = true;
+    renderRepoNewsLoading();
+    api('GET', 'repos/' + repoID + '/news').then(function (items) {
+      repoNewsCache[repoID] = items || [];
+      if (chartCurrent === repoID) renderRepoNews(repoID, repoNewsCache[repoID]);
+    }).catch(function () {
+      if (chartCurrent === repoID) renderRepoNews(repoID, []);
+    }).finally(function () {
+      repoNewsLoading[repoID] = false;
+    });
+  }
+  function renderRepoNewsLoading() {
+    var list = $('repo-news-list');
+    if (list) list.innerHTML = '<div class="repo-news-empty">Loading…</div>';
+  }
+  function renderRepoNews(repoID, items) {
+    var list = $('repo-news-list');
+    if (!list) return;
+    items = items || [];
+    if (!repoID || !items.length) {
+      list.innerHTML = '<div class="repo-news-empty">No recent merges.</div>';
+      return;
+    }
+    list.innerHTML = items.map(function (n) {
+      var count = Number(n.prCount) || 0;
+      return '<article class="news-card">' +
+        '<span class="news-date">' + esc(n.date || '') + '</span>' +
+        '<div class="news-tldr">' + esc(n.tldr || '') + '</div>' +
+        '<div class="news-note">' + count + ' PR' + (count === 1 ? '' : 's') + ' merged</div>' +
+        '</article>';
+    }).join('');
   }
   var TREND_COLOR = { up: '#74df9a', down: '#ff7e7e', flat: '#f4c75f' };
   function renderChart(d) {
@@ -1553,6 +1612,7 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
       new IntersectionObserver(function (entries) {
         entries.forEach(function (e) {
           chartPanelVisible = e.isIntersecting;
+          if (chartPanelVisible && chartCurrent) ensureRepoNews(chartCurrent);
           scheduleChartRotation();
         });
       }, { threshold: 0.01 }).observe(panel);

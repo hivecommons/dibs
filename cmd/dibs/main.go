@@ -17,6 +17,7 @@ import (
 	"github.com/kubestellar/dibs/pkg/auth"
 	"github.com/kubestellar/dibs/pkg/history"
 	"github.com/kubestellar/dibs/pkg/match"
+	"github.com/kubestellar/dibs/pkg/news"
 	"github.com/kubestellar/dibs/pkg/notify"
 	"github.com/kubestellar/dibs/pkg/registry"
 	"github.com/kubestellar/dibs/pkg/server"
@@ -87,6 +88,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("opening repo history store: %v", err)
 	}
+	newsStore, err := news.NewStore(dataDir)
+	if err != nil {
+		log.Fatalf("opening repo news store: %v", err)
+	}
 
 	notifications, err := notify.New(dataDir)
 	if err != nil {
@@ -116,6 +121,7 @@ func main() {
 		log.Printf("settlement: matchmaker mode — ideators file issues via prefilled GitHub URLs")
 	}
 	backfiller := history.NewBackfiller(hist, envOr(settle.EnvGitHubToken, ""))
+	newsGen := news.NewGenerator(newsStore, backfiller, llm)
 
 	if seed := os.Getenv("REPOS_SEED_FILE"); seed != "" {
 		if err := reg.LoadSeedFile(seed); err != nil {
@@ -133,7 +139,9 @@ func main() {
 			if err := reg.Sync(ctx, hubRepos); err != nil {
 				log.Printf("registry sync: %v", err)
 			} else {
-				backfiller.RefreshAsync(reg.List(false))
+				repos := reg.List(false)
+				backfiller.RefreshAsync(repos)
+				newsGen.RefreshAsync(repos)
 			}
 			cancel()
 			time.Sleep(registrySyncInterval)
@@ -147,6 +155,7 @@ func main() {
 		Store:    st,
 		Repos:    reg,
 		History:  hist,
+		News:     newsStore,
 		Engine:   engine,
 		Settler:  settler,
 		Notify:   notifications,
