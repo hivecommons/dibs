@@ -23,8 +23,9 @@ header { padding: 14px 24px; border-bottom: 1px solid var(--line); background: v
 header .logo { font-weight: 800; font-size: 1.15rem; letter-spacing: .02em; background: none; border: none; color: var(--text); cursor: pointer; font-family: inherit; padding: 0; }
 header .logo span { color: var(--amber); }
 .logo-stack { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; min-width: 215px; }
-.logo-tag { color: var(--muted); font-size: .62rem; letter-spacing: .04em; white-space: nowrap; transition: opacity .4s; }
-.logo-tag.fade { opacity: 0; }
+.logo-tag { position: relative; height: 12px; min-width: 215px; }
+.logo-tag span { position: absolute; left: 0; top: 0; color: var(--muted); font-size: .62rem; letter-spacing: .04em; white-space: nowrap; opacity: 0; transition: opacity .4s; }
+.logo-tag span.on { opacity: 1; }
 .hdr-spacer { flex: 1; }
 /* jump affordance: the whole nav, out of the way */
 #jump-btn { display: inline-flex; align-items: center; gap: 8px; background: var(--panel-2); color: var(--muted); border: 1px solid var(--line); padding: 5px 12px; border-radius: var(--radius); cursor: pointer; font: inherit; font-size: .84rem; font-weight: 600; }
@@ -521,7 +522,7 @@ details.how-details .how-body { padding: 16px 18px; }
   <div class="header-shell">
     <div class="logo-stack">
       <button class="logo" data-goto="home" aria-label="DIBS home">DI<span>BS</span></button>
-      <span class="logo-tag" id="logo-tag">Delegate It, Bro. Seriously.</span>
+      <span class="logo-tag" id="logo-tag"><span class="on">Delegate It, Bro. Seriously.</span><span>Donated Intelligence Builds Software</span></span>
     </div>
     <button id="jump-btn" aria-haspopup="dialog" aria-controls="jump-overlay" title="Jump anywhere">Jump<kbd id="jump-kbd">⌘K</kbd></button>
     <span class="hdr-spacer"></span>
@@ -2898,18 +2899,18 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
     }).catch(function (e) { showErr(e.message); });
   }
 
-  // Rotating logo tagline
+  // Rotating logo tagline — crossfade between stacked spans (in-place text
+  // swaps left paint remnants in Safari).
   (function () {
-    var tags = ['Delegate It, Bro. Seriously.', 'Donated Intelligence Builds Software'];
-    var i = 0, el = $('logo-tag');
+    var el = $('logo-tag');
     if (!el) return;
+    var spans = el.querySelectorAll('span');
+    if (spans.length < 2) return;
+    var i = 0;
     setInterval(function () {
-      el.classList.add('fade');
-      setTimeout(function () {
-        i = (i + 1) % tags.length;
-        el.textContent = tags[i];
-        el.classList.remove('fade');
-      }, 400);
+      spans[i].classList.remove('on');
+      i = (i + 1) % spans.length;
+      spans[i].classList.add('on');
     }, 10000);
   })();
 })();
