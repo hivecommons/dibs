@@ -90,6 +90,41 @@ func TestHiveBM25RanksNewsletterRepoFromRepoID(t *testing.T) {
 	}
 }
 
+// TestRematchLLMCannotEraseBM25Signal: a small LLM that scores nearly every
+// candidate 90+ must not shuffle away the clear lexical winner — scores are
+// blended, so the BM25 #1 stays #1 (the prod failure behind issue #99).
+func TestRematchLLMCannotEraseBM25Signal(t *testing.T) {
+	st, reg := newFixtures(t)
+	if err := reg.Merge([]registry.RepoProfile{
+		{RepoID: "kellyaa/agent-newsletter", HiveID: "hive-news", Owner: "kelly"},
+		{RepoID: "example/kubernetes-operator", HiveID: "hive-k8s", Owner: "alice",
+			Description: "Kubernetes operators and cluster automation", Topics: []string{"kubernetes", "operator"}},
+		{RepoID: "example/web-dashboard", HiveID: "hive-web", Owner: "bob",
+			Description: "Web dashboard for metrics", Topics: []string{"dashboard", "metrics"}},
+	}); err != nil {
+		t.Fatalf("Merge: %v", err)
+	}
+	// The gateway loves everything: 98 across the board.
+	srv, _ := fakeGateway(t, func(string) string { return `{"score": 98, "reason": "looks great"}` })
+	idea := createIdea(t, st, "Daily 5-minute audio newsletter",
+		"Create a daily five minute audio newsletter for agents to summarize important updates.")
+	e := &Engine{Store: st, Registry: reg, LLM: &LLM{BaseURL: srv.URL + "/v1", Model: "test"}}
+
+	_, hive, _, err := e.RematchIdea(context.Background(), idea, false, nil)
+	if err != nil {
+		t.Fatalf("RematchIdea: %v", err)
+	}
+	if len(hive) == 0 {
+		t.Fatal("expected hive matches")
+	}
+	if hive[0].RepoID != "kellyaa/agent-newsletter" {
+		t.Fatalf("uniform LLM scores shuffled the ranking: top = %s, want kellyaa/agent-newsletter: %+v", hive[0].RepoID, hive)
+	}
+	if !hive[0].ByLLM {
+		t.Fatalf("top match should carry the blended LLM result: %+v", hive[0])
+	}
+}
+
 func TestFallbackTLDR(t *testing.T) {
 	idea := &store.Idea{Title: "T", Body: "First paragraph  with   spaces.\n\nSecond paragraph is ignored."}
 	if got := FallbackTLDR(idea); got != "First paragraph with spaces." {
