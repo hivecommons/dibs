@@ -274,6 +274,7 @@ body.admin [data-admin] { display: revert !important; }
 .admin-progress-bar i { display: block; height: 100%; width: 0; background: var(--amber); border-radius: 999px; transition: width .2s ease; }
 .admin-progress-text { color: var(--muted); font-size: .82rem; margin-top: 6px; }
 .admin-progress-phase { color: var(--amber); text-transform: uppercase; letter-spacing: .08em; font-size: .68rem; margin-top: 6px; }
+.admin-applied { color: var(--up, #4ade80); font-weight: 700; margin: 8px 0; }
 .admin-progress-row { color: var(--muted); border-top: 1px solid rgba(139,148,158,.12); padding-top: 4px; }
 .admin-progress-row b { color: var(--text); }
 .admin-detail-row td { background: rgba(15,20,28,.55); }
@@ -2147,7 +2148,7 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
     var hive = matches.hive || [];
     var cncf = matches.cncf || [];
     if (!hive.length && !cncf.length) return '<div class="empty">No suggestions yet.</div>';
-    hive = hive.slice(0, 2);
+    hive = hive.slice(0, 3);
     cncf = cncf.slice(0, 2);
     var hiveHTML = hive.length ? '<h4>Hive-managed (' + hive.length + ')</h4><div class="admin-match-list">' + hive.map(function (m) {
       return '<div class="admin-match-item"><b>' + esc(m.repoID) + '</b> · score ' + scoreText(m.score) +
@@ -2160,11 +2161,18 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
     }).join('') + '</div>' : '';
     return hiveHTML + cncfHTML;
   }
-  function renderAdminOutput(row, res) {
+  function renderAdminOutput(row, res, applied) {
     var out = row.nextElementSibling && row.nextElementSibling.querySelector('.admin-output');
     if (!out) return;
-    out.innerHTML = adminMatchesHTML((res && res.matches) || {});
+    out.innerHTML = (applied ? '<div class="admin-applied">✓ Applied — suggestions saved to this idea</div>' : '') +
+      adminMatchesHTML((res && res.matches) || {});
     var detail = row.nextElementSibling;
+    if (detail && applied) {
+      // Reflect the persisted matches in the "current" block without
+      // rebuilding the table (which would collapse this row).
+      var cur = detail.querySelector('.admin-current');
+      if (cur) cur.innerHTML = adminMatchesHTML((res && res.matches) || {});
+    }
     if (detail && res && res.status === 'done') setApplyAvailable(detail, !!res.dry);
   }
   function progressLabel(phase) {
@@ -2252,8 +2260,7 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
         if (out) out.innerHTML = '<div class="empty">' + esc(res.error || 'Rematch failed.') + '</div>';
         return;
       }
-      renderAdminOutput(row, res);
-      if (!res.dry) loadAdminIdeas();
+      renderAdminOutput(row, res, !res.dry);
     }).catch(function (e) {
       var detail = row.nextElementSibling;
       if (detail) setAdminButtons(detail, false);
@@ -2273,9 +2280,8 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
       if (res.status === 'running') {
         pollAdminRematch(id, row, res.next || 0, res.jobID);
       } else {
-        renderAdminOutput(row, res);
+        renderAdminOutput(row, res, !dry);
         setAdminButtons(detail, false);
-        if (!dry) loadAdminIdeas();
       }
     }).catch(function (e) {
       setAdminButtons(detail, false);
