@@ -140,7 +140,8 @@ func TestEngineLLMScoringAndCache(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MatchesForIdea: %v", err)
 	}
-	if len(ms) != 1 || ms[0].Score != 77 || ms[0].Reason != "great fit" || !ms[0].ByLLM {
+	// 77 from the LLM + AcceptingBoost (org/a opted in to accepting ideas).
+	if len(ms) != 1 || ms[0].Score != 77+AcceptingBoost || ms[0].Reason != "great fit" || !ms[0].ByLLM {
 		t.Fatalf("llm match: %+v", ms)
 	}
 	before := calls.Load()
