@@ -2164,8 +2164,11 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
   function renderAdminOutput(row, res, applied) {
     var out = row.nextElementSibling && row.nextElementSibling.querySelector('.admin-output');
     if (!out) return;
-    out.innerHTML = (applied ? '<div class="admin-applied">✓ Applied — suggestions saved to this idea</div>' : '') +
-      adminMatchesHTML((res && res.matches) || {});
+    // On apply, show only the banner here; the saved matches are reflected
+    // in the "current" block above so the results appear exactly once.
+    out.innerHTML = applied
+      ? '<div class="admin-applied">✓ Applied — suggestions saved to this idea</div>'
+      : adminMatchesHTML((res && res.matches) || {});
     var detail = row.nextElementSibling;
     if (detail && applied) {
       // Reflect the persisted matches in the "current" block without
