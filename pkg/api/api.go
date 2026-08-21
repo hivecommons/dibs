@@ -254,16 +254,9 @@ func (a *API) handleAdminRematch(w http.ResponseWriter, r *http.Request) {
 	}
 	persist := r.URL.Query().Get("dry") != "1"
 	dry := !persist
-	if !dry && a.tryApplyDryRematch(w, idea) {
-		return
-	}
 	if !dry {
-		idea, err = a.Store.Get(idea.ID)
-		if err != nil {
-			status, msg := storeErrStatus(err)
-			writeError(w, status, msg)
-			return
-		}
+		a.tryApplyDryRematch(w, idea)
+		return
 	}
 
 	a.startAdminRematch(w, r, idea, persist, dry)
@@ -302,7 +295,8 @@ func (a *API) tryApplyDryRematch(w http.ResponseWriter, idea *store.Idea) bool {
 	}
 	if existing == nil || !existing.Dry || existing.Status != "done" || !idea.UpdatedAt.Equal(existing.IdeaUpdatedAt) {
 		a.rematchMu.Unlock()
-		return false
+		writeError(w, http.StatusConflict, "no completed dry run to apply")
+		return true
 	}
 	existing.Status = "applying"
 	tldr := existing.TLDR
@@ -315,7 +309,8 @@ func (a *API) tryApplyDryRematch(w http.ResponseWriter, idea *store.Idea) bool {
 		existing.Status = "stale"
 		a.rematchMu.Unlock()
 		if errors.Is(err, match.ErrIdeaChanged) || errors.Is(err, match.ErrRepoChanged) {
-			return false
+			writeError(w, http.StatusConflict, "no completed dry run to apply")
+			return true
 		}
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return true

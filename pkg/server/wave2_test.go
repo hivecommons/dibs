@@ -526,6 +526,10 @@ func TestAdminRematchDryApplyAndPayload(t *testing.T) {
 	if len(got.Matches) != 2 || len(got.CNCFMatches) != 2 || got.MatchesUpdatedAt.IsZero() {
 		t.Fatalf("apply did not persist suggestions: %+v", got)
 	}
+	rec = doJSON(t, f.h, "POST", "/api/admin/ideas/"+idea.ID+"/rematch", "alice-session", nil)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("repeat apply without fresh dry: want 409, got %d %s", rec.Code, rec.Body.String())
+	}
 
 	rec = doJSON(t, f.h, "GET", "/api/admin/ideas", "alice-session", nil)
 	if rec.Code != http.StatusOK {
@@ -548,10 +552,9 @@ func TestAdminRematchDryApplyAndPayload(t *testing.T) {
 
 	fresh := f.createIdea(t, "bob-session", "Fresh apply", "kubernetes marketplace matching", "public")
 	rec = doJSON(t, f.h, "POST", "/api/admin/ideas/"+fresh.ID+"/rematch", "alice-session", nil)
-	if rec.Code != http.StatusAccepted {
-		t.Fatalf("apply without dry should start job: got %d %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("apply without dry should be gated: got %d %s", rec.Code, rec.Body.String())
 	}
-	waitDone(fresh.ID)
 
 	stale := f.createIdea(t, "bob-session", "Stale dry", "kubernetes marketplace matching", "public")
 	rec = doJSON(t, f.h, "POST", "/api/admin/ideas/"+stale.ID+"/rematch?dry=1", "alice-session", nil)
@@ -565,10 +568,9 @@ func TestAdminRematchDryApplyAndPayload(t *testing.T) {
 		t.Fatalf("edit stale idea: %d %s", rec.Code, rec.Body.String())
 	}
 	rec = doJSON(t, f.h, "POST", "/api/admin/ideas/"+stale.ID+"/rematch", "alice-session", nil)
-	if rec.Code != http.StatusAccepted {
-		t.Fatalf("stale dry apply should re-run: got %d %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("stale dry apply should be gated: got %d %s", rec.Code, rec.Body.String())
 	}
-	waitDone(stale.ID)
 }
 
 func TestAdminAuthorIdentityPayload(t *testing.T) {

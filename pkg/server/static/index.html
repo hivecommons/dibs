@@ -2164,8 +2164,8 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
     var out = row.nextElementSibling && row.nextElementSibling.querySelector('.admin-output');
     if (!out) return;
     out.innerHTML = adminMatchesHTML((res && res.matches) || {});
-    var apply = row.nextElementSibling && row.nextElementSibling.querySelector('[data-admin-act=apply]');
-    if (apply && res && res.dry && res.status === 'done') apply.textContent = 'Apply these results';
+    var detail = row.nextElementSibling;
+    if (detail && res && res.status === 'done') setApplyAvailable(detail, !!res.dry);
   }
   function progressLabel(phase) {
     return ({
@@ -2227,6 +2227,13 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
   function setAdminButtons(detail, disabled) {
     detail.querySelectorAll('button').forEach(function (b) { b.disabled = disabled; });
   }
+  function setApplyAvailable(detail, available) {
+    var apply = detail && detail.querySelector('[data-admin-act=apply]');
+    if (!apply) return;
+    apply.textContent = 'Apply these results';
+    apply.disabled = !available;
+    apply.title = available ? '' : 'Run a dry run first';
+  }
   function pollAdminRematch(id, row, since, jobID) {
     var path = 'admin/ideas/' + id + '/rematch?since=' + encodeURIComponent(String(since || 0));
     if (jobID) path += '&job=' + encodeURIComponent(jobID);
@@ -2241,6 +2248,7 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
       var detail = row.nextElementSibling;
       if (detail) setAdminButtons(detail, false);
       if (res.status === 'error') {
+        if (detail) setApplyAvailable(detail, false);
         if (out) out.innerHTML = '<div class="empty">' + esc(res.error || 'Rematch failed.') + '</div>';
         return;
       }
@@ -2249,6 +2257,7 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
     }).catch(function (e) {
       var detail = row.nextElementSibling;
       if (detail) setAdminButtons(detail, false);
+      if (detail) setApplyAvailable(detail, false);
       showErr(e.message);
     });
   }
@@ -2257,6 +2266,7 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
     if (!detail) return;
     var out = detail.querySelector('.admin-output');
     if (out) out.innerHTML = '<div class="admin-progress"><div class="admin-spinner">Starting rematch…</div><div class="admin-progress-bar" aria-hidden="true"><i></i></div><div class="admin-progress-text">Waiting for progress…</div><div class="admin-progress-log" aria-live="polite"></div></div>';
+    setApplyAvailable(detail, false);
     setAdminButtons(detail, true);
     api('POST', 'admin/ideas/' + id + '/rematch' + (dry ? '?dry=1' : '')).then(function (res) {
       appendAdminEvents(out, res.events || []);
@@ -2290,7 +2300,7 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
         '</tr><tr class="admin-detail-row" data-for="' + esc(idea.id) + '" hidden><td colspan="5"><div class="admin-detail">' +
           '<div class="admin-current">' + adminMatchesHTML(idea.matches) + '</div>' +
           '<div class="admin-actions"><button class="pill small" data-admin-act="dry">Dry run</button>' +
-          '<button class="pill small primary" data-admin-act="apply">Apply</button></div>' +
+          '<button class="pill small primary" data-admin-act="apply" disabled title="Run a dry run first">Apply these results</button></div>' +
           '<div class="admin-output" aria-live="polite"></div></div></td></tr>';
       }).join('') + '</tbody></table></div>';
     el.querySelectorAll('.admin-row').forEach(function (row) {
