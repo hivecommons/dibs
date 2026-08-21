@@ -2164,6 +2164,8 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
     var out = row.nextElementSibling && row.nextElementSibling.querySelector('.admin-output');
     if (!out) return;
     out.innerHTML = adminMatchesHTML((res && res.matches) || {});
+    var apply = row.nextElementSibling && row.nextElementSibling.querySelector('[data-admin-act=apply]');
+    if (apply && res && res.dry && res.status === 'done') apply.textContent = 'Apply these results';
   }
   function progressLabel(phase) {
     return ({

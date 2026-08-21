@@ -136,15 +136,16 @@ type adminIdea struct {
 }
 
 type adminRematchJob struct {
-	ID         string
-	Status     string
-	Dry        bool
-	TLDR       string
-	Matches    adminMatchSummary
-	Error      string
-	FinishedAt time.Time
-	Events     []adminRematchEvent
-	Next       int64
+	ID            string
+	Status        string
+	Dry           bool
+	IdeaUpdatedAt time.Time
+	TLDR          string
+	Matches       adminMatchSummary
+	Error         string
+	FinishedAt    time.Time
+	Events        []adminRematchEvent
+	Next          int64
 }
 
 type adminRematchEvent struct {
@@ -253,24 +254,85 @@ func (a *API) handleAdminRematch(w http.ResponseWriter, r *http.Request) {
 	}
 	persist := r.URL.Query().Get("dry") != "1"
 	dry := !persist
+	if !dry && a.tryApplyDryRematch(w, idea) {
+		return
+	}
+	if !dry {
+		idea, err = a.Store.Get(idea.ID)
+		if err != nil {
+			status, msg := storeErrStatus(err)
+			writeError(w, status, msg)
+			return
+		}
+	}
 
+	a.startAdminRematch(w, r, idea, persist, dry)
+}
+
+func (a *API) startAdminRematch(w http.ResponseWriter, r *http.Request, idea *store.Idea, persist, dry bool) {
 	a.rematchMu.Lock()
 	if a.rematchJobs == nil {
 		a.rematchJobs = map[string]*adminRematchJob{}
 	}
-	if existing := a.rematchJobs[idea.ID]; existing != nil && existing.Status == "running" {
+	if existing := a.rematchJobs[idea.ID]; existing != nil && (existing.Status == "running" || existing.Status == "applying") {
 		a.rematchMu.Unlock()
 		writeError(w, http.StatusConflict, "rematch already running")
 		return
 	}
 	a.rematchSeq++
-	job := &adminRematchJob{ID: strconv.FormatInt(a.rematchSeq, 10), Status: "running", Dry: dry}
+	job := &adminRematchJob{ID: strconv.FormatInt(a.rematchSeq, 10), Status: "running", Dry: dry, IdeaUpdatedAt: idea.UpdatedAt}
 	a.rematchJobs[idea.ID] = job
 	res := job.responseSince(0)
 	a.rematchMu.Unlock()
 
 	go a.runAdminRematch(context.WithoutCancel(r.Context()), idea, persist, job)
 	writeJSON(w, http.StatusAccepted, res)
+}
+
+func (a *API) tryApplyDryRematch(w http.ResponseWriter, idea *store.Idea) bool {
+	a.rematchMu.Lock()
+	if a.rematchJobs == nil {
+		a.rematchJobs = map[string]*adminRematchJob{}
+	}
+	existing := a.rematchJobs[idea.ID]
+	if existing != nil && (existing.Status == "running" || existing.Status == "applying") {
+		a.rematchMu.Unlock()
+		writeError(w, http.StatusConflict, "rematch already running")
+		return true
+	}
+	if existing == nil || !existing.Dry || existing.Status != "done" || !idea.UpdatedAt.Equal(existing.IdeaUpdatedAt) {
+		a.rematchMu.Unlock()
+		return false
+	}
+	existing.Status = "applying"
+	tldr := existing.TLDR
+	hive := append([]store.Match(nil), existing.Matches.Hive...)
+	cncf := append([]store.CNCFMatch(nil), existing.Matches.CNCF...)
+	a.rematchMu.Unlock()
+
+	if err := a.Engine.PersistRematchResults(idea.ID, idea.UpdatedAt, tldr, hive, cncf); err != nil {
+		a.rematchMu.Lock()
+		existing.Status = "stale"
+		a.rematchMu.Unlock()
+		if errors.Is(err, match.ErrIdeaChanged) || errors.Is(err, match.ErrRepoChanged) {
+			return false
+		}
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return true
+	}
+	a.rematchMu.Lock()
+	existing.Status = "done"
+	existing.Dry = false
+	existing.FinishedAt = timeNow()
+	a.rematchMu.Unlock()
+	writeJSON(w, http.StatusOK, adminRematchResponse{
+		Status:     "done",
+		Dry:        false,
+		TLDR:       tldr,
+		Matches:    adminMatchSummary{Count: len(hive) + len(cncf), Hive: hive, CNCF: cncf},
+		FinishedAt: timeNow(),
+	})
+	return true
 }
 
 func (a *API) runAdminRematch(parent context.Context, idea *store.Idea, persist bool, job *adminRematchJob) {

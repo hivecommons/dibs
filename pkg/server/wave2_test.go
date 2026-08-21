@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -393,6 +394,29 @@ func TestAdminRematchDryApplyAndPayload(t *testing.T) {
 	)
 	idea := f.createIdea(t, "bob-session", "Kubernetes marketplace matching",
 		"kubernetes marketplace matching for open source repos", "public")
+	waitDone := func(id string) {
+		t.Helper()
+		for i := 0; i < 50; i++ {
+			rec := doJSON(t, f.h, "GET", "/api/admin/ideas/"+id+"/rematch", "alice-session", nil)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("poll rematch %s: %d %s", id, rec.Code, rec.Body.String())
+			}
+			var st struct {
+				Status string `json:"status"`
+			}
+			if err := json.NewDecoder(rec.Body).Decode(&st); err != nil {
+				t.Fatalf("decode rematch %s: %v", id, err)
+			}
+			if st.Status == "done" {
+				return
+			}
+			if st.Status == "error" {
+				t.Fatalf("rematch %s errored", id)
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		t.Fatalf("rematch %s did not finish", id)
+	}
 
 	rec := doJSON(t, f.h, "POST", "/api/admin/ideas/"+idea.ID+"/rematch?dry=1", "bob-session", nil)
 	if rec.Code != http.StatusForbidden {
@@ -480,31 +504,23 @@ func TestAdminRematchDryApplyAndPayload(t *testing.T) {
 	}
 
 	rec = doJSON(t, f.h, "POST", "/api/admin/ideas/"+idea.ID+"/rematch", "alice-session", nil)
-	if rec.Code != http.StatusAccepted {
-		t.Fatalf("admin apply rematch start: %d %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("admin apply dry results: %d %s", rec.Code, rec.Body.String())
 	}
-	rec = doJSON(t, f.h, "GET", "/api/admin/ideas/"+idea.ID+"/rematch?job="+dry.JobID, "alice-session", nil)
-	if rec.Code != http.StatusConflict {
-		t.Fatalf("stale rematch job poll: want 409, got %d %s", rec.Code, rec.Body.String())
+	var appliedDry struct {
+		Status  string `json:"status"`
+		Dry     bool   `json:"dry"`
+		Matches struct {
+			Hive []store.Match     `json:"hive"`
+			CNCF []store.CNCFMatch `json:"cncf"`
+		} `json:"matches"`
 	}
-	for i := 0; i < 50; i++ {
-		rec = doJSON(t, f.h, "GET", "/api/admin/ideas/"+idea.ID+"/rematch", "alice-session", nil)
-		if rec.Code != http.StatusOK {
-			t.Fatalf("poll apply rematch: %d %s", rec.Code, rec.Body.String())
-		}
-		var applied struct {
-			Status string `json:"status"`
-		}
-		if err := json.NewDecoder(rec.Body).Decode(&applied); err != nil {
-			t.Fatalf("decode apply: %v", err)
-		}
-		if applied.Status != "running" {
-			if applied.Status != "done" {
-				t.Fatalf("apply status = %s, want done", applied.Status)
-			}
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
+	if err := json.NewDecoder(rec.Body).Decode(&appliedDry); err != nil {
+		t.Fatalf("decode applied dry: %v", err)
+	}
+	if appliedDry.Status != "done" || appliedDry.Dry || !reflect.DeepEqual(appliedDry.Matches.Hive, dry.Matches.Hive) ||
+		!reflect.DeepEqual(appliedDry.Matches.CNCF, dry.Matches.CNCF) {
+		t.Fatalf("apply did not reuse dry results: got %+v want %+v", appliedDry, dry.Matches)
 	}
 	got, _ = f.store.Get(idea.ID)
 	if len(got.Matches) != 2 || len(got.CNCFMatches) != 2 || got.MatchesUpdatedAt.IsZero() {
@@ -529,6 +545,30 @@ func TestAdminRematchDryApplyAndPayload(t *testing.T) {
 	if len(ideas) != 1 || ideas[0].ID != idea.ID || len(ideas[0].Matches.Hive) != 2 || len(ideas[0].Matches.CNCF) != 2 {
 		t.Fatalf("admin payload missing stored matches: %+v", ideas)
 	}
+
+	fresh := f.createIdea(t, "bob-session", "Fresh apply", "kubernetes marketplace matching", "public")
+	rec = doJSON(t, f.h, "POST", "/api/admin/ideas/"+fresh.ID+"/rematch", "alice-session", nil)
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("apply without dry should start job: got %d %s", rec.Code, rec.Body.String())
+	}
+	waitDone(fresh.ID)
+
+	stale := f.createIdea(t, "bob-session", "Stale dry", "kubernetes marketplace matching", "public")
+	rec = doJSON(t, f.h, "POST", "/api/admin/ideas/"+stale.ID+"/rematch?dry=1", "alice-session", nil)
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("stale dry start: %d %s", rec.Code, rec.Body.String())
+	}
+	waitDone(stale.ID)
+	rec = doJSON(t, f.h, "PUT", "/api/ideas/"+stale.ID, "bob-session",
+		map[string]string{"title": "Stale dry edited", "body": stale.Body, "visibility": "public", "status": "draft"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("edit stale idea: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = doJSON(t, f.h, "POST", "/api/admin/ideas/"+stale.ID+"/rematch", "alice-session", nil)
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("stale dry apply should re-run: got %d %s", rec.Code, rec.Body.String())
+	}
+	waitDone(stale.ID)
 }
 
 func TestAdminAuthorIdentityPayload(t *testing.T) {
