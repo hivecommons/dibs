@@ -28,6 +28,17 @@ const MaxCNCFCandidates = 15
 // notification to both sides.
 const NotifyThreshold = 60
 
+// RematchHiveKeep and RematchCNCFKeep shape the rematch result: hive-managed
+// repos are favored (3) over CNCF suggestions (2).
+const (
+	RematchHiveKeep = 3
+	RematchCNCFKeep = 2
+)
+
+// AcceptingBoost is added to a hive repo's score when its owner has opted in
+// to accepting ideas — opted-in repos rank ahead of equal lexical fits.
+const AcceptingBoost = 5
+
 // MaxTLDRLen caps a generated TLDR.
 const MaxTLDRLen = 280
 
@@ -143,7 +154,9 @@ func (e *Engine) MatchesForIdea(ctx context.Context, idea *store.Idea) ([]store.
 	}
 	var out []store.Match
 	changed := false
-	for _, rp := range e.Registry.List(true) {
+	// All hive-managed repos are candidates; acceptingIdeas is a boost, not a
+	// gate (no hub repo has opted in yet — a gate would empty the pool).
+	for _, rp := range e.Registry.List(false) {
 		rp := rp
 		if idea.HasPassed(rp.RepoID) || idea.OfferTo(rp.RepoID) != nil {
 			continue
@@ -154,6 +167,7 @@ func (e *Engine) MatchesForIdea(ctx context.Context, idea *store.Idea) ([]store.
 			continue
 		}
 		m := e.score(ctx, idea, &rp, hash)
+		boostAccepting(&m, &rp)
 		out = append(out, m)
 		changed = true
 		if m.Score >= NotifyThreshold && e.Notifier != nil {
@@ -306,6 +320,18 @@ func (e *Engine) cncfMatchesForIdea(ctx context.Context, idea *store.Idea, persi
 	return out, nil
 }
 
+// boostAccepting bumps an opted-in repo's score so accepting repos rank
+// ahead of equal lexical fits. Capped at 100.
+func boostAccepting(m *store.Match, rp *registry.RepoProfile) {
+	if !rp.AcceptingIdeas {
+		return
+	}
+	m.Score += AcceptingBoost
+	if m.Score > 100 {
+		m.Score = 100
+	}
+}
+
 func (e *Engine) nonHiveCNCF(matches []CNCFMatch) []CNCFMatch {
 	out := make([]CNCFMatch, 0, len(matches))
 	for _, m := range matches {
@@ -391,7 +417,8 @@ func (e *Engine) RematchIdea(ctx context.Context, idea *store.Idea, persist bool
 	}
 	var matches []store.Match
 	repos := []registry.RepoProfile{}
-	for _, rp := range e.Registry.List(true) {
+	// Candidates are all hive-managed repos; acceptingIdeas boosts, never gates.
+	for _, rp := range e.Registry.List(false) {
 		if work.HasPassed(rp.RepoID) || work.OfferTo(rp.RepoID) != nil {
 			continue
 		}
@@ -410,6 +437,7 @@ func (e *Engine) RematchIdea(ctx context.Context, idea *store.Idea, persist bool
 			SuggestedAt: time.Now().UTC(),
 			RepoHash:    RepoHash(&rp),
 		}
+		boostAccepting(&m, &rp)
 		matches = append(matches, m)
 		if progress != nil {
 			progress(ProgressEvent{
@@ -431,6 +459,7 @@ func (e *Engine) RematchIdea(ctx context.Context, idea *store.Idea, persist bool
 		rp := baseline[i].Repo
 		llmMatch := e.score(ctx, &work, &rp, RepoHash(&rp))
 		if llmMatch.ByLLM {
+			boostAccepting(&llmMatch, &rp)
 			matches[i] = llmMatch
 		}
 		if progress != nil && llmMatch.ByLLM {
@@ -447,16 +476,16 @@ func (e *Engine) RematchIdea(ctx context.Context, idea *store.Idea, persist bool
 		}
 	}
 	sort.SliceStable(matches, func(i, j int) bool { return matches[i].Score > matches[j].Score })
-	if len(matches) > 2 {
-		matches = matches[:2]
+	if len(matches) > RematchHiveKeep {
+		matches = matches[:RematchHiveKeep]
 	}
 	cncf, err := e.cncfMatchesForIdea(ctx, &work, false, progress)
 	if err != nil {
 		return "", nil, nil, err
 	}
 	cncf = e.nonHiveCNCF(cncf)
-	if len(cncf) > 2 {
-		cncf = cncf[:2]
+	if len(cncf) > RematchCNCFKeep {
+		cncf = cncf[:RematchCNCFKeep]
 	}
 	if progress != nil {
 		progress(ProgressEvent{
