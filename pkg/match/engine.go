@@ -39,6 +39,19 @@ const (
 // to accepting ideas — opted-in repos rank ahead of equal lexical fits.
 const AcceptingBoost = 5
 
+// BM25Weight and LLMWeight blend the deterministic lexical score with the
+// LLM's judgment. Lexical evidence dominates: small models score nearly
+// everything 90+, which would otherwise erase BM25's signal entirely.
+const (
+	BM25Weight = 0.6
+	LLMWeight  = 0.4
+)
+
+// blendScores combines a BM25-scaled score (0-100) with an LLM score (0-100).
+func blendScores(bm25, llm float64) float64 {
+	return BM25Weight*bm25 + LLMWeight*llm
+}
+
 // MaxTLDRLen caps a generated TLDR.
 const MaxTLDRLen = 280
 
@@ -285,7 +298,9 @@ func (e *Engine) cncfMatchesForIdea(ctx context.Context, idea *store.Idea, persi
 		}
 		if e.LLM != nil {
 			if score, reason, err := e.llmScoreCNCF(ctx, idea, c.Project); err == nil {
-				m.Score, m.Reason, m.ByLLM = score, reason, true
+				// Blend with the BM25 baseline instead of replacing it — see
+				// blendScores.
+				m.Score, m.Reason, m.ByLLM = blendScores(m.Score, score), reason, true
 			} else {
 				log.Printf("match: cncf llm score failed for %s×%s, using BM25 fallback: %v", idea.ID, c.Project.RepoID, err)
 			}
@@ -459,6 +474,9 @@ func (e *Engine) RematchIdea(ctx context.Context, idea *store.Idea, persist bool
 		rp := baseline[i].Repo
 		llmMatch := e.score(ctx, &work, &rp, RepoHash(&rp))
 		if llmMatch.ByLLM {
+			// Blend, don't replace: the LLM refines the lexical ranking but
+			// cannot erase it (small models score nearly everything 90+).
+			llmMatch.Score = blendScores(baseline[i].Score, llmMatch.Score)
 			boostAccepting(&llmMatch, &rp)
 			matches[i] = llmMatch
 		}
