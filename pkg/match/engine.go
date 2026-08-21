@@ -55,7 +55,10 @@ func blendScores(bm25, llm float64) float64 {
 // MaxTLDRLen caps a generated TLDR.
 const MaxTLDRLen = 280
 
-var ErrIdeaChanged = errors.New("match: idea changed during rematch")
+var (
+	ErrIdeaChanged = errors.New("match: idea changed during rematch")
+	ErrRepoChanged = errors.New("match: repo changed during rematch")
+)
 
 // maxPromptBody bounds how much idea body we send to the LLM.
 const maxPromptBody = 4000
@@ -512,34 +515,52 @@ func (e *Engine) RematchIdea(ctx context.Context, idea *store.Idea, persist bool
 		})
 	}
 	if persist {
-		tldr, persistedMatches, persistedCNCF := work.TLDR, matches, cncf
-		if _, err := e.Store.Mutate(idea.ID, false, func(i *store.Idea) error {
-			if i.Title != work.Title || i.Body != work.Body || !i.UpdatedAt.Equal(work.UpdatedAt) {
-				return ErrIdeaChanged
-			}
-			i.TLDR = tldr
-			i.Matches = persistedMatches
-			i.CNCFMatches = persistedCNCF
-			i.MatchesUpdatedAt = time.Now().UTC()
-			return nil
-		}); err != nil {
+		if err := e.PersistRematchResults(idea.ID, work.UpdatedAt, work.TLDR, matches, cncf); err != nil {
 			return "", nil, nil, err
-		}
-		if e.Notifier != nil {
-			for _, m := range matches {
-				if m.Score < NotifyThreshold {
-					continue
-				}
-				if rp, err := e.Registry.Get(m.RepoID); err == nil {
-					e.Notifier.NewMatch(work.Author, rp.Owner, &work, rp, m.Score)
-				}
-			}
 		}
 	}
 	if progress != nil {
 		progress(ProgressEvent{Phase: "done", Note: "Rematch complete"})
 	}
 	return work.TLDR, matches, cncf, nil
+}
+
+// PersistRematchResults commits a previously computed rematch result if the
+// idea has not changed since expectedUpdatedAt, then emits the normal match
+// notifications for persisted hive matches.
+func (e *Engine) PersistRematchResults(ideaID string, expectedUpdatedAt time.Time, tldr string, matches []store.Match, cncf []CNCFMatch) error {
+	if e.Registry != nil {
+		for _, m := range matches {
+			rp, err := e.Registry.Get(m.RepoID)
+			if err != nil || m.RepoHash != RepoHash(rp) {
+				return ErrRepoChanged
+			}
+		}
+	}
+	updated, err := e.Store.Mutate(ideaID, false, func(i *store.Idea) error {
+		if !i.UpdatedAt.Equal(expectedUpdatedAt) {
+			return ErrIdeaChanged
+		}
+		i.TLDR = tldr
+		i.Matches = append([]store.Match(nil), matches...)
+		i.CNCFMatches = append([]CNCFMatch(nil), cncf...)
+		i.MatchesUpdatedAt = time.Now().UTC()
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if e.Notifier != nil {
+		for _, m := range matches {
+			if m.Score < NotifyThreshold {
+				continue
+			}
+			if rp, err := e.Registry.Get(m.RepoID); err == nil {
+				e.Notifier.NewMatch(updated.Author, rp.Owner, updated, rp, m.Score)
+			}
+		}
+	}
+	return nil
 }
 
 func firstNonEmpty(values ...string) string {
