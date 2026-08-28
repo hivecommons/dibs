@@ -20,10 +20,20 @@
   --text: #f6f8fb; --muted: #a8b3c2; --amber: #f4c75f;
   --green: #74df9a; --blue: #80bfff; --red: #ff7e7e; --purple: #c0a6f0;
   --radius: 6px;
-  /* elevation: two-layer (contact + ambient) reads as depth on a dark ground
-     where a single large blur just looks like haze. */
-  --shadow-1: 0 1px 2px rgba(0,0,0,.30), 0 4px 12px rgba(0,0,0,.26);
-  --shadow-2: 0 2px 4px rgba(0,0,0,.34), 0 12px 28px rgba(0,0,0,.34);
+  /* Elevation on a DARK ground. The panels (#1c2128) are LIGHTER than the page
+     (#0d1117), so a black shadow has almost no headroom to darken and reads as
+     nothing. Depth here comes from a light top inset edge (implied light from
+     above) plus a shadow opaque enough to actually register. */
+  --shadow-1:
+    inset 0 1px 0 rgba(255,255,255,.055),
+    0 1px 2px rgba(0,0,0,.55),
+    0 6px 16px rgba(0,0,0,.45),
+    0 14px 32px rgba(0,0,0,.30);
+  --shadow-2:
+    inset 0 1px 0 rgba(255,255,255,.075),
+    0 2px 4px rgba(0,0,0,.60),
+    0 10px 24px rgba(0,0,0,.52),
+    0 22px 48px rgba(0,0,0,.38);
   --font-ui: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
 }
@@ -477,7 +487,7 @@ details.how-details .how-body { padding: 16px 18px; }
   margin: 22px 0 6px; }
 .flow-node { position: relative; background: var(--panel-2); border: 1px solid var(--line);
   border-radius: var(--radius); padding: 13px 14px; transition: border-color .35s, box-shadow .35s, transform .35s; }
-.flow-node.active { border-color: var(--amber); box-shadow: 0 0 0 1px var(--amber), 0 10px 30px rgba(244,199,95,.11), var(--shadow-1);
+.flow-node.active { border-color: var(--amber); box-shadow: 0 0 0 1px var(--amber), 0 10px 30px rgba(244,199,95,.14), var(--shadow-2);
   transform: translateY(-2px); }
 .flow-role { font-size: .7rem; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
 .flow-node.active .flow-role { color: var(--amber); }
