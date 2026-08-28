@@ -431,6 +431,23 @@ details.how-details .how-body { padding: 16px 18px; }
    curve does the spin, so no per-frame JS. Respects reduced-motion. */
 .hero h1.slot-h1, .hero.compact h1.slot-h1 { display: flex; align-items: baseline; justify-content: center; gap: .5ch; flex-wrap: wrap; font-size: clamp(2.1rem, 5.2vw, 4rem); line-height: 1.15; letter-spacing: -.02em; margin-bottom: 16px; }
 .slot-lead { white-space: nowrap; }
+.kicker { display: flex; align-items: center; justify-content: center; gap: 10px;
+  font-size: .74rem; font-weight: 800; letter-spacing: .19em; text-transform: uppercase;
+  color: var(--muted); margin: 0 0 14px; }
+.kicker b { color: var(--amber); font-weight: 800; letter-spacing: .19em; }
+.kicker::before, .kicker::after { content: ""; height: 1px; width: clamp(18px, 7vw, 74px);
+  background: linear-gradient(90deg, transparent, var(--line)); }
+.kicker::after { background: linear-gradient(90deg, var(--line), transparent); }
+.kicker .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); flex: none;
+  box-shadow: 0 0 0 3px rgba(116,223,154,.16); }
+@media (prefers-reduced-motion: no-preference) {
+  .kicker .dot { animation: kick-pulse 2.4s ease-in-out infinite; }
+}
+@keyframes kick-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(116,223,154,.16); }
+  50% { box-shadow: 0 0 0 6px rgba(116,223,154,.05); }
+}
+@media (max-width: 640px) { .kicker { font-size: .64rem; letter-spacing: .14em; } }
 .slot-window { position: relative; display: inline-block; height: 1.35em; overflow: hidden; vertical-align: baseline;
   border-bottom: 3px solid var(--amber); min-width: 15ch; text-align: left;
   -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 22%, #000 78%, transparent 100%);
@@ -720,6 +737,7 @@ details.how-details .how-body { padding: 16px 18px; }
   </div>
   <!-- The pitch — visible to everyone; only the sign-in CTA is anon-gated. -->
   <div class="hero compact">
+    <p class="kicker"><span class="dot" aria-hidden="true"></span>Welcome to the <b>idea economy</b></p>
     <h1 class="slot-h1">
       <span class="slot-lead">Let's make the best</span>
       <span class="slot-window" id="slot-window" aria-live="polite" aria-atomic="true">
@@ -744,9 +762,9 @@ details.how-details .how-body { padding: 16px 18px; }
   <!-- how the exchange clears: idea -> matched repo -> implemented, surplus routed not duplicated -->
   <section class="flow" id="flow" aria-label="How the exchange clears">
     <div class="flow-head">
-      <h2>Three surpluses, one clearing house</h2>
-      <p>Everyone at this table is holding something the other two are short of. The exchange
-      moves it instead of letting it sit.</p>
+      <h2>The idea economy, cleared</h2>
+      <p>Three surpluses, one clearing house. Everyone at this table is holding something the
+      other two are short of — the exchange moves it instead of letting it sit.</p>
     </div>
 
     <div class="flow-stage">
