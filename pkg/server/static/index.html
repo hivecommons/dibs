@@ -429,10 +429,10 @@ details.how-details .how-body { padding: 16px 18px; }
    CNCF landscape categories and lands on one. The reel is a vertical strip of
    category rows translated by transform; a CSS transition with a decelerating
    curve does the spin, so no per-frame JS. Respects reduced-motion. */
-.slot-h1 { display: flex; align-items: baseline; justify-content: center; gap: .4ch; flex-wrap: wrap; font-size: 1.8rem; margin-bottom: 10px; }
+.slot-h1 { display: flex; align-items: baseline; justify-content: center; gap: .5ch; flex-wrap: wrap; font-size: clamp(2.1rem, 5.2vw, 4rem); line-height: 1.15; letter-spacing: -.02em; margin-bottom: 16px; }
 .slot-lead { white-space: nowrap; }
 .slot-window { position: relative; display: inline-block; height: 1.35em; overflow: hidden; vertical-align: baseline;
-  border-bottom: 2px solid var(--amber); min-width: 12ch; text-align: left;
+  border-bottom: 3px solid var(--amber); min-width: 12ch; text-align: left;
   -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 22%, #000 78%, transparent 100%);
   mask-image: linear-gradient(180deg, transparent 0, #000 22%, #000 78%, transparent 100%); }
 .slot-reel { display: block; will-change: transform; }
@@ -444,7 +444,7 @@ details.how-details .how-body { padding: 16px 18px; }
   .slot-reel.spinning { transition: none; }
   .slot-window.landed { animation: none; }
 }
-@media (max-width: 640px) { .slot-h1 { font-size: 1.45rem; } .slot-window { min-width: 9ch; } }
+@media (max-width: 640px) { .slot-h1 { font-size: clamp(1.6rem, 7.5vw, 2.2rem); } .slot-window { min-width: 9ch; } }
 .market-layout { display: grid; grid-template-columns: minmax(260px, 300px) minmax(0, 1fr); gap: 16px; align-items: stretch; margin: 18px 0 0; }
 .watchlist-panel, .chart-panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
 .watchlist-panel { display: flex; flex-direction: column; min-height: 0; height: min(60vh, 720px); max-height: 720px; overflow: hidden; }
