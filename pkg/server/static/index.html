@@ -432,7 +432,7 @@ details.how-details .how-body { padding: 16px 18px; }
 .hero h1.slot-h1, .hero.compact h1.slot-h1 { display: flex; align-items: baseline; justify-content: center; gap: .5ch; flex-wrap: wrap; font-size: clamp(2.1rem, 5.2vw, 4rem); line-height: 1.15; letter-spacing: -.02em; margin-bottom: 16px; }
 .slot-lead { white-space: nowrap; }
 .slot-window { position: relative; display: inline-block; height: 1.35em; overflow: hidden; vertical-align: baseline;
-  border-bottom: 3px solid var(--amber); min-width: 12ch; text-align: left;
+  border-bottom: 3px solid var(--amber); min-width: 15ch; text-align: left;
   -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 22%, #000 78%, transparent 100%);
   mask-image: linear-gradient(180deg, transparent 0, #000 22%, #000 78%, transparent 100%); }
 .slot-reel { display: block; will-change: transform; }
@@ -444,7 +444,7 @@ details.how-details .how-body { padding: 16px 18px; }
   .slot-reel.spinning { transition: none; }
   .slot-window.landed { animation: none; }
 }
-@media (max-width: 640px) { .hero h1.slot-h1, .hero.compact h1.slot-h1 { font-size: clamp(1.6rem, 7.5vw, 2.2rem); } .slot-window { min-width: 9ch; } }
+@media (max-width: 640px) { .hero h1.slot-h1, .hero.compact h1.slot-h1 { font-size: clamp(1.6rem, 7.5vw, 2.2rem); } .slot-window { min-width: 11ch; } }
 
 /* ---- flow graph: how the exchange clears ---- */
 .flow { margin: 26px auto 4px; max-width: 1120px; padding: 22px 20px 18px; background: var(--panel);
@@ -1724,15 +1724,30 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
         showChart(row.dataset.repo);
       });
     });
-    syncWatchlistSelection();
+    /* passive: a re-render (spark/price refresh) is not a selection the user
+       made, so it must never move the viewport. */
+    syncWatchlistSelection(true);
     scheduleWatchlistSparks();
   }
   function syncWatchlistSelection(noScroll) {
+    var target = null;
     chartRows().forEach(function (row) {
       var selected = row.dataset.repo === chartCurrent;
       row.setAttribute('aria-selected', String(selected));
-      if (!noScroll && selected && row.scrollIntoView) row.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      if (selected) target = row;
     });
+    if (noScroll || !target) return;
+    /* Scroll ONLY the watchlist panel. scrollIntoView walks up and scrolls the
+       page too, which yanks the reader away from wherever they actually are. */
+    var list = $('chart-watchlist');
+    if (!list || !target.getBoundingClientRect || !list.getBoundingClientRect) return;
+    var lr = list.getBoundingClientRect();
+    var tr = target.getBoundingClientRect();
+    if (tr.top < lr.top) {
+      list.scrollTop -= (lr.top - tr.top);
+    } else if (tr.bottom > lr.bottom) {
+      list.scrollTop += (tr.bottom - lr.bottom);
+    }
   }
   function scheduleWatchlistSparks() {
     if (watchlistSparkScheduled) return;
@@ -3496,15 +3511,35 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
   /* Width is set from the widest category so the underline doesn't jitter as
      rows pass; measured once against the real font. */
   function sizeWindow() {
+    /* Measure INSIDE the window so the probe inherits the heading's real font
+       size (the h1 uses clamp(), so body-level measurement is far too small).
+       Pin an exact width, not a min-width: the line is centered, so a reel that
+       resizes per category drags "Let's make the best" left and right on every
+       spin. Fixed width == the lead text never moves. */
     var probe = document.createElement('span');
     probe.className = 'slot-item';
-    probe.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap';
-    document.body.appendChild(probe);
+    probe.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;left:-9999px;top:0';
+    win.appendChild(probe);
     var max = 0;
-    CNCF_CATEGORIES.forEach(function (c) { probe.textContent = c; max = Math.max(max, probe.offsetWidth); });
-    document.body.removeChild(probe);
-    if (max) win.style.minWidth = (max + 8) + 'px';
+    CNCF_CATEGORIES.forEach(function (c) {
+      probe.textContent = c;
+      max = Math.max(max, probe.getBoundingClientRect().width);
+    });
+    win.removeChild(probe);
+    if (max) {
+      var px = Math.ceil(max) + 2;
+      win.style.width = px + 'px';
+      win.style.minWidth = px + 'px';
+      win.style.maxWidth = px + 'px';
+    }
   }
+
+  /* Re-measure when the viewport changes: the clamp() font size is vw-based. */
+  var sizeTimer = null;
+  window.addEventListener('resize', function () {
+    clearTimeout(sizeTimer);
+    sizeTimer = setTimeout(sizeWindow, 150);
+  });
 
   var current = CNCF_CATEGORIES[Math.floor(Math.random() * CNCF_CATEGORIES.length)];
 
@@ -3555,6 +3590,9 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
   win.addEventListener('focusout', function () { setPaused(false); });
 
   sizeWindow();
+  if (document.fonts && document.fonts.ready && typeof document.fonts.ready.then === 'function') {
+    document.fonts.ready.then(sizeWindow);
+  }
   reel.appendChild(row(current));
   win.setAttribute('aria-label', "Let's make the best " + current);
   schedule();
