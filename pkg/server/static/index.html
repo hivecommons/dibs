@@ -425,6 +425,26 @@ details.how-details .how-body { padding: 16px 18px; }
 /* ── the terminal: repo value-index chart ── */
 .hero.compact { padding: 26px 0 18px; }
 .hero.compact h1 { font-size: 1.8rem; }
+/* Slot-machine hero: "Let's make the best ____" where the blank spins through
+   CNCF landscape categories and lands on one. The reel is a vertical strip of
+   category rows translated by transform; a CSS transition with a decelerating
+   curve does the spin, so no per-frame JS. Respects reduced-motion. */
+.slot-h1 { display: flex; align-items: baseline; justify-content: center; gap: .4ch; flex-wrap: wrap; font-size: 1.8rem; margin-bottom: 10px; }
+.slot-lead { white-space: nowrap; }
+.slot-window { position: relative; display: inline-block; height: 1.35em; overflow: hidden; vertical-align: baseline;
+  border-bottom: 2px solid var(--amber); min-width: 12ch; text-align: left;
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 22%, #000 78%, transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0, #000 22%, #000 78%, transparent 100%); }
+.slot-reel { display: block; will-change: transform; }
+.slot-reel.spinning { transition: transform var(--slot-dur, 2.6s) cubic-bezier(.16, .84, .28, 1); }
+.slot-item { display: block; height: 1.35em; line-height: 1.35em; color: var(--amber); font-style: normal; white-space: nowrap; font-weight: 700; }
+.slot-window.landed { animation: slot-land .45s ease-out; }
+@keyframes slot-land { 0% { box-shadow: 0 2px 0 -1px var(--amber); } 40% { box-shadow: 0 6px 14px -6px var(--amber); } 100% { box-shadow: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .slot-reel.spinning { transition: none; }
+  .slot-window.landed { animation: none; }
+}
+@media (max-width: 640px) { .slot-h1 { font-size: 1.45rem; } .slot-window { min-width: 9ch; } }
 .market-layout { display: grid; grid-template-columns: minmax(260px, 300px) minmax(0, 1fr); gap: 16px; align-items: stretch; margin: 18px 0 0; }
 .watchlist-panel, .chart-panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
 .watchlist-panel { display: flex; flex-direction: column; min-height: 0; height: min(60vh, 720px); max-height: 720px; overflow: hidden; }
@@ -642,7 +662,13 @@ details.how-details .how-body { padding: 16px 18px; }
   </div>
   <!-- The pitch — visible to everyone; only the sign-in CTA is anon-gated. -->
   <div class="hero compact">
-    <h1>The open-source idea exchange.</h1>
+    <h1 class="slot-h1">
+      <span class="slot-lead">Let's make the best</span>
+      <span class="slot-window" id="slot-window" aria-live="polite" aria-atomic="true">
+        <span class="slot-reel" id="slot-reel"></span>
+      </span>
+    </h1>
+    <p class="sub" style="margin-bottom:14px">The open-source idea exchange.</p>
     <p class="tagline"><strong>D</strong>elegate <strong>I</strong>t, <strong>B</strong>ro. <strong>S</strong>eriously.</p>
     <p class="sub">Repos are the listed companies. Two kinds of capital move the market:
     ideas and spare AI tokens. An idea can be a spec, a requirement, or something you wish
@@ -3303,6 +3329,116 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
       spans[i].classList.add('on');
     }, 10000);
   })();
+})();
+</script>
+
+<script>
+/* Hero slot machine — the blank in "Let's make the best ____" spins through the
+   CNCF landscape categories and lands on a random one every few seconds.
+   Implementation notes:
+   - The reel is a strip of rows; spinning = translateY with a decelerating
+     cubic-bezier, so the browser animates it on the compositor (no rAF loop,
+     no timer drift, cheap when backgrounded).
+   - Rows are appended in randomized order each spin, so consecutive landings
+     don't repeat and the sequence isn't predictable.
+   - Pauses when the tab is hidden and when the user hovers/focuses the hero, so
+     it never animates unseen or fights someone reading it.
+   - prefers-reduced-motion: swaps text without motion. */
+(function () {
+  var CNCF_CATEGORIES = [
+    'observability', 'service mesh', 'container runtime', 'CI/CD',
+    'orchestration', 'API gateway', 'cloud native storage', 'serverless',
+    'key management', 'database', 'streaming & messaging', 'service proxy',
+    'scheduling & orchestration', 'chaos engineering', 'security & compliance',
+    'application definition', 'automation & configuration', 'coordination & discovery',
+    'remote procedure call', 'cloud native network', 'registry',
+    'continuous optimization', 'feature flagging', 'developer platform'
+  ];
+  var SPIN_MS = 2600, HOLD_MS = 2600, ROWS = 14;
+
+  var win = document.getElementById('slot-window');
+  var reel = document.getElementById('slot-reel');
+  if (!win || !reel) return;
+
+  var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var paused = false, timer = null;
+
+  function shuffled() {
+    var a = CNCF_CATEGORIES.slice();
+    for (var i = a.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t;
+    }
+    return a;
+  }
+  function row(text) {
+    var el = document.createElement('span');
+    el.className = 'slot-item'; el.textContent = text; return el;
+  }
+  /* Width is set from the widest category so the underline doesn't jitter as
+     rows pass; measured once against the real font. */
+  function sizeWindow() {
+    var probe = document.createElement('span');
+    probe.className = 'slot-item';
+    probe.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap';
+    document.body.appendChild(probe);
+    var max = 0;
+    CNCF_CATEGORIES.forEach(function (c) { probe.textContent = c; max = Math.max(max, probe.offsetWidth); });
+    document.body.removeChild(probe);
+    if (max) win.style.minWidth = (max + 8) + 'px';
+  }
+
+  var current = CNCF_CATEGORIES[Math.floor(Math.random() * CNCF_CATEGORIES.length)];
+
+  function render(landing) {
+    /* Strip of filler rows ending on the landing row; we translate to the last. */
+    reel.className = 'slot-reel';
+    reel.style.transform = 'translateY(0)';
+    reel.innerHTML = '';
+    reel.appendChild(row(current));
+    var pool = shuffled().filter(function (c) { return c !== landing; });
+    for (var i = 0; i < ROWS; i++) reel.appendChild(row(pool[i % pool.length]));
+    reel.appendChild(row(landing));
+  }
+
+  function spin() {
+    if (paused) return schedule();
+    var landing = CNCF_CATEGORIES[Math.floor(Math.random() * CNCF_CATEGORIES.length)];
+    if (landing === current && CNCF_CATEGORIES.length > 1) return spin();
+    render(landing);
+    var rowH = reel.firstChild ? reel.firstChild.offsetHeight : 0;
+    var distance = rowH * (reel.childNodes.length - 1);
+    if (reduced || !rowH) {
+      reel.innerHTML = ''; reel.appendChild(row(landing));
+      current = landing; win.setAttribute('aria-label', "Let's make the best " + landing);
+      return schedule();
+    }
+    reel.style.setProperty('--slot-dur', SPIN_MS + 'ms');
+    /* Force layout so the transition starts from translateY(0). */
+    void reel.offsetHeight;
+    reel.classList.add('spinning');
+    reel.style.transform = 'translateY(-' + distance + 'px)';
+    window.setTimeout(function () {
+      current = landing;
+      win.setAttribute('aria-label', "Let's make the best " + landing);
+      win.classList.add('landed');
+      window.setTimeout(function () { win.classList.remove('landed'); }, 450);
+      schedule();
+    }, SPIN_MS);
+  }
+
+  function schedule() { window.clearTimeout(timer); timer = window.setTimeout(spin, HOLD_MS); }
+
+  function setPaused(p) { paused = p; if (!p) schedule(); }
+  document.addEventListener('visibilitychange', function () { setPaused(document.hidden); });
+  win.addEventListener('mouseenter', function () { setPaused(true); });
+  win.addEventListener('mouseleave', function () { setPaused(false); });
+  win.addEventListener('focusin', function () { setPaused(true); });
+  win.addEventListener('focusout', function () { setPaused(false); });
+
+  sizeWindow();
+  reel.appendChild(row(current));
+  win.setAttribute('aria-label', "Let's make the best " + current);
+  schedule();
 })();
 </script>
 </body>
