@@ -429,7 +429,7 @@ details.how-details .how-body { padding: 16px 18px; }
    CNCF landscape categories and lands on one. The reel is a vertical strip of
    category rows translated by transform; a CSS transition with a decelerating
    curve does the spin, so no per-frame JS. Respects reduced-motion. */
-.slot-h1 { display: flex; align-items: baseline; justify-content: center; gap: .5ch; flex-wrap: wrap; font-size: clamp(2.1rem, 5.2vw, 4rem); line-height: 1.15; letter-spacing: -.02em; margin-bottom: 16px; }
+.hero h1.slot-h1, .hero.compact h1.slot-h1 { display: flex; align-items: baseline; justify-content: center; gap: .5ch; flex-wrap: wrap; font-size: clamp(2.1rem, 5.2vw, 4rem); line-height: 1.15; letter-spacing: -.02em; margin-bottom: 16px; }
 .slot-lead { white-space: nowrap; }
 .slot-window { position: relative; display: inline-block; height: 1.35em; overflow: hidden; vertical-align: baseline;
   border-bottom: 3px solid var(--amber); min-width: 12ch; text-align: left;
@@ -444,7 +444,65 @@ details.how-details .how-body { padding: 16px 18px; }
   .slot-reel.spinning { transition: none; }
   .slot-window.landed { animation: none; }
 }
-@media (max-width: 640px) { .slot-h1 { font-size: clamp(1.6rem, 7.5vw, 2.2rem); } .slot-window { min-width: 9ch; } }
+@media (max-width: 640px) { .hero h1.slot-h1, .hero.compact h1.slot-h1 { font-size: clamp(1.6rem, 7.5vw, 2.2rem); } .slot-window { min-width: 9ch; } }
+
+/* ---- flow graph: how the exchange clears ---- */
+.flow { margin: 26px auto 4px; max-width: 1120px; padding: 22px 20px 18px; background: var(--panel);
+  border: 1px solid var(--line); border-radius: var(--radius); }
+.flow-head { text-align: center; margin-bottom: 4px; }
+.flow-head h2 { font-size: 1.15rem; margin: 0 0 4px; letter-spacing: -.01em; }
+.flow-head p { color: var(--muted); font-size: .88rem; margin: 0 auto; max-width: 62ch; line-height: 1.5; }
+.flow-stage { position: relative; display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;
+  margin: 22px 0 6px; }
+.flow-node { position: relative; background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 13px 14px; transition: border-color .35s, box-shadow .35s, transform .35s; }
+.flow-node.active { border-color: var(--amber); box-shadow: 0 0 0 1px var(--amber), 0 10px 30px rgba(244,199,95,.11);
+  transform: translateY(-2px); }
+.flow-role { font-size: .7rem; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.flow-node.active .flow-role { color: var(--amber); }
+.flow-what { font-size: .95rem; font-weight: 700; margin: 5px 0 7px; }
+.flow-holds { list-style: none; margin: 0; padding: 0; }
+.flow-holds li { font-size: .8rem; color: var(--muted); line-height: 1.65; display: flex; gap: 7px; }
+.flow-holds li::before { content: "+"; color: var(--green); font-weight: 700; flex: none; }
+.flow-holds li.lacks::before { content: "\2212"; color: var(--red); }
+
+/* the travelling packet */
+.flow-track { position: relative; height: 30px; margin: 0 4px; }
+.flow-rail { position: absolute; left: 8%; right: 8%; top: 14px; height: 2px; background: var(--line); border-radius: 2px; }
+.flow-rail-fill { position: absolute; left: 0; top: 0; height: 100%; width: 0; background: var(--amber);
+  border-radius: 2px; transition: width .9s cubic-bezier(.4,.1,.2,1); }
+.flow-packet { position: absolute; top: 4px; left: 8%; width: 22px; height: 22px; margin-left: -11px;
+  border-radius: 50%; background: var(--amber); color: #080b0f; font-size: .68rem; font-weight: 800;
+  display: flex; align-items: center; justify-content: center; opacity: 0;
+  transition: left .9s cubic-bezier(.4,.1,.2,1), opacity .35s;
+  box-shadow: 0 0 0 5px rgba(244,199,95,.13); }
+.flow-packet.on { opacity: 1; }
+
+.flow-caption { text-align: center; min-height: 2.6em; margin: 10px auto 0; max-width: 70ch;
+  font-size: .9rem; color: var(--text); line-height: 1.5; }
+.flow-caption b { color: var(--amber); }
+.flow-steps { display: flex; justify-content: center; gap: 7px; margin-top: 12px; }
+.flow-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--line); border: 0; padding: 0;
+  cursor: pointer; transition: background .3s, transform .3s; }
+.flow-dot.on { background: var(--amber); transform: scale(1.35); }
+.flow-dot:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
+
+.flow-why { margin-top: 18px; padding-top: 15px; border-top: 1px solid var(--line);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 14px 26px; }
+.flow-why p { margin: 0; font-size: .85rem; color: var(--muted); line-height: 1.6; }
+.flow-why strong { color: var(--text); }
+.flow-why .kv { grid-column: 1 / -1; padding-top: 12px; border-top: 1px dashed var(--line);
+  font-size: .84rem; color: var(--muted); }
+.flow-why .kv code { font-family: var(--font-mono); color: var(--blue); font-size: .96em; }
+
+@media (prefers-reduced-motion: reduce) {
+  .flow-node, .flow-packet, .flow-rail-fill, .flow-dot { transition: none; }
+}
+@media (max-width: 760px) {
+  .flow-stage { grid-template-columns: 1fr; gap: 10px; }
+  .flow-track { display: none; }
+  .flow-why { grid-template-columns: 1fr; }
+}
 .market-layout { display: grid; grid-template-columns: minmax(260px, 300px) minmax(0, 1fr); gap: 16px; align-items: stretch; margin: 18px 0 0; }
 .watchlist-panel, .chart-panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
 .watchlist-panel { display: flex; flex-direction: column; min-height: 0; height: min(60vh, 720px); max-height: 720px; overflow: hidden; }
@@ -682,6 +740,67 @@ details.how-details .how-body { padding: 16px 18px; }
       <button class="pill" data-goto="credits">Leaderboard</button>
     </div>
   </div>
+
+  <!-- how the exchange clears: idea -> matched repo -> implemented, surplus routed not duplicated -->
+  <section class="flow" id="flow" aria-label="How the exchange clears">
+    <div class="flow-head">
+      <h2>Three surpluses, one clearing house</h2>
+      <p>Everyone at this table is holding something the other two are short of. The exchange
+      moves it instead of letting it sit.</p>
+    </div>
+
+    <div class="flow-stage">
+      <div class="flow-node" id="flow-n0">
+        <div class="flow-role">Ideator</div>
+        <div class="flow-what">Has the idea</div>
+        <ul class="flow-holds">
+          <li>A spec, a gap, a wish</li>
+          <li class="lacks">No time to maintain it</li>
+          <li class="lacks">No tokens to build it</li>
+        </ul>
+      </div>
+      <div class="flow-node" id="flow-n1">
+        <div class="flow-role">Repo</div>
+        <div class="flow-what">Has the home</div>
+        <ul class="flow-holds">
+          <li>Maintainers, users, CI</li>
+          <li>Already carries the domain</li>
+          <li class="lacks">Short on ideas and hands</li>
+        </ul>
+      </div>
+      <div class="flow-node" id="flow-n2">
+        <div class="flow-role">Clanker</div>
+        <div class="flow-what">Has the capacity</div>
+        <ul class="flow-holds">
+          <li>Prepaid tokens, already sunk</li>
+          <li>Agent time going unused</li>
+          <li class="lacks">Nothing worth pointing it at</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="flow-track" aria-hidden="true">
+      <div class="flow-rail"><div class="flow-rail-fill" id="flow-fill"></div></div>
+      <div class="flow-packet" id="flow-packet">i</div>
+    </div>
+
+    <p class="flow-caption" id="flow-caption" aria-live="polite"></p>
+
+    <div class="flow-steps" id="flow-steps" role="tablist" aria-label="Steps"></div>
+
+    <div class="flow-why">
+      <p><strong>Nothing new gets started that didn't need to be.</strong> The idea lands in a
+      project that already has maintainers, users and a release process — instead of becoming
+      the fourteenth half-finished repo solving the same thing.</p>
+      <p><strong>Credit follows the idea.</strong> The GitHub issue is filed under the ideator's
+      name. Contribution shows up where contribution happened, for all three parties.</p>
+      <p class="kv">If you build systems, you already know this shape. <code>kv-cache</code> is
+      hot for exactly one reason: we kept paying to recompute things somebody had already
+      computed. This is that same argument one layer up — every duplicated project is duplicated
+      inference, and duplicated inference is real electricity and real water. Routing the work
+      to where it already lives is the cache hit.</p>
+    </div>
+  </section>
   <!-- the terminal: everyone's home — derived repo value-index chart -->
   <div class="market-layout">
     <aside class="watchlist-panel" aria-label="Listed repo watchlist">
@@ -3439,6 +3558,76 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
   reel.appendChild(row(current));
   win.setAttribute('aria-label', "Let's make the best " + current);
   schedule();
+})();
+</script>
+<script>
+(function () {
+  var STEPS = [
+    { node: 0, pos: 0,   label: 'An idea gets listed. <b>Costs the ideator nothing</b> but the thought \u2014 no repo to start, no tokens to spend, no decade of maintenance signed up for.' },
+    { node: 1, pos: 50,  label: 'It is matched to a repo that already lives in that problem space. <b>The issue is filed under the ideator\u2019s name.</b>' },
+    { node: 2, pos: 100, label: 'A clanker with prepaid capacity picks it up. <b>Those tokens expire unused otherwise</b> \u2014 spending them on real work is pure recovered value.' },
+    { node: -1, pos: 100, label: 'Ships. <b>The ideator spent no time or money, the repo gained a feature and a contributor, the clanker turned a sunk cost into something that exists.</b>' }
+  ];
+  var HOLD_MS = 3400;
+
+  var packet = document.getElementById('flow-packet');
+  var fill = document.getElementById('flow-fill');
+  var caption = document.getElementById('flow-caption');
+  var stepsEl = document.getElementById('flow-steps');
+  var section = document.getElementById('flow');
+  if (!packet || !fill || !caption || !stepsEl || !section) return;
+
+  var nodes = [0, 1, 2].map(function (i) { return document.getElementById('flow-n' + i); });
+  var idx = 0, timer = null, paused = false, seen = false;
+
+  var dots = STEPS.map(function (_, i) {
+    var b = document.createElement('button');
+    b.className = 'flow-dot';
+    b.type = 'button';
+    b.setAttribute('role', 'tab');
+    b.setAttribute('aria-label', 'Step ' + (i + 1) + ' of ' + STEPS.length);
+    b.addEventListener('click', function () { show(i); restart(); });
+    stepsEl.appendChild(b);
+    return b;
+  });
+
+  function show(i) {
+    idx = ((i % STEPS.length) + STEPS.length) % STEPS.length;
+    var st = STEPS[idx];
+    nodes.forEach(function (n, k) { if (n) n.classList.toggle('active', k === st.node); });
+    packet.classList.toggle('on', st.node >= 0);
+    packet.style.left = 'calc(8% + ' + st.pos + '% * 0.84)';
+    fill.style.width = st.pos + '%';
+    caption.innerHTML = st.label;
+    dots.forEach(function (d, k) {
+      d.classList.toggle('on', k === idx);
+      d.setAttribute('aria-selected', k === idx ? 'true' : 'false');
+    });
+  }
+
+  function tick() { if (!paused) show(idx + 1); timer = setTimeout(tick, HOLD_MS); }
+  function restart() { clearTimeout(timer); timer = setTimeout(tick, HOLD_MS); }
+  function setPaused(p) { paused = p; }
+
+  section.addEventListener('mouseenter', function () { setPaused(true); });
+  section.addEventListener('mouseleave', function () { setPaused(false); });
+  section.addEventListener('focusin', function () { setPaused(true); });
+  section.addEventListener('focusout', function () { setPaused(false); });
+  document.addEventListener('visibilitychange', function () { setPaused(document.hidden); });
+
+  show(0);
+
+  // only start cycling once it is actually on screen
+  if (typeof IntersectionObserver === 'function') {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting && !seen) { seen = true; restart(); io.disconnect(); }
+      });
+    }, { threshold: 0.25 });
+    io.observe(section);
+  } else {
+    restart();
+  }
 })();
 </script>
 </body>
