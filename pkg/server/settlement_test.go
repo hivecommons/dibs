@@ -54,7 +54,7 @@ func TestMatchmakerSettlementFlow(t *testing.T) {
 		FullBody  string `json:"fullBody"`
 		Truncated bool   `json:"truncated"`
 	}](t, rec)
-	if !strings.HasPrefix(launch.URL, "https://github.com/hivecommons/dibs/issues/new?") {
+	if !strings.HasPrefix(launch.URL, "https://github.com/kubestellar/dibs/issues/new?") {
 		t.Fatalf("launch url: %q", launch.URL)
 	}
 	u, err := url.Parse(launch.URL)
@@ -83,8 +83,8 @@ func TestMatchmakerSettlementFlow(t *testing.T) {
 	// Confirmation validation: wrong repo / non-issue URLs rejected.
 	for _, bad := range []string{
 		"https://github.com/org/other/issues/9",
-		"https://github.com/hivecommons/dibs/pull/9",
-		"http://github.com/hivecommons/dibs/issues/9",
+		"https://github.com/kubestellar/dibs/pull/9",
+		"http://github.com/kubestellar/dibs/issues/9",
 		"nonsense",
 	} {
 		rec := doJSON(t, f.h, "POST", "/api/ideas/"+idea.ID+"/confirm-issue", "bob-session",
@@ -95,12 +95,12 @@ func TestMatchmakerSettlementFlow(t *testing.T) {
 	}
 	// Only the author may confirm.
 	if rec := doJSON(t, f.h, "POST", "/api/ideas/"+idea.ID+"/confirm-issue", "alice-session",
-		map[string]string{"issueURL": "https://github.com/hivecommons/dibs/issues/9"}); rec.Code != http.StatusForbidden {
+		map[string]string{"issueURL": "https://github.com/kubestellar/dibs/issues/9"}); rec.Code != http.StatusForbidden {
 		t.Fatalf("non-author confirm: want 403, got %d", rec.Code)
 	}
 
 	// The real confirmation settles the idea.
-	issueURL := "https://github.com/hivecommons/dibs/issues/9"
+	issueURL := "https://github.com/kubestellar/dibs/issues/9"
 	rec = doJSON(t, f.h, "POST", "/api/ideas/"+idea.ID+"/confirm-issue", "bob-session",
 		map[string]string{"issueURL": issueURL})
 	if rec.Code != http.StatusOK {
@@ -141,7 +141,7 @@ func TestLaunchGuards(t *testing.T) {
 		t.Fatalf("launch draft: want 400, got %d %s", rec.Code, rec.Body.String())
 	}
 	rec = doJSON(t, f.h, "POST", "/api/ideas/"+idea.ID+"/confirm-issue", "bob-session",
-		map[string]string{"issueURL": "https://github.com/hivecommons/dibs/issues/1"})
+		map[string]string{"issueURL": "https://github.com/kubestellar/dibs/issues/1"})
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("confirm draft: want 400, got %d %s", rec.Code, rec.Body.String())
 	}

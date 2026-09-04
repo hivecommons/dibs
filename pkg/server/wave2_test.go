@@ -348,7 +348,7 @@ func TestDeclineAndReoffer(t *testing.T) {
 
 func TestIdeaMatchesReturnOneHiveThenTwoNonHiveCNCF(t *testing.T) {
 	f := newWave2Server(t, nil,
-		catalog.Project{Name: "Hive duplicate", RepoID: "kubestellar/dibs", RepoURL: "https://github.com/hivecommons/dibs", Maturity: "sandbox", Description: "kubernetes marketplace matching"},
+		catalog.Project{Name: "Hive duplicate", RepoID: "kubestellar/dibs", RepoURL: "https://github.com/kubestellar/dibs", Maturity: "sandbox", Description: "kubernetes marketplace matching"},
 		catalog.Project{Name: "Istio", RepoID: "istio/istio", RepoURL: "https://github.com/istio/istio", Maturity: "graduated", Category: "Service Proxy", Description: "kubernetes service mesh proxy matching"},
 		catalog.Project{Name: "Envoy", RepoID: "envoyproxy/envoy", RepoURL: "https://github.com/envoyproxy/envoy", Maturity: "graduated", Category: "Service Proxy", Description: "kubernetes service proxy matching"},
 		catalog.Project{Name: "Vitess", RepoID: "vitessio/vitess", RepoURL: "https://github.com/vitessio/vitess", Maturity: "graduated", Category: "Database", Description: "kubernetes database matching"},
