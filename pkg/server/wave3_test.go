@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kubestellar/dibs/pkg/api"
-	"github.com/kubestellar/dibs/pkg/settle"
-	"github.com/kubestellar/dibs/pkg/store"
+	"github.com/hivecommons/dibs/pkg/api"
+	"github.com/hivecommons/dibs/pkg/settle"
+	"github.com/hivecommons/dibs/pkg/store"
 )
 
 // settleIdea walks an idea through offer → accept → settled so credit-wall

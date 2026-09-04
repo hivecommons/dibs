@@ -20,10 +20,10 @@ import (
 	"sort"
 	"time"
 
-	"github.com/kubestellar/dibs/pkg/history"
-	"github.com/kubestellar/dibs/pkg/indexformula"
-	"github.com/kubestellar/dibs/pkg/registry"
-	"github.com/kubestellar/dibs/pkg/store"
+	"github.com/hivecommons/dibs/pkg/history"
+	"github.com/hivecommons/dibs/pkg/indexformula"
+	"github.com/hivecommons/dibs/pkg/registry"
+	"github.com/hivecommons/dibs/pkg/store"
 )
 
 // Index derivation constants (see package comment).

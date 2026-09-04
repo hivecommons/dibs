@@ -10,10 +10,10 @@ import (
 	"net/http"
 	"sort"
 
-	"github.com/kubestellar/dibs/pkg/notify"
-	"github.com/kubestellar/dibs/pkg/registry"
-	"github.com/kubestellar/dibs/pkg/settle"
-	"github.com/kubestellar/dibs/pkg/store"
+	"github.com/hivecommons/dibs/pkg/notify"
+	"github.com/hivecommons/dibs/pkg/registry"
+	"github.com/hivecommons/dibs/pkg/settle"
+	"github.com/hivecommons/dibs/pkg/store"
 )
 
 const (

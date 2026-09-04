@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kubestellar/dibs/pkg/notify"
-	"github.com/kubestellar/dibs/pkg/settle"
-	"github.com/kubestellar/dibs/pkg/store"
+	"github.com/hivecommons/dibs/pkg/notify"
+	"github.com/hivecommons/dibs/pkg/settle"
+	"github.com/hivecommons/dibs/pkg/store"
 )
 
 // TestMatchmakerSettlementFlow: the DEFAULT (tokenless) settlement path.

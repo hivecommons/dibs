@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/kubestellar/dibs/pkg/store"
+	"github.com/hivecommons/dibs/pkg/store"
 )
 
 func idea(status string, offers []string, target string) *store.Idea {

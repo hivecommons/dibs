@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kubestellar/dibs/pkg/settle"
-	"github.com/kubestellar/dibs/pkg/store"
+	"github.com/hivecommons/dibs/pkg/settle"
+	"github.com/hivecommons/dibs/pkg/store"
 )
 
 type launchResp struct {

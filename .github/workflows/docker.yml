@@ -1,6 +1,6 @@
 name: Docker
 
-# Publishes ghcr.io/kubestellar/dibs on every push to main: `latest` plus
+# Publishes ghcr.io/hivecommons/dibs on every push to main: `latest` plus
 # the full commit sha, so deployments can pin exactly what they run and the
 # `--version` freshness probe matches the deployed manifest.
 on:

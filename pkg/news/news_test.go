@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kubestellar/dibs/pkg/history"
-	"github.com/kubestellar/dibs/pkg/match"
+	"github.com/hivecommons/dibs/pkg/history"
+	"github.com/hivecommons/dibs/pkg/match"
 )
 
 type fakeFetcher struct {

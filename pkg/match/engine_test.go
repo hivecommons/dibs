@@ -10,9 +10,9 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/kubestellar/dibs/pkg/catalog"
-	"github.com/kubestellar/dibs/pkg/registry"
-	"github.com/kubestellar/dibs/pkg/store"
+	"github.com/hivecommons/dibs/pkg/catalog"
+	"github.com/hivecommons/dibs/pkg/registry"
+	"github.com/hivecommons/dibs/pkg/store"
 )
 
 func newFixtures(t *testing.T) (*store.Store, *registry.Registry) {

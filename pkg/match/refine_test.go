@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kubestellar/dibs/pkg/registry"
-	"github.com/kubestellar/dibs/pkg/store"
+	"github.com/hivecommons/dibs/pkg/registry"
+	"github.com/hivecommons/dibs/pkg/store"
 )
 
 // TestRefineWithoutLLM: no gateway configured → nil, the graceful "skip the

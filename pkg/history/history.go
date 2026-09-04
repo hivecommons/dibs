@@ -17,9 +17,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kubestellar/dibs/pkg/indexformula"
-	"github.com/kubestellar/dibs/pkg/registry"
-	"github.com/kubestellar/dibs/pkg/settle"
+	"github.com/hivecommons/dibs/pkg/indexformula"
+	"github.com/hivecommons/dibs/pkg/registry"
+	"github.com/hivecommons/dibs/pkg/settle"
 )
 
 const (

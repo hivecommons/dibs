@@ -3,8 +3,8 @@ package api
 import (
 	"net/http"
 
-	"github.com/kubestellar/dibs/pkg/news"
-	"github.com/kubestellar/dibs/pkg/registry"
+	"github.com/hivecommons/dibs/pkg/news"
+	"github.com/hivecommons/dibs/pkg/registry"
 )
 
 // HandleRepoNews returns cached repo news cards newest first.

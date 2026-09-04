@@ -11,8 +11,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/kubestellar/dibs/pkg/game"
-	"github.com/kubestellar/dibs/pkg/store"
+	"github.com/hivecommons/dibs/pkg/game"
+	"github.com/hivecommons/dibs/pkg/store"
 )
 
 // CreditEntry is one row on the public credit wall: a settled idea's

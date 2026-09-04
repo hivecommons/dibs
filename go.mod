@@ -1,4 +1,4 @@
-module github.com/kubestellar/dibs
+module github.com/hivecommons/dibs
 
 go 1.25.0
 
