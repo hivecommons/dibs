@@ -4,7 +4,7 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/kubestellar/dibs/pkg/registry"
+	"github.com/hivecommons/dibs/pkg/registry"
 	qrcode "github.com/skip2/go-qrcode"
 )
 

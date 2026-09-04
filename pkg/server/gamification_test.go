@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kubestellar/dibs/pkg/api"
-	"github.com/kubestellar/dibs/pkg/settle"
+	"github.com/hivecommons/dibs/pkg/api"
+	"github.com/hivecommons/dibs/pkg/settle"
 )
 
 // TestStatsGamification: /api/me/stats carries the derived score, level,

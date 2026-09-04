@@ -10,14 +10,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kubestellar/dibs/pkg/api"
-	"github.com/kubestellar/dibs/pkg/auth"
-	"github.com/kubestellar/dibs/pkg/catalog"
-	"github.com/kubestellar/dibs/pkg/match"
-	"github.com/kubestellar/dibs/pkg/notify"
-	"github.com/kubestellar/dibs/pkg/registry"
-	"github.com/kubestellar/dibs/pkg/settle"
-	"github.com/kubestellar/dibs/pkg/store"
+	"github.com/hivecommons/dibs/pkg/api"
+	"github.com/hivecommons/dibs/pkg/auth"
+	"github.com/hivecommons/dibs/pkg/catalog"
+	"github.com/hivecommons/dibs/pkg/match"
+	"github.com/hivecommons/dibs/pkg/notify"
+	"github.com/hivecommons/dibs/pkg/registry"
+	"github.com/hivecommons/dibs/pkg/settle"
+	"github.com/hivecommons/dibs/pkg/store"
 )
 
 // wave2Fixture is a full server with the fallback matcher, a fake GitHub,
@@ -348,7 +348,7 @@ func TestDeclineAndReoffer(t *testing.T) {
 
 func TestIdeaMatchesReturnOneHiveThenTwoNonHiveCNCF(t *testing.T) {
 	f := newWave2Server(t, nil,
-		catalog.Project{Name: "Hive duplicate", RepoID: "kubestellar/dibs", RepoURL: "https://github.com/kubestellar/dibs", Maturity: "sandbox", Description: "kubernetes marketplace matching"},
+		catalog.Project{Name: "Hive duplicate", RepoID: "kubestellar/dibs", RepoURL: "https://github.com/hivecommons/dibs", Maturity: "sandbox", Description: "kubernetes marketplace matching"},
 		catalog.Project{Name: "Istio", RepoID: "istio/istio", RepoURL: "https://github.com/istio/istio", Maturity: "graduated", Category: "Service Proxy", Description: "kubernetes service mesh proxy matching"},
 		catalog.Project{Name: "Envoy", RepoID: "envoyproxy/envoy", RepoURL: "https://github.com/envoyproxy/envoy", Maturity: "graduated", Category: "Service Proxy", Description: "kubernetes service proxy matching"},
 		catalog.Project{Name: "Vitess", RepoID: "vitessio/vitess", RepoURL: "https://github.com/vitessio/vitess", Maturity: "graduated", Category: "Database", Description: "kubernetes database matching"},

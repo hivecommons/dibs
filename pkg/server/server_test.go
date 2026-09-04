@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kubestellar/dibs/pkg/auth"
-	"github.com/kubestellar/dibs/pkg/registry"
-	"github.com/kubestellar/dibs/pkg/store"
+	"github.com/hivecommons/dibs/pkg/auth"
+	"github.com/hivecommons/dibs/pkg/registry"
+	"github.com/hivecommons/dibs/pkg/store"
 )
 
 // newTestServer wires the full handler with a fake hub. Sessions:

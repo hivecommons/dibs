@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kubestellar/dibs/pkg/settle"
+	"github.com/hivecommons/dibs/pkg/settle"
 )
 
 func fixedNow() time.Time {

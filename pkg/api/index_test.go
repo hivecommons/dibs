@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kubestellar/dibs/pkg/history"
-	"github.com/kubestellar/dibs/pkg/indexformula"
-	"github.com/kubestellar/dibs/pkg/registry"
-	"github.com/kubestellar/dibs/pkg/store"
+	"github.com/hivecommons/dibs/pkg/history"
+	"github.com/hivecommons/dibs/pkg/indexformula"
+	"github.com/hivecommons/dibs/pkg/registry"
+	"github.com/hivecommons/dibs/pkg/store"
 )
 
 func ts(t *testing.T, s string) time.Time {

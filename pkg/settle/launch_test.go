@@ -15,7 +15,7 @@ func TestNewIssueURL(t *testing.T) {
 	if truncated {
 		t.Fatal("small body must not be truncated")
 	}
-	if !strings.HasPrefix(got, "https://github.com/kubestellar/dibs/issues/new?") {
+	if !strings.HasPrefix(got, "https://github.com/hivecommons/dibs/issues/new?") {
 		t.Fatalf("url prefix: %q", got)
 	}
 	u, err := url.Parse(got)
@@ -100,10 +100,10 @@ func TestNewIssueURLTruncationMultibyte(t *testing.T) {
 func TestValidateIssueURL(t *testing.T) {
 	repo := "kubestellar/dibs"
 	valid := []string{
-		"https://github.com/kubestellar/dibs/issues/42",
-		"  https://github.com/kubestellar/dibs/issues/1 ", // whitespace trimmed
+		"https://github.com/hivecommons/dibs/issues/42",
+		"  https://github.com/hivecommons/dibs/issues/1 ", // whitespace trimmed
 		"https://github.com/KubeStellar/Dibs/issues/7",    // GitHub is case-insensitive
-		"https://www.github.com/kubestellar/dibs/issues/3",
+		"https://www.github.com/hivecommons/dibs/issues/3",
 	}
 	for _, u := range valid {
 		if err := ValidateIssueURL(u, repo); err != nil {
@@ -113,15 +113,15 @@ func TestValidateIssueURL(t *testing.T) {
 	invalid := []string{
 		"",
 		"not a url at all ://",
-		"http://github.com/kubestellar/dibs/issues/42",        // not https
+		"http://github.com/hivecommons/dibs/issues/42",        // not https
 		"https://gitlab.com/kubestellar/dibs/issues/42",       // wrong host
 		"https://github.com/other/repo/issues/42",             // wrong repo
-		"https://github.com/kubestellar/dibs/pull/42",         // a PR, not an issue
-		"https://github.com/kubestellar/dibs/issues/new",      // the form, not a filed issue
-		"https://github.com/kubestellar/dibs/issues/0",        // not a positive number
-		"https://github.com/kubestellar/dibs/issues/42/extra", // trailing junk
-		"https://github.com/kubestellar/dibs/issues",          // no number
-		"https://evil.com/https://github.com/kubestellar/dibs/issues/42",
+		"https://github.com/hivecommons/dibs/pull/42",         // a PR, not an issue
+		"https://github.com/hivecommons/dibs/issues/new",      // the form, not a filed issue
+		"https://github.com/hivecommons/dibs/issues/0",        // not a positive number
+		"https://github.com/hivecommons/dibs/issues/42/extra", // trailing junk
+		"https://github.com/hivecommons/dibs/issues",          // no number
+		"https://evil.com/https://github.com/hivecommons/dibs/issues/42",
 	}
 	for _, u := range invalid {
 		if err := ValidateIssueURL(u, repo); err == nil {

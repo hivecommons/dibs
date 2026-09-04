@@ -13,15 +13,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kubestellar/dibs/pkg/auth"
-	"github.com/kubestellar/dibs/pkg/history"
-	"github.com/kubestellar/dibs/pkg/intake"
-	"github.com/kubestellar/dibs/pkg/match"
-	"github.com/kubestellar/dibs/pkg/news"
-	"github.com/kubestellar/dibs/pkg/notify"
-	"github.com/kubestellar/dibs/pkg/registry"
-	"github.com/kubestellar/dibs/pkg/settle"
-	"github.com/kubestellar/dibs/pkg/store"
+	"github.com/hivecommons/dibs/pkg/auth"
+	"github.com/hivecommons/dibs/pkg/history"
+	"github.com/hivecommons/dibs/pkg/intake"
+	"github.com/hivecommons/dibs/pkg/match"
+	"github.com/hivecommons/dibs/pkg/news"
+	"github.com/hivecommons/dibs/pkg/notify"
+	"github.com/hivecommons/dibs/pkg/registry"
+	"github.com/hivecommons/dibs/pkg/settle"
+	"github.com/hivecommons/dibs/pkg/store"
 )
 
 // timeNow is stubbed in tests.

@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kubestellar/dibs/pkg/history"
-	"github.com/kubestellar/dibs/pkg/news"
-	"github.com/kubestellar/dibs/pkg/registry"
+	"github.com/hivecommons/dibs/pkg/history"
+	"github.com/hivecommons/dibs/pkg/news"
+	"github.com/hivecommons/dibs/pkg/registry"
 )
 
 func TestHandleRepoNews(t *testing.T) {

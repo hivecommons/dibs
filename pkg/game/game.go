@@ -5,7 +5,7 @@
 package game
 
 import (
-	"github.com/kubestellar/dibs/pkg/store"
+	"github.com/hivecommons/dibs/pkg/store"
 )
 
 // Points awarded per lifecycle milestone. Milestones are cumulative down

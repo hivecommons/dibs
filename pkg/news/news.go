@@ -18,9 +18,9 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/kubestellar/dibs/pkg/history"
-	"github.com/kubestellar/dibs/pkg/match"
-	"github.com/kubestellar/dibs/pkg/registry"
+	"github.com/hivecommons/dibs/pkg/history"
+	"github.com/hivecommons/dibs/pkg/match"
+	"github.com/hivecommons/dibs/pkg/registry"
 )
 
 const (

@@ -24,7 +24,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kubestellar/dibs/pkg/store"
+	"github.com/hivecommons/dibs/pkg/store"
 )
 
 // EnvGitHubToken configures the GitHub PAT for the LEGACY server-side

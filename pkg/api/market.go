@@ -14,7 +14,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/kubestellar/dibs/pkg/store"
+	"github.com/hivecommons/dibs/pkg/store"
 )
 
 // Market phases: the exchange-flavored rendering of the idea state machine.
