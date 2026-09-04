@@ -133,6 +133,40 @@ claude mcp add --transport http dibs https://dibs.kubestellar.io/mcp \
   --header "Authorization: Bearer <your-token-or-hive_hub_user-cookie-value>"
 ```
 
+### Claude Desktop and ChatGPT connectors
+
+Both accept a remote MCP server over Streamable HTTP, so the same endpoint
+works without a local process.
+
+Claude Desktop: Settings -> Connectors -> Add custom connector, with the URL
+`https://dibs.kubestellar.io/mcp`. Where the connector UI allows a custom
+header, set `Authorization: Bearer <token>`; the read-only tools work without
+one, and `submit_idea` needs it.
+
+ChatGPT: Settings -> Connectors -> Add custom connector (available on plans
+where custom MCP connectors are enabled), using the same URL and header.
+
+## Recall ideas you never acted on
+
+Dibs ships an MCP prompt, `recall_ideas`, for the ideas that never made it to
+a form: the ones mentioned in passing and forgotten. Dibs cannot find those
+itself - only the assistant holding your history can - so the prompt asks it
+to.
+
+It instructs the assistant to search its memory and your past conversations
+for product ideas, feature wishes, requirements and specs you described but
+never acted on, report each with enough context to act on, and then ask which
+ones to list. It submits only what you pick.
+
+| Argument | Purpose |
+|---|---|
+| `scope` | Optional focus - a project, a repo, a period like "the last year". Omit to search everything available. |
+| `limit` | Maximum candidates to report. Defaults to 10, capped at 50. |
+
+In Claude Code and Claude Desktop the prompt appears as a slash command once
+the connector is added. Clients that do not surface prompts in their UI can
+still call `prompts/get` directly.
+
 ### Generic MCP JSON
 
 ```json
