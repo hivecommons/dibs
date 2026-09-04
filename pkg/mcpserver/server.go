@@ -43,6 +43,7 @@ func NewHandler(cfg Config) http.Handler {
 	server := mcpsdk.NewServer(&mcpsdk.Implementation{Name: serverName, Version: serverVersion}, nil)
 	toolset := &tools{cfg: cfg}
 	registerTools(server, toolset)
+	registerPrompts(server)
 	mcp := mcpsdk.NewStreamableHTTPHandler(func(*http.Request) *mcpsdk.Server { return server }, &mcpsdk.StreamableHTTPOptions{
 		Stateless:                    true,
 		MaxRequestBodyBytes:          maxMCPRequestBytes,
@@ -116,6 +117,10 @@ client at it to submit ideas to Dibs from inside your agent.</p>
 <h2>Token</h2>
 <p>Use a GitHub token for the account you sign in to the hub with
 (<code>gh auth token</code> prints one). Read-only tools work without a token.</p>
+<h2>Connectors</h2>
+<p>Claude Desktop and ChatGPT both accept a remote MCP server: add a custom
+connector pointing at this URL, and set the <code>Authorization</code> header
+where the connector UI allows one.</p>
 <h2>Tools</h2>
 <table>
 <tr><th>Tool</th><th>Auth</th><th>Purpose</th></tr>
@@ -124,6 +129,13 @@ client at it to submit ideas to Dibs from inside your agent.</p>
 <tr><td><code>get_idea</code></td><td>public: none</td><td>Idea detail and settlement state</td></tr>
 <tr><td><code>list_repos</code></td><td>none</td><td>Registered repo venues</td></tr>
 </table>
+<h2>Prompts</h2>
+<table>
+<tr><th>Prompt</th><th>Purpose</th></tr>
+<tr><td><code>recall_ideas</code></td><td>Asks the assistant to search its memory and your past conversations for ideas you described but never acted on, then offer to list the ones you pick</td></tr>
+</table>
+<p>Takes optional <code>scope</code> and <code>limit</code> arguments. Clients
+that surface prompts show it as a slash command.</p>
 <p style="margin-top:24px"><a href="/">dibs.kubestellar.io</a> &middot; endpoint: <code>%s</code></p>
 </main></body></html>
 `
