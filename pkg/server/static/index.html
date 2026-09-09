@@ -1204,13 +1204,13 @@ details.how-details .how-body { padding: 16px 18px; }
     <p class="donate-copy">Supply the second kind of market capital. Your AI CLI runs a public hive's agents through ClankeR, the contributor relay. Work lands under your GitHub username on that hive and its leaderboard.</p>
     <div class="donate-fallback">
       Pick a public hive, then connect your CLI. If no hive contribute URL is listed here, use the public hive directory.
-      <div style="margin-top:10px"><a class="pill small" href="https://hive.kubestellar.io/#hives" target="_blank" rel="noopener">Pick a hive</a></div>
+      <div style="margin-top:10px"><a class="pill small" href="https://hive.hivecommons.dev/#hives" target="_blank" rel="noopener">Pick a hive</a></div>
     </div>
     <h3 style="margin:20px 0 10px;font-size:1rem">Public hives</h3>
     <div id="donate-hives" aria-live="polite"><div class="empty">Loading public hives…</div></div>
     <h3 style="margin:22px 0 10px;font-size:1rem">CLI</h3>
     <code class="donate-code">npx @kubestellar/hive-contribute
-hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
+hive-contribute connect https://hive.hivecommons.dev/hive/HIVE_ID</code>
   </div>
 </div>
 
@@ -1248,7 +1248,7 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
 <footer>DIBS — Delegate It, Bro. Seriously. · a KubeStellar project</footer>
 
 <script>
-/* All URLs are RELATIVE so the app works at the root (dibs.kubestellar.io)
+/* All URLs are RELATIVE so the app works at the root (dibs.hivecommons.dev)
    or behind any reverse-proxy prefix (DIBS_BASE_PATH). */
 (function () {
   'use strict';
@@ -2790,7 +2790,7 @@ hive-contribute connect https://hive.kubestellar.io/hive/HIVE_ID</code>
     if (anon) { $('signin-overlay').hidden = false; $('so-signin').focus(); }
     else openEdit(null, targetRepo);
   }
-  var HIVE_DIRECTORY_URL = 'https://hive.kubestellar.io/#hives';
+  var HIVE_DIRECTORY_URL = 'https://hive.hivecommons.dev/#hives';
   function getContributeURL(repo) {
     return repo && repo.contributeURL ? repo.contributeURL : '';
   }
