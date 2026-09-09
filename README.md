@@ -59,7 +59,7 @@ deployments also work.
 |---|---|---|
 | `DIBS_BASE_PATH` | `/` | Base path every route/asset is served under (set e.g. `/ideas` for path-prefixed proxying) |
 | `DIBS_ADDR` | `:8080` | Listen address |
-| `HUB_URL` | `https://hive.kubestellar.io` | Hive hub for session validation & repo sync |
+| `HUB_URL` | `https://hive.hivecommons.dev` | Hive hub for session validation & repo sync |
 | `DATA_DIR` | `/data` | JSON store directory |
 | `REPOS_SEED_FILE` | (unset) | Static JSON seed of repo profiles for dev/demo |
 | `DIBS_LLM_BASE_URL` | (unset) | OpenAI-compatible gateway (hive litellm), e.g. `http://litellm:4000/v1`. Unset → deterministic keyword matcher |
@@ -119,11 +119,11 @@ Use `Authorization: Bearer <token>`. Dibs first asks the Hive Hub
 `/api/saas/whoami` endpoint to verify the bearer token server-to-server; the
 hub already accepts GitHub bearer tokens for registered hub users. If that is
 not practical, copy the raw `hive_hub_user` cookie value from your browser
-after signing in at `https://hive.kubestellar.io`; Dibs falls back to verifying
+after signing in at `https://hive.hivecommons.dev`; Dibs falls back to verifying
 that value through the same hub `whoami` cookie flow used by the web UI.
 
 In Chrome/Edge: open DevTools → Application → Cookies →
-`https://hive.kubestellar.io` (or `https://dibs.kubestellar.io`) → copy the
+`https://hive.hivecommons.dev` (or `https://dibs.hivecommons.dev`) → copy the
 `hive_hub_user` value.
 
 ### Claude Code
