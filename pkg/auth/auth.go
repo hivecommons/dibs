@@ -1,12 +1,15 @@
 // Package auth bridges Dibs to the hive hub's session authentication.
 //
-// Dibs has no login of its own. It is served at dibs.kubestellar.io and
-// relies on the hive hub's session cookie ("hive_hub_user"). For the browser
-// to send that cookie here, the hub must scope it to .kubestellar.io (or
-// Dibs grows its own OAuth flow against the hub) — a deployment follow-up
-// tracked in the Wave 1 PR. This package validates whatever cookie arrives by
-// calling back to the hub and attaches the resulting identity to the request
-// context.
+// Dibs has no login of its own. It relies on the hive hub's session cookie
+// ("hive_hub_user"). For the browser to send that cookie here, Dibs and the
+// hub must share a registrable domain, so that the Domain the hub scopes the
+// cookie to also covers the host serving Dibs (or Dibs grows its own OAuth
+// flow against the hub). That is an invariant, not a fixed pair of hostnames:
+// when the hub moved to hive.hivecommons.dev its cookie became
+// Domain=.hivecommons.dev, which is why Dibs moves to dibs.hivecommons.dev
+// rather than staying on the old name (hivecommons/hive#5925). This package
+// validates whatever cookie arrives by calling back to the hub and attaches
+// the resulting identity to the request context.
 //
 // Hub contract (see the follow-up note in the Wave 1 PR): the hub exposes
 //
@@ -71,7 +74,7 @@ type BearerHubClient interface {
 // HTTPHubClient is the production HubClient: it forwards the session cookie
 // to the hub's whoami endpoint.
 type HTTPHubClient struct {
-	// BaseURL is the hub origin, e.g. https://hive.kubestellar.io.
+	// BaseURL is the hub origin, e.g. https://hive.hivecommons.dev.
 	BaseURL string
 	// Client defaults to a 10s-timeout client when nil.
 	Client *http.Client

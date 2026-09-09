@@ -32,7 +32,7 @@ spec:
       containers:
         - name: dibs
           # Pin to a commit sha in production; latest tracks main.
-          image: ghcr.io/kubestellar/dibs:latest
+          image: ghcr.io/hivecommons/dibs:latest
           ports:
             - name: http
               containerPort: 8080

@@ -6,5 +6,5 @@ metadata:
 data:
   DIBS_ADDR: ":8080"
   DIBS_BASE_PATH: "/"
-  HUB_URL: "https://hive.kubestellar.io"
+  HUB_URL: "https://hive.hivecommons.dev"
   DATA_DIR: "/data"
