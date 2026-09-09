@@ -1,6 +1,6 @@
 // Command dibs serves the Dibs marketplace: JSON API + embedded static UI
 // in a single process, under DIBS_BASE_PATH (default "/" — Dibs is served
-// at its own subdomain, dibs.kubestellar.io).
+// at its own subdomain, dibs.hivecommons.dev).
 package main
 
 import (
