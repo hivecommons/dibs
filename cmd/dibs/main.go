@@ -35,7 +35,7 @@ var (
 
 const (
 	defaultAddr    = ":8080"
-	defaultHubURL  = "https://hive.kubestellar.io"
+	defaultHubURL  = "https://hive.hivecommons.dev"
 	defaultDataDir = "/data"
 	// registrySyncInterval is how often the hub's repo list is re-pulled.
 	registrySyncInterval = 5 * time.Minute
