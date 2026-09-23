@@ -136,7 +136,7 @@ where the connector UI allows one.</p>
 </table>
 <p>Takes optional <code>scope</code> and <code>limit</code> arguments. Clients
 that surface prompts show it as a slash command.</p>
-<p style="margin-top:24px"><a href="/">dibs.kubestellar.io</a> &middot; endpoint: <code>%s</code></p>
+<p style="margin-top:24px"><a href="/">dibs.hivecommons.dev</a> &middot; endpoint: <code>%s</code></p>
 </main></body></html>
 `
 
@@ -322,7 +322,7 @@ func bearerToken(req *mcpsdk.CallToolRequest) string {
 }
 
 func ideaURL(req *mcpsdk.CallToolRequest, basePath, id string) string {
-	scheme, host := defaultIdeaScheme, "dibs.kubestellar.io"
+	scheme, host := defaultIdeaScheme, "dibs.hivecommons.dev"
 	if req != nil && req.Extra != nil {
 		if v := strings.TrimSpace(req.Extra.Header.Get(forwardedProto)); v != "" {
 			scheme = strings.Split(v, ",")[0]

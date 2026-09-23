@@ -206,7 +206,7 @@ func IssueBody(idea *store.Idea) string {
 		display = handle
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "> 💡 **Idea by @%s** (%s) via [Dibs](https://dibs.kubestellar.io) — creators get credit, agents do the work, projects take the bow.\n\n", handle, display)
+	fmt.Fprintf(&b, "> 💡 **Idea by @%s** (%s) via [Dibs](https://dibs.hivecommons.dev) — creators get credit, agents do the work, projects take the bow.\n\n", handle, display)
 	if idea.TLDR != "" {
 		fmt.Fprintf(&b, "**TLDR:** %s\n\n---\n\n", idea.TLDR)
 	}

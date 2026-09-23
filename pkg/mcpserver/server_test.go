@@ -130,7 +130,7 @@ func TestSubmitIdeaRequiresAuthentication(t *testing.T) {
 
 func TestBrowserGETServesInstructions(t *testing.T) {
 	h := NewHandler(Config{})
-	req := httptest.NewRequest(http.MethodGet, "https://dibs.kubestellar.io/mcp", nil)
+	req := httptest.NewRequest(http.MethodGet, "https://dibs.hivecommons.dev/mcp", nil)
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,*/*;q=0.8")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -138,14 +138,14 @@ func TestBrowserGETServesInstructions(t *testing.T) {
 		t.Fatalf("browser GET /mcp = %d, want 200", rec.Code)
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, "claude mcp add") || !strings.Contains(body, "https://dibs.kubestellar.io/mcp") {
+	if !strings.Contains(body, "claude mcp add") || !strings.Contains(body, "https://dibs.hivecommons.dev/mcp") {
 		t.Fatalf("instructions page missing connect snippet:\n%s", body)
 	}
 }
 
 func TestMCPClientGETNotHijacked(t *testing.T) {
 	h := NewHandler(Config{})
-	req := httptest.NewRequest(http.MethodGet, "https://dibs.kubestellar.io/mcp", nil)
+	req := httptest.NewRequest(http.MethodGet, "https://dibs.hivecommons.dev/mcp", nil)
 	req.Header.Set("Accept", "text/event-stream")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)

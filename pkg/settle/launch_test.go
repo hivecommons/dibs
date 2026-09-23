@@ -138,7 +138,7 @@ func TestLaunchBodyExternal(t *testing.T) {
 	if !strings.HasSuffix(ext, ExternalFooter) {
 		t.Fatalf("external body missing the growth footer: %q", ext)
 	}
-	if !strings.Contains(ext, "requesting a hive") || !strings.Contains(ext, "hive.kubestellar.io") || !strings.Contains(ext, "dibs.kubestellar.io") {
+	if !strings.Contains(ext, "requesting a hive") || !strings.Contains(ext, "hive.hivecommons.dev") || !strings.Contains(ext, "dibs.hivecommons.dev") {
 		t.Fatalf("external footer missing the hive CTA: %q", ext)
 	}
 	// Idempotent: relaunching an already-footered body adds nothing.
@@ -189,6 +189,37 @@ func TestValidateRepoID(t *testing.T) {
 	for _, id := range invalid {
 		if err := ValidateRepoID(id); err == nil {
 			t.Errorf("ValidateRepoID(%q) = nil, want error", id)
+		}
+	}
+}
+
+// TestFootersUseCanonicalHost pins the outbound branding hosts. These footer
+// strings are written permanently into third-party issue trackers, so they
+// cannot be corrected after the fact: a regression here is not a stale
+// default but a wrong URL published on someone else's repo forever. The
+// canonical hosts are dibs.hivecommons.dev and hive.hivecommons.dev; the
+// retired kubestellar.io hosts survive only as redirects we do not control.
+func TestFootersUseCanonicalHost(t *testing.T) {
+	const retiredHost = "kubestellar.io"
+	for name, footer := range map[string]string{
+		"Footer":         Footer,
+		"ExternalFooter": ExternalFooter,
+	} {
+		if strings.Contains(footer, retiredHost) {
+			t.Errorf("%s advertises the retired host %q: %q", name, retiredHost, footer)
+		}
+		if !strings.Contains(footer, "dibs.hivecommons.dev") {
+			t.Errorf("%s missing canonical dibs host: %q", name, footer)
+		}
+	}
+	// The growth CTA must point at the canonical hub, not the redirect.
+	if !strings.Contains(ExternalFooter, "https://hive.hivecommons.dev") {
+		t.Errorf("ExternalFooter missing canonical hub URL: %q", ExternalFooter)
+	}
+	// Both footers as actually appended to a launched body.
+	for _, hiveManaged := range []bool{true, false} {
+		if body := LaunchBody("Body.", hiveManaged); strings.Contains(body, retiredHost) {
+			t.Errorf("LaunchBody(hiveManaged=%v) advertises %q: %q", hiveManaged, retiredHost, body)
 		}
 	}
 }
