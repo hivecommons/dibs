@@ -38,7 +38,7 @@ whose idea shipped. An idea is a contribution.
 ## Architecture
 
 Single Go binary (`cmd/dibs`) serving both the JSON API and an embedded
-static UI, deployed at its own subdomain: **dibs.kubestellar.io**. The base
+static UI, deployed at its own subdomain: **dibs.hivecommons.dev**. The base
 path is configurable (`DIBS_BASE_PATH`), so path-prefixed reverse-proxy
 deployments also work.
 
@@ -74,7 +74,7 @@ fallbacks for every `DIBS_*` variable.
 
 - **Wave 1 (done):** scaffold, hub auth bridge, idea CRUD, repo registry.
 - **Wave 2 (done):** LLM matching + TLDRs, swipe UX ("offer" / "pass"), issue settlement (credited GitHub issues), notifications.
-- **Wave 3 (done):** deployment (GHCR image + [`deploy/` manifests](deploy/README.md) for dibs.kubestellar.io), public landing page, public credit wall, ideator profile stats.
+- **Wave 3 (done):** deployment (GHCR image + [`deploy/` manifests](deploy/README.md) for dibs.hivecommons.dev), public landing page, public credit wall, ideator profile stats.
 - **Wave 4 (done):** matchmaker settlement — the ideator files a prefilled GitHub issue themselves (native attribution, `ideated` label) and confirms the issue URL; LLM-assisted idea refinement on posting and repo-tailored expansion on submission; token-based settlement demoted to legacy.
 - **Later:** cookie-domain/hub-OAuth session sharing, non-hive receptor repos, idea economics.
 
@@ -82,7 +82,7 @@ fallbacks for every `DIBS_*` variable.
 
 Every push to `main` publishes `ghcr.io/kubestellar/dibs` (`latest` +
 commit sha) via `.github/workflows/docker.yml`; the image is distroless and
-runs as non-root. Plain Kubernetes manifests for **dibs.kubestellar.io**
+runs as non-root. Plain Kubernetes manifests for **dibs.hivecommons.dev**
 (Deployment, Service, cert-manager TLS Ingress, PVC, ConfigMap/Secret) live
 in [`deploy/`](deploy/README.md), including the required DNS record and
 hub-cookie prerequisites.
@@ -101,7 +101,7 @@ get `GET /api/me/stats` (ideas posted / offered / accepted / settled).
 ## Submit ideas from your agent
 
 Dibs exposes a stateless Streamable HTTP MCP endpoint at
-`https://dibs.kubestellar.io/mcp`, so Claude Code, Copilot CLI, Cursor, and
+`https://dibs.hivecommons.dev/mcp`, so Claude Code, Copilot CLI, Cursor, and
 other MCP clients can submit ideas without leaving the agent.
 
 Available tools:
@@ -129,7 +129,7 @@ In Chrome/Edge: open DevTools → Application → Cookies →
 ### Claude Code
 
 ```sh
-claude mcp add --transport http dibs https://dibs.kubestellar.io/mcp \
+claude mcp add --transport http dibs https://dibs.hivecommons.dev/mcp \
   --header "Authorization: Bearer <your-token-or-hive_hub_user-cookie-value>"
 ```
 
@@ -139,7 +139,7 @@ Both accept a remote MCP server over Streamable HTTP, so the same endpoint
 works without a local process.
 
 Claude Desktop: Settings -> Connectors -> Add custom connector, with the URL
-`https://dibs.kubestellar.io/mcp`. Where the connector UI allows a custom
+`https://dibs.hivecommons.dev/mcp`. Where the connector UI allows a custom
 header, set `Authorization: Bearer <token>`; the read-only tools work without
 one, and `submit_idea` needs it.
 
@@ -174,7 +174,7 @@ still call `prompts/get` directly.
   "mcpServers": {
     "dibs": {
       "type": "http",
-      "url": "https://dibs.kubestellar.io/mcp",
+      "url": "https://dibs.hivecommons.dev/mcp",
       "headers": {
         "Authorization": "Bearer <your-token-or-hive_hub_user-cookie-value>"
       }

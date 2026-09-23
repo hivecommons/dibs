@@ -8,7 +8,7 @@ import (
 	qrcode "github.com/skip2/go-qrcode"
 )
 
-const defaultContributeURL = "https://hive.kubestellar.io/#hives"
+const defaultContributeURL = "https://hive.hivecommons.dev/#hives"
 
 // HandleRepoQR serves GET /api/repos/{org}/{repo}/qr.png — a public QR code
 // pointing scanners directly at the hive's contribute page.

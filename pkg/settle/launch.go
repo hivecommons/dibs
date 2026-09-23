@@ -18,13 +18,13 @@ import (
 // Footer is the attribution line issues filed on HIVE-MANAGED repos end
 // with — they already have agent capacity, so no pitch is needed. It is
 // public-facing text on real repos: one plain line, no flourish.
-const Footer = "Listed via dibs.kubestellar.io"
+const Footer = "Listed via dibs.hivecommons.dev"
 
 // ExternalFooter is the growth-loop call-to-action appended to issues filed
 // on repos NOT managed by a hive: every idea filed externally advertises
 // hive to that repo's maintainers.
-const ExternalFooter = "Listed via dibs.kubestellar.io.\n" +
-	"This idea arrived via DIBS (https://dibs.kubestellar.io). Give this repo agent capacity by requesting a hive at https://hive.kubestellar.io; clankers, powered by donated AI tokens, implement accepted ideas. Once the repo has a hive, this issue can be assigned to it and built."
+const ExternalFooter = "Listed via dibs.hivecommons.dev.\n" +
+	"This idea arrived via DIBS (https://dibs.hivecommons.dev). Give this repo agent capacity by requesting a hive at https://hive.hivecommons.dev; clankers, powered by donated AI tokens, implement accepted ideas. Once the repo has a hive, this issue can be assigned to it and built."
 
 // footerFor picks the footer by hive membership of the target repo.
 func footerFor(hiveManaged bool) string {

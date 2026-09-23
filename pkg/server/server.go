@@ -2,7 +2,7 @@
 // embedded static UI, health, and the auth-guarded API.
 //
 // Every route lives under a base path (DIBS_BASE_PATH, default "/") —
-// Dibs is served at its own subdomain, dibs.kubestellar.io, so the default
+// Dibs is served at its own subdomain, dibs.hivecommons.dev, so the default
 // is the root; a prefix (e.g. "/ideas") remains fully supported for
 // path-based reverse-proxy deployments. The UI only uses RELATIVE URLs so it
 // needs no base-path templating.
@@ -28,7 +28,7 @@ import (
 )
 
 // DefaultBasePath is where Dibs is mounted when DIBS_BASE_PATH is unset:
-// the root, because Dibs lives on its own subdomain (dibs.kubestellar.io).
+// the root, because Dibs lives on its own subdomain (dibs.hivecommons.dev).
 const DefaultBasePath = "/"
 
 //go:embed static/index.html
