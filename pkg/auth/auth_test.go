@@ -57,6 +57,37 @@ func TestHTTPHubClientWhoAmI(t *testing.T) {
 	}
 }
 
+func TestHTTPHubClientWhoAmIBearer(t *testing.T) {
+	hub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != WhoAmIPath {
+			http.NotFound(w, r)
+			return
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer good-token" {
+			http.Error(w, `{"error":"expired"}`, http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(Identity{Username: "bear", DisplayName: "Bearer User"})
+	}))
+	defer hub.Close()
+
+	c := &HTTPHubClient{BaseURL: hub.URL}
+	id, err := c.WhoAmIBearer(context.Background(), "good-token")
+	if err != nil {
+		t.Fatalf("valid bearer token: %v", err)
+	}
+	if id.Username != "bear" || id.DisplayName != "Bearer User" {
+		t.Fatalf("identity mismatch: %+v", id)
+	}
+	if _, err := c.WhoAmIBearer(context.Background(), "bad-token"); !errors.Is(err, ErrUnauthenticated) {
+		t.Fatalf("bad bearer token: want ErrUnauthenticated, got %v", err)
+	}
+	if _, err := c.WhoAmIBearer(context.Background(), ""); !errors.Is(err, ErrUnauthenticated) {
+		t.Fatalf("empty bearer token: want ErrUnauthenticated, got %v", err)
+	}
+}
+
 func newTestMiddleware(hub HubClient) *Middleware {
 	return &Middleware{
 		Hub:    hub,

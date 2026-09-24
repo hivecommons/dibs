@@ -212,6 +212,33 @@ func TestPrivateIdeaNeverSurfacesBeforeOffer(t *testing.T) {
 	}
 }
 
+func TestIdeaMatchesSeenMarksCurrentSuggestionsForAuthor(t *testing.T) {
+	f := newWave2Server(t, &settle.Fake{})
+	idea := f.createIdea(t, "bob-session", "Kubernetes marketplace boost",
+		"A kubernetes marketplace for ideas.", "public")
+	matchesUpdatedAt := time.Date(2026, 9, 24, 12, 0, 0, 0, time.UTC)
+	if _, err := f.store.Mutate(idea.ID, false, func(i *store.Idea) error {
+		i.MatchesUpdatedAt = matchesUpdatedAt
+		i.Matches = []store.Match{{RepoID: "kubestellar/dibs", Score: 91, RepoHash: "hash"}}
+		return nil
+	}); err != nil {
+		t.Fatalf("seed matches: %v", err)
+	}
+
+	rec := doJSON(t, f.h, "POST", "/api/ideas/"+idea.ID+"/matches/seen", "alice-session", nil)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("non-author matches/seen status = %d, want 403", rec.Code)
+	}
+	rec = doJSON(t, f.h, "POST", "/api/ideas/"+idea.ID+"/matches/seen", "bob-session", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("matches/seen: %d %s", rec.Code, rec.Body.String())
+	}
+	got := decode[store.Idea](t, rec)
+	if !got.SuggestionsSeenAt.Equal(matchesUpdatedAt) {
+		t.Fatalf("SuggestionsSeenAt = %v, want %v", got.SuggestionsSeenAt, matchesUpdatedAt)
+	}
+}
+
 // TestOfferAcceptSettleFlow: the LEGACY happy path end to end (a GitHub
 // client is configured, so accept still opens the credited issue
 // server-side) — match, offer, accept, credited issue, notifications.

@@ -5,10 +5,14 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"reflect"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/hivecommons/dibs/pkg/registry"
 	"github.com/hivecommons/dibs/pkg/settle"
 )
 
@@ -260,5 +264,145 @@ func TestBackfillRateLimitDoesNotPersistPartialPulls(t *testing.T) {
 	}
 	if _, ok := st.Get("org/repo"); ok {
 		t.Fatalf("rate-limited pulls should not persist partial history")
+	}
+}
+
+func TestNewBackfillerDefaults(t *testing.T) {
+	st, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	b := NewBackfiller(st, "token")
+	if b.Store != st || b.Token != "token" {
+		t.Fatalf("backfiller dependencies not wired: %+v", b)
+	}
+	if b.Client == nil || b.Logf == nil {
+		t.Fatal("backfiller defaults missing client or logger")
+	}
+	if b.now().IsZero() {
+		t.Fatal("default clock returned zero time")
+	}
+}
+
+func TestStoreListCopiesAndSorts(t *testing.T) {
+	st, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	if err := st.Upsert("z/repo", []DayActivity{{Date: "2026-08-18", MergedPRs: 1}}, fixedNow()); err != nil {
+		t.Fatalf("Upsert z/repo: %v", err)
+	}
+	if err := st.Upsert("a/repo", []DayActivity{{Date: "2026-08-18", MergedPRs: 2}}, fixedNow()); err != nil {
+		t.Fatalf("Upsert a/repo: %v", err)
+	}
+	list := st.List()
+	if len(list) != 2 || list[0].RepoID != "a/repo" || list[1].RepoID != "z/repo" {
+		t.Fatalf("List not sorted by repo: %+v", list)
+	}
+	list[0].Days[0].MergedPRs = 99
+	got, _ := st.Get("a/repo")
+	if got.Days[0].MergedPRs != 2 {
+		t.Fatalf("List returned mutable store internals: %+v", got.Days[0])
+	}
+}
+
+func TestRefreshAsyncRunsOnceAndSkipsFresh(t *testing.T) {
+	release := make(chan struct{})
+	issueCalls := make(chan string, 4)
+	var once sync.Once
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/repos/org/repo/issues":
+			issueCalls <- r.URL.RawQuery
+			once.Do(func() { <-release })
+			_ = json.NewEncoder(w).Encode([]map[string]any{})
+		case "/repos/org/repo/pulls":
+			_ = json.NewEncoder(w).Encode([]map[string]any{})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	st, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	b := &Backfiller{Store: st, BaseURL: srv.URL, Client: srv.Client(), Now: fixedNow, Logf: t.Logf}
+	repos := []registry.RepoProfile{{RepoID: "org/repo"}}
+	b.RefreshAsync(repos)
+	select {
+	case <-issueCalls:
+	case <-time.After(5 * time.Second):
+		t.Fatal("first RefreshAsync never started")
+	}
+	b.RefreshAsync(repos)
+	select {
+	case q := <-issueCalls:
+		t.Fatalf("second RefreshAsync started while first was active: %s", q)
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(release)
+
+	deadline := time.After(5 * time.Second)
+	for {
+		if h, ok := st.Get("org/repo"); ok && len(h.Days) == windowDays {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Fatal("RefreshAsync never persisted history")
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+	b.RefreshAsync(repos)
+	select {
+	case q := <-issueCalls:
+		t.Fatalf("fresh history should not refresh again: %s", q)
+	case <-time.After(50 * time.Millisecond):
+	}
+	var nilBackfiller *Backfiller
+	nilBackfiller.RefreshAsync(repos)
+	(&Backfiller{}).RefreshAsync(repos)
+}
+
+func TestFetchMergedPullRequestsFiltersSortsAndAuthenticates(t *testing.T) {
+	newer := time.Date(2026, 8, 18, 12, 0, 0, 0, time.UTC)
+	older := time.Date(2026, 8, 17, 12, 0, 0, 0, time.UTC)
+	var sawAuth, sawVersion string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/repos/org/repo/pulls" {
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
+		q, _ := url.ParseQuery(r.URL.RawQuery)
+		if q.Get("state") != "closed" || q.Get("sort") != "updated" || q.Get("direction") != "desc" {
+			t.Fatalf("unexpected query %s", r.URL.RawQuery)
+		}
+		sawAuth = r.Header.Get("Authorization")
+		sawVersion = r.Header.Get("X-GitHub-Api-Version")
+		_ = json.NewEncoder(w).Encode([]map[string]any{
+			{"title": "  older merge  ", "merged_at": older, "user": map[string]string{"login": "alice"}},
+			{"title": "closed only", "merged_at": nil, "user": map[string]string{"login": "bob"}},
+			{"title": "newer merge", "merged_at": newer, "user": map[string]string{"login": "carol"}},
+		})
+	}))
+	defer srv.Close()
+
+	b := &Backfiller{BaseURL: srv.URL, Token: "token", Client: srv.Client(), Now: fixedNow}
+	got, err := b.FetchMergedPullRequests(context.Background(), "org/repo")
+	if err != nil {
+		t.Fatalf("FetchMergedPullRequests: %v", err)
+	}
+	if sawAuth != "Bearer token" || sawVersion != "2022-11-28" {
+		t.Fatalf("headers Authorization=%q X-GitHub-Api-Version=%q", sawAuth, sawVersion)
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %d merged PRs: %+v", len(got), got)
+	}
+	if got[0].Title != "newer merge" || got[0].Author != "carol" || !got[0].MergedAt.Equal(newer) {
+		t.Fatalf("newest PR not first/trimmed: %+v", got[0])
+	}
+	if got[1].Title != "older merge" || strings.TrimSpace(got[1].Title) != got[1].Title {
+		t.Fatalf("older PR not trimmed: %+v", got[1])
 	}
 }
