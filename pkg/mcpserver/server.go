@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"html"
 	"net/http"
 	"strings"
 	"time"
@@ -73,10 +74,15 @@ func wantsHTML(r *http.Request) bool {
 }
 
 func serveInstructions(w http.ResponseWriter, r *http.Request) {
-	endpoint := defaultIdeaScheme + "://" + r.Host + r.URL.Path
-	if p := r.Header.Get(forwardedProto); p != "" {
-		endpoint = p + "://" + r.Host + r.URL.Path
+	// The endpoint URL is assembled from request headers (X-Forwarded-Proto,
+	// Host) and interpolated into HTML that is served with a public cache
+	// lifetime, so it must be constrained and escaped: a forged header must
+	// not be able to poison a shared cache with markup (XSS).
+	scheme := defaultIdeaScheme
+	if p := strings.TrimSpace(strings.Split(r.Header.Get(forwardedProto), ",")[0]); p == "http" || p == "https" {
+		scheme = p
 	}
+	endpoint := html.EscapeString(scheme + "://" + r.Host + r.URL.Path)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=300")
 	fmt.Fprintf(w, instructionsHTML, endpoint, endpoint, endpoint)

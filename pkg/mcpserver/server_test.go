@@ -153,3 +153,35 @@ func TestMCPClientGETNotHijacked(t *testing.T) {
 		t.Fatal("SSE GET was served the HTML instructions page")
 	}
 }
+
+func TestInstructionsPageEscapesForwardedHeaders(t *testing.T) {
+	h := NewHandler(Config{})
+	req := httptest.NewRequest(http.MethodGet, "https://dibs.hivecommons.dev/mcp", nil)
+	req.Header.Set("Accept", "text/html")
+	// A forged scheme must be dropped (only http/https pass), never
+	// reflected: the page is served with a public cache lifetime, so header
+	// reflection would let one request poison a shared cache with markup.
+	req.Header.Set("X-Forwarded-Proto", `"><script>alert(1)</script>`)
+	req.Host = `dibs.hivecommons.dev"><img src=x onerror=alert(1)>`
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	body := rec.Body.String()
+	if strings.Contains(body, "<script>alert(1)") || strings.Contains(body, "<img src=x") {
+		t.Fatalf("instructions page reflected unescaped header content:\n%s", body)
+	}
+	if !strings.Contains(body, "https://dibs.hivecommons.dev") {
+		t.Fatalf("instructions page lost the https endpoint URL:\n%s", body)
+	}
+}
+
+func TestInstructionsPageHonorsForwardedProto(t *testing.T) {
+	h := NewHandler(Config{})
+	req := httptest.NewRequest(http.MethodGet, "https://dibs.hivecommons.dev/mcp", nil)
+	req.Header.Set("Accept", "text/html")
+	req.Header.Set("X-Forwarded-Proto", "http")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if !strings.Contains(rec.Body.String(), "http://dibs.hivecommons.dev/mcp") {
+		t.Fatal("instructions page ignored a legitimate X-Forwarded-Proto: http")
+	}
+}
