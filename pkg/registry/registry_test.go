@@ -82,6 +82,28 @@ func TestSyncAndList(t *testing.T) {
 	}
 }
 
+func TestListByOwnerFiltersAndCopies(t *testing.T) {
+	r, _ := newTestRegistry(t)
+	if err := r.Merge(sampleRepos()); err != nil {
+		t.Fatalf("Merge: %v", err)
+	}
+	alice := r.ListByOwner("alice")
+	if len(alice) != 1 || alice[0].RepoID != "kubestellar/kubestellar" {
+		t.Fatalf("alice repos = %+v", alice)
+	}
+	alice[0].Description = "mutated"
+	rp, err := r.Get("kubestellar/kubestellar")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if rp.Description == "mutated" {
+		t.Fatal("ListByOwner returned mutable registry internals")
+	}
+	if got := r.ListByOwner("nobody"); len(got) != 0 {
+		t.Fatalf("unknown owner repos = %+v, want none", got)
+	}
+}
+
 // TestSyncPreservesLocalEdits: a hub re-sync must not clobber owner toggles.
 func TestSyncPreservesLocalEdits(t *testing.T) {
 	r, _ := newTestRegistry(t)
