@@ -135,6 +135,9 @@ func New(cfg Config) http.Handler {
 			http.Redirect(w, r, base+"/", http.StatusMovedPermanently)
 		})
 	}
-	root.Handle(base+"/", mw.Wrap(authed))
+	// csrfGuard runs before the session check: the hub cookie is scoped to
+	// the shared registrable domain, so SameSite alone does not stop forged
+	// state-changing requests from sibling subdomains (see csrf.go).
+	root.Handle(base+"/", csrfGuard(mw.Wrap(authed)))
 	return root
 }
