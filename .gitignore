@@ -6,3 +6,10 @@
 *.out
 .DS_Store
 .env
+
+# OSPS baseline: local secrets and generated dependencies
+.env.*
+*.env
+*.pem
+*.key
+node_modules/
