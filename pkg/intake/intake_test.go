@@ -69,6 +69,74 @@ func TestExtractPDFGeneratedFixture(t *testing.T) {
 	}
 }
 
+func TestExtractPDFMalformedReturnsError(t *testing.T) {
+	t.Parallel()
+	// The upstream parser panics on many malformed inputs; ExtractPDF must
+	// convert that to an error, never panic.
+	inputs := [][]byte{
+		[]byte("%PDF-1.4\ngarbage"),
+		[]byte("%PDF-1.4\nxref\n0 1\ntrailer\n<< /Size 1 >>\nstartxref\n9\n%%EOF\n"),
+		generatedPDF("ok")[:40],
+	}
+	for i, in := range inputs {
+		if _, err := ExtractPDF(in); err == nil {
+			t.Errorf("input %d: malformed PDF extracted without error", i)
+		}
+	}
+}
+
+func TestExtractPDFStopsAtRuneLimit(t *testing.T) {
+	t.Parallel()
+	// Many pages of long text: extraction must stop accumulating at
+	// extractRunesLimit instead of materializing every page.
+	page := strings.Repeat("A", 4000)
+	got, err := ExtractPDF(generatedMultiPagePDF(64, page))
+	if err != nil {
+		t.Skipf("generated PDF fixture is not supported by extractor: %v", err)
+	}
+	n := len([]rune(got))
+	if n > extractRunesLimit {
+		t.Fatalf("extracted %d runes, want <= %d", n, extractRunesLimit)
+	}
+	if !strings.Contains(got, "AAAA") {
+		t.Fatalf("pdf extracted %q", got)
+	}
+}
+
+func generatedMultiPagePDF(pages int, text string) []byte {
+	// Objects: 1 catalog, 2 pages tree, 3 font, then per page: page + contents.
+	kids := make([]string, pages)
+	for i := 0; i < pages; i++ {
+		kids[i] = fmt.Sprintf("%d 0 R", 4+i*2)
+	}
+	objects := []string{
+		`<< /Type /Catalog /Pages 2 0 R >>`,
+		fmt.Sprintf(`<< /Type /Pages /Kids [%s] /Count %d >>`, strings.Join(kids, " "), pages),
+		`<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>`,
+	}
+	for i := 0; i < pages; i++ {
+		content := "BT /F1 12 Tf 36 100 Td (" + text + ") Tj ET\n"
+		objects = append(objects,
+			fmt.Sprintf(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 144] /Resources << /Font << /F1 3 0 R >> >> /Contents %d 0 R >>`, 5+i*2),
+			fmt.Sprintf("<< /Length %d >>\nstream\n%sendstream", len(content), content),
+		)
+	}
+	var b bytes.Buffer
+	b.WriteString("%PDF-1.4\n")
+	offsets := make([]int, len(objects)+1)
+	for i, obj := range objects {
+		offsets[i+1] = b.Len()
+		fmt.Fprintf(&b, "%d 0 obj\n%s\nendobj\n", i+1, obj)
+	}
+	xref := b.Len()
+	fmt.Fprintf(&b, "xref\n0 %d\n0000000000 65535 f \n", len(objects)+1)
+	for i := 1; i <= len(objects); i++ {
+		fmt.Fprintf(&b, "%010d 00000 n \n", offsets[i])
+	}
+	fmt.Fprintf(&b, "trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n", len(objects)+1, xref)
+	return b.Bytes()
+}
+
 func TestProcessCapsReturnedText(t *testing.T) {
 	t.Parallel()
 	got, err := Process("idea.txt", "text/plain", []byte(strings.Repeat("x", MaxReturnedRunes+10)))

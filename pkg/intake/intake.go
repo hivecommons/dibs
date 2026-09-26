@@ -150,20 +150,48 @@ func ExtractDocument(ext string, data []byte) (string, error) {
 	}
 }
 
-func ExtractPDF(data []byte) (string, error) {
+// ExtractPDF pulls plain text out of a PDF page by page, stopping as soon
+// as extractRunesLimit runes have been collected. Reader.GetPlainText would
+// materialize every page's decompressed text in one buffer, so a crafted
+// PDF whose FlateDecode streams expand ~1000:1 could turn a within-cap
+// upload into multi-GB allocations; the caller only ever keeps
+// MaxReturnedRunes anyway. The parser also panics on malformed input
+// (reader-level entry points have no recover), so panics are converted to
+// ordinary errors here.
+func ExtractPDF(data []byte) (text string, err error) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			text, err = "", fmt.Errorf("malformed PDF: %v", rec)
+		}
+	}()
 	r, err := pdf.NewReader(bytes.NewReader(data), int64(len(data)))
 	if err != nil {
 		return "", err
 	}
-	plain, err := r.GetPlainText()
-	if err != nil {
-		return "", err
+	fonts := make(map[string]*pdf.Font)
+	var b strings.Builder
+	runes := 0
+	for i := 1; i <= r.NumPage(); i++ {
+		p := r.Page(i)
+		if p.V.IsNull() {
+			continue
+		}
+		for _, name := range p.Fonts() {
+			if _, ok := fonts[name]; !ok {
+				f := p.Font(name)
+				fonts[name] = &f
+			}
+		}
+		pageText, err := p.GetPlainText(fonts)
+		if err != nil {
+			return "", err
+		}
+		runes += writeLimitedRunes(&b, pageText, extractRunesLimit-runes)
+		if runes >= extractRunesLimit {
+			break
+		}
 	}
-	b, err := io.ReadAll(plain)
-	if err != nil {
-		return "", err
-	}
-	return string(b), nil
+	return b.String(), nil
 }
 
 func ExtractDOCX(data []byte) (string, error) {
