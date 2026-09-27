@@ -24,3 +24,22 @@ func TestContribution(t *testing.T) {
 		})
 	}
 }
+
+func TestActivity(t *testing.T) {
+	tests := []struct {
+		name string
+		in   Counts
+		want int
+	}{
+		{name: "quiet"},
+		{name: "single source", in: Counts{IdeasFiled: 3}, want: 3},
+		{name: "unweighted sum", in: Counts{RegularIssuesCreated: 1, RegularPRsMerged: 2, ClankerPRsCreated: 3, IdeasFiled: 4, ClankerPRsMerged: 5}, want: 15},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := Activity(tt.in); got != tt.want {
+				t.Fatalf("Activity(%+v) = %d, want %d", tt.in, got, tt.want)
+			}
+		})
+	}
+}
