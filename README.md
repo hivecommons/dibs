@@ -80,7 +80,7 @@ fallbacks for every `DIBS_*` variable.
 
 ## Deployment
 
-Every push to `main` publishes `ghcr.io/kubestellar/dibs` (`latest` +
+Every push to `main` publishes `ghcr.io/hivecommons/dibs` (`latest` +
 commit sha) via `.github/workflows/docker.yml`; the image is distroless and
 runs as non-root. Plain Kubernetes manifests for **dibs.hivecommons.dev**
 (Deployment, Service, cert-manager TLS Ingress, PVC, ConfigMap/Secret) live
