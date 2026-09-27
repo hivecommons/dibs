@@ -466,6 +466,60 @@ func TestUpdateIdea(t *testing.T) {
 	}
 }
 
+// TestUpdateIdeaStatusTransitions pins the state machine on the PUT path:
+// a client-supplied status must satisfy store.CanTransition from the idea's
+// current status — in particular, a terminal settled idea can never be
+// reverted to draft/offered (hivecommons/dibs#153).
+func TestUpdateIdeaStatusTransitions(t *testing.T) {
+	a, mux := newAPIFixture(t)
+
+	settled := mustCreate(t, a, "alice", "Done deal", store.VisibilityPublic, store.StatusDraft)
+	if _, err := a.Store.Mutate(settled.ID, true, func(i *store.Idea) error {
+		i.Status = store.StatusSettled
+		i.TargetRepo = "kubestellar/dibs"
+		i.IssueURL = "https://github.com/kubestellar/dibs/issues/1"
+		return nil
+	}); err != nil {
+		t.Fatalf("mutate: %v", err)
+	}
+	for _, status := range []string{store.StatusDraft, store.StatusOffered} {
+		rec := do(t, mux, ident("alice"), "PUT", "/api/ideas/"+settled.ID,
+			`{"title":"Done deal","body":"body of Done deal","visibility":"public","status":"`+status+`"}`)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("settled → %s: %d, want 400 (body=%s)", status, rec.Code, rec.Body.String())
+		}
+	}
+	if got, err := a.Store.Get(settled.ID); err != nil || got.Status != store.StatusSettled {
+		t.Fatalf("settled idea after rejected PUTs = %+v, %v", got, err)
+	}
+
+	offered := mustCreate(t, a, "alice", "In play", store.VisibilityPublic, store.StatusOffered)
+	rec := do(t, mux, ident("alice"), "PUT", "/api/ideas/"+offered.ID,
+		`{"title":"In play","body":"body of In play","visibility":"public","status":"draft"}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("offered → draft: %d, want 400", rec.Code)
+	}
+	// Same-status writes and legal transitions still pass.
+	rec = do(t, mux, ident("alice"), "PUT", "/api/ideas/"+offered.ID,
+		`{"title":"In play","body":"body of In play","visibility":"public","status":"offered"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("offered → offered no-op: %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	declined := mustCreate(t, a, "alice", "Second wind", store.VisibilityPublic, store.StatusDraft)
+	if _, err := a.Store.Mutate(declined.ID, true, func(i *store.Idea) error {
+		i.Status = store.StatusDeclined
+		return nil
+	}); err != nil {
+		t.Fatalf("mutate: %v", err)
+	}
+	rec = do(t, mux, ident("alice"), "PUT", "/api/ideas/"+declined.ID,
+		`{"title":"Second wind","body":"body of Second wind","visibility":"public","status":"offered"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("declined → offered re-offer: %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestDeleteIdea(t *testing.T) {
 	a, mux := newAPIFixture(t)
 	private := mustCreate(t, a, "alice", "Doomed", store.VisibilityPrivate, store.StatusDraft)

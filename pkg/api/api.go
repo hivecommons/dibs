@@ -540,6 +540,14 @@ func (a *API) handleUpdateIdea(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, `status must be "draft" or "offered"`)
 		return
 	}
+	// Enforce the lifecycle state machine on the update path too: without
+	// this, a settled idea could be reverted to draft — dropping it from the
+	// public credit wall while keeping its accepted offers, launch target,
+	// and issue URL (see hivecommons/dibs#153).
+	if in.Status != "" && in.Status != idea.Status && !store.CanTransition(idea.Status, in.Status) {
+		writeError(w, http.StatusBadRequest, "cannot change status "+idea.Status+" to "+in.Status)
+		return
+	}
 	idea.Title = in.Title
 	idea.Body = in.Body
 	idea.Visibility = in.Visibility
