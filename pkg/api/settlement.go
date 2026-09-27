@@ -165,10 +165,9 @@ func (a *API) handleConfirmIssue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	settled, err := a.Store.Mutate(idea.ID, true, func(i *store.Idea) error {
-		if !store.CanTransition(i.Status, store.StatusSettled) {
-			return &store.ValidationError{Msg: "cannot settle an idea in status " + i.Status}
+		if err := i.TransitionTo(store.StatusSettled, "settle"); err != nil {
+			return err
 		}
-		i.Status = store.StatusSettled
 		i.IssueURL = in.IssueURL
 		return nil
 	})
