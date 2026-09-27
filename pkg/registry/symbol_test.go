@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -84,6 +85,31 @@ func TestUniqueRepoTickerSymbolCollisionSequence(t *testing.T) {
 	if got != "HIVI" {
 		t.Fatalf("second collision = %q, want HIVI", got)
 	}
+}
+
+func TestUniqueRepoTickerSymbolTwoLetterTail(t *testing.T) {
+	// Every base[:3]+letter candidate taken: fall back to base[:2] + two-letter tail.
+	taken := func(s string) bool { return strings.HasPrefix(s, "HIV") }
+	if got := UniqueRepoTickerSymbol("org/hive", taken); got != "HIAA" {
+		t.Fatalf("two-letter tail fallback = %q, want HIAA", got)
+	}
+}
+
+func TestUniqueRepoTickerSymbolFullScan(t *testing.T) {
+	// Every HI?? candidate also taken: fall back to the full 4-letter scan.
+	taken := func(s string) bool { return strings.HasPrefix(s, "HI") }
+	if got := UniqueRepoTickerSymbol("org/hive", taken); got != "AAAA" {
+		t.Fatalf("full-scan fallback = %q, want AAAA", got)
+	}
+}
+
+func TestUniqueRepoTickerSymbolExhaustionPanics(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("expected panic when every 4-letter symbol is taken")
+		}
+	}()
+	UniqueRepoTickerSymbol("org/hive", func(string) bool { return true })
 }
 
 func TestRepoSymbolsPersistAndSurviveResync(t *testing.T) {
