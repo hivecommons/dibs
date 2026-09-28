@@ -429,6 +429,12 @@ func (a *API) accept(w http.ResponseWriter, r *http.Request, idea *store.Idea, r
 		return
 	}
 	updated, err := a.Store.Mutate(idea.ID, true, func(i *store.Idea) error {
+		// TransitionTo treats same-status as a no-op success, so guard
+		// explicitly: a second repo must not re-accept an already-accepted
+		// idea and overwrite TargetRepo.
+		if i.Status == store.StatusAccepted {
+			return &store.ValidationError{Msg: "cannot accept an idea in status " + i.Status}
+		}
 		if err := i.TransitionTo(store.StatusAccepted, "accept"); err != nil {
 			return err
 		}

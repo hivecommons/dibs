@@ -716,6 +716,38 @@ func TestPublicDirectAccept(t *testing.T) {
 	}
 }
 
+// TestAcceptedIdeaCannotBeReAccepted: when an idea offered to two repos is
+// accepted by the first, the second repo's still-pending offer must NOT let
+// its owner accept again and overwrite TargetRepo (idea hijack).
+func TestAcceptedIdeaCannotBeReAccepted(t *testing.T) {
+	f := newWave2Server(t, nil) // matchmaker mode: accept leaves status "accepted"
+	idea := f.createIdea(t, "bob-session", "Contested", "kubernetes marketplace body", "public")
+	for _, repoID := range []string{"kubestellar/dibs", "org/other"} {
+		rec := doJSON(t, f.h, "POST", "/api/ideas/"+idea.ID+"/offer", "bob-session",
+			map[string]string{"repoID": repoID})
+		if rec.Code != http.StatusOK {
+			t.Fatalf("offer to %s: %d %s", repoID, rec.Code, rec.Body.String())
+		}
+	}
+	rec := doJSON(t, f.h, "POST", "/api/repos/kubestellar/dibs/decide", "alice-session",
+		map[string]string{"ideaID": idea.ID, "decision": "accept"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("first accept: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = doJSON(t, f.h, "POST", "/api/repos/org/other/decide", "charlie-session",
+		map[string]string{"ideaID": idea.ID, "decision": "accept"})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("second accept: want 400, got %d %s", rec.Code, rec.Body.String())
+	}
+	got, _ := f.store.Get(idea.ID)
+	if got.TargetRepo != "kubestellar/dibs" || got.Status != store.StatusAccepted {
+		t.Fatalf("idea hijacked: target=%s status=%s", got.TargetRepo, got.Status)
+	}
+	if o := got.OfferTo("org/other"); o == nil || o.Status != store.OfferPending {
+		t.Fatalf("second repo's offer mutated: %+v", o)
+	}
+}
+
 // TestAcceptWithoutGitHub: the DEFAULT matchmaker mode (no token) — accept
 // records the acceptance and stops; no issue is opened by Dibs, the ideator
 // files it themselves (see settlement_test.go).
