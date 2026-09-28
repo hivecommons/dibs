@@ -185,6 +185,34 @@ func (i *Idea) HasPassed(repoID string) bool {
 	return false
 }
 
+// TransitionTo advances the idea to status to, enforcing the lifecycle
+// state machine. action names the attempted move (e.g. "offer", "accept",
+// "settle") for the returned error message. A no-op (to == i.Status) always
+// succeeds. Callers that previously duplicated the CanTransition-then-set
+// pattern inline should call this instead so the invariant lives in one
+// place.
+func (i *Idea) TransitionTo(to, action string) error {
+	if i.Status == to {
+		return nil
+	}
+	if !CanTransition(i.Status, to) {
+		return &ValidationError{Msg: "cannot " + action + " an idea in status " + i.Status}
+	}
+	i.Status = to
+	return nil
+}
+
+// TryTransition sets the idea's status to to if the lifecycle state machine
+// allows it, reporting whether the transition happened. Used where a
+// disallowed transition is a silent no-op rather than a hard error.
+func (i *Idea) TryTransition(to string) bool {
+	if !CanTransition(i.Status, to) {
+		return false
+	}
+	i.Status = to
+	return true
+}
+
 // ErrNotFound is returned when an idea does not exist.
 var ErrNotFound = errors.New("store: idea not found")
 

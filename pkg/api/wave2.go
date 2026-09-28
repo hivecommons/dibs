@@ -177,11 +177,8 @@ func (a *API) handleOffer(w http.ResponseWriter, r *http.Request) {
 		if o := i.OfferTo(rp.RepoID); o != nil && o.Status != store.OfferDeclined {
 			return &store.ValidationError{Msg: "already offered to this repo"}
 		}
-		if i.Status != store.StatusOffered {
-			if !store.CanTransition(i.Status, store.StatusOffered) {
-				return &store.ValidationError{Msg: "cannot offer an idea in status " + i.Status}
-			}
-			i.Status = store.StatusOffered
+		if err := i.TransitionTo(store.StatusOffered, "offer"); err != nil {
+			return err
 		}
 		if o := i.OfferTo(rp.RepoID); o != nil {
 			o.Status = store.OfferPending
@@ -218,11 +215,8 @@ func (a *API) offerExternal(w http.ResponseWriter, idea *store.Idea, repoID stri
 		if o := i.OfferTo(repoID); o != nil && o.Status != store.OfferDeclined {
 			return &store.ValidationError{Msg: "already offered to this repo"}
 		}
-		if i.Status != store.StatusOffered {
-			if !store.CanTransition(i.Status, store.StatusOffered) {
-				return &store.ValidationError{Msg: "cannot offer an idea in status " + i.Status}
-			}
-			i.Status = store.StatusOffered
+		if err := i.TransitionTo(store.StatusOffered, "offer"); err != nil {
+			return err
 		}
 		if o := i.OfferTo(repoID); o != nil {
 			o.Status = store.OfferPending
@@ -405,9 +399,7 @@ func (a *API) handleDecide(w http.ResponseWriter, r *http.Request) {
 					return nil // other repos are still considering it
 				}
 			}
-			if store.CanTransition(i.Status, store.StatusDeclined) {
-				i.Status = store.StatusDeclined
-			}
+			i.TryTransition(store.StatusDeclined)
 			return nil
 		})
 		if err != nil {
@@ -437,15 +429,14 @@ func (a *API) accept(w http.ResponseWriter, r *http.Request, idea *store.Idea, r
 		return
 	}
 	updated, err := a.Store.Mutate(idea.ID, true, func(i *store.Idea) error {
-		if !store.CanTransition(i.Status, store.StatusAccepted) {
-			return &store.ValidationError{Msg: "cannot accept an idea in status " + i.Status}
+		if err := i.TransitionTo(store.StatusAccepted, "accept"); err != nil {
+			return err
 		}
 		if o := i.OfferTo(rp.RepoID); o != nil {
 			now := timeNow()
 			o.Status = store.OfferAccepted
 			o.DecidedAt = &now
 		}
-		i.Status = store.StatusAccepted
 		i.TargetRepo = rp.RepoID
 		return nil
 	})
@@ -489,10 +480,9 @@ func (a *API) legacySettle(w http.ResponseWriter, r *http.Request, updated *stor
 		return
 	}
 	settled, err := a.Store.Mutate(updated.ID, true, func(i *store.Idea) error {
-		if !store.CanTransition(i.Status, store.StatusSettled) {
-			return &store.ValidationError{Msg: "cannot settle an idea in status " + i.Status}
+		if err := i.TransitionTo(store.StatusSettled, "settle"); err != nil {
+			return err
 		}
-		i.Status = store.StatusSettled
 		i.IssueURL = issueURL
 		return nil
 	})
