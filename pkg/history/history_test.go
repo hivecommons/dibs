@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
@@ -404,5 +406,73 @@ func TestFetchMergedPullRequestsFiltersSortsAndAuthenticates(t *testing.T) {
 	}
 	if got[1].Title != "older merge" || strings.TrimSpace(got[1].Title) != got[1].Title {
 		t.Fatalf("older PR not trimmed: %+v", got[1])
+	}
+}
+
+func TestNewStoreErrors(t *testing.T) {
+	t.Run("data dir path is an existing file", func(t *testing.T) {
+		file := filepath.Join(t.TempDir(), "not-a-dir")
+		if err := os.WriteFile(file, nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := NewStore(file); err == nil || !strings.Contains(err.Error(), "creating data dir") {
+			t.Fatalf("err = %v, want creating data dir error", err)
+		}
+	})
+
+	t.Run("repo-history.json unreadable", func(t *testing.T) {
+		dir := t.TempDir()
+		if err := os.Mkdir(filepath.Join(dir, "repo-history.json"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := NewStore(dir); err == nil || !strings.Contains(err.Error(), "reading repo-history.json") {
+			t.Fatalf("err = %v, want reading error", err)
+		}
+	})
+
+	t.Run("repo-history.json corrupt", func(t *testing.T) {
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, "repo-history.json"), []byte("{not json"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := NewStore(dir); err == nil || !strings.Contains(err.Error(), "corrupt repo-history.json") {
+			t.Fatalf("err = %v, want corrupt error", err)
+		}
+	})
+}
+
+func TestNewStoreLoadsAndNormalizesExistingFile(t *testing.T) {
+	dir := t.TempDir()
+	histories := []RepoHistory{{
+		RepoID:  "org/repo",
+		Version: BackfillVersion,
+		Days: []DayActivity{
+			{Date: "2026-08-02", MergedPRs: 1},
+			{Date: ""}, // dropped by normalizeHistory
+			{Date: "2026-08-01", IdeasFiled: 2},
+			{Date: "2026-08-02", MergedPRs: 3}, // later duplicate wins
+		},
+	}}
+	raw, err := json.Marshal(histories)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "repo-history.json"), raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	st, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	got := st.List()
+	if len(got) != 1 || len(got[0].Days) != 2 {
+		t.Fatalf("List = %+v", got)
+	}
+	days := got[0].Days
+	if days[0].Date != "2026-08-01" || days[1].Date != "2026-08-02" {
+		t.Fatalf("days not sorted: %+v", days)
+	}
+	if days[1].MergedPRs != 3 || !days[1].Backfilled || !days[0].Backfilled {
+		t.Fatalf("normalization wrong: %+v", days)
 	}
 }

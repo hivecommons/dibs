@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -134,5 +136,69 @@ func TestRefreshLLMPath(t *testing.T) {
 	}
 	if !strings.Contains(userPrompt, "source PR count: 2") || !strings.Contains(userPrompt, "fix auth refresh") {
 		t.Fatalf("prompt missing PR context:\n%s", userPrompt)
+	}
+}
+
+func TestNewStoreErrors(t *testing.T) {
+	t.Run("data dir path is an existing file", func(t *testing.T) {
+		file := filepath.Join(t.TempDir(), "not-a-dir")
+		if err := os.WriteFile(file, nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := NewStore(file); err == nil || !strings.Contains(err.Error(), "creating data dir") {
+			t.Fatalf("err = %v, want creating data dir error", err)
+		}
+	})
+
+	t.Run("repo-news.json unreadable", func(t *testing.T) {
+		dir := t.TempDir()
+		if err := os.Mkdir(filepath.Join(dir, "repo-news.json"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := NewStore(dir); err == nil || !strings.Contains(err.Error(), "reading repo-news.json") {
+			t.Fatalf("err = %v, want reading error", err)
+		}
+	})
+
+	t.Run("repo-news.json corrupt", func(t *testing.T) {
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, "repo-news.json"), []byte("{not json"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := NewStore(dir); err == nil || !strings.Contains(err.Error(), "corrupt repo-news.json") {
+			t.Fatalf("err = %v, want corrupt error", err)
+		}
+	})
+}
+
+func TestNewStoreLoadsAndNormalizesExistingFile(t *testing.T) {
+	dir := t.TempDir()
+	repos := []repoNews{{
+		RepoID: "org/repo",
+		Items: []cachedItem{
+			{Item: Item{Date: "2026-08-01", TLDR: "older", PRCount: 1, Source: "llm"}},
+			{Item: Item{Date: "", TLDR: "no date", PRCount: 1}},        // dropped
+			{Item: Item{Date: "2026-08-03", TLDR: " ", PRCount: 1}},    // blank TLDR dropped
+			{Item: Item{Date: "2026-08-02", TLDR: "zero", PRCount: 0}}, // non-positive dropped
+			{Item: Item{Date: "2026-08-04", TLDR: "newest", PRCount: 2, Source: "llm"}},
+		},
+	}}
+	raw, err := json.Marshal(repos)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "repo-news.json"), raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	st, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	items := st.Get("org/repo")
+	if len(items) != 2 {
+		t.Fatalf("Get = %+v", items)
+	}
+	if items[0].Date != "2026-08-04" || items[0].TLDR != "newest" || items[1].Date != "2026-08-01" {
+		t.Fatalf("items not newest-first/filtered: %+v", items)
 	}
 }
