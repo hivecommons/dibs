@@ -40,12 +40,12 @@ type Config struct {
 	// for the root, or "/prefix" (no trailing slash) for path-based proxying.
 	BasePath string
 	// HubURL is the human-facing hub origin (sign-in interstitial link).
-	HubURL  string
-	Hub     auth.HubClient
-	Store   *store.Store
-	Repos   *registry.Registry
-	History *history.Store
-	News    *news.Store
+	HubURL   string
+	Hub      auth.HubClient
+	Store    *store.Store
+	Registry *registry.Registry
+	History  *history.Store
+	News     *news.Store
 	// Engine scores idea↔repo matches (nil disables matching).
 	Engine *match.Engine
 	// Settler opens credited GitHub issues on accept (nil-GitHub records
@@ -92,7 +92,7 @@ func New(cfg Config) http.Handler {
 
 	// Authenticated routes.
 	authed := http.NewServeMux()
-	dibsAPI := &api.API{Store: cfg.Store, Registry: cfg.Repos, History: cfg.History, News: cfg.News, Engine: cfg.Engine, Settler: cfg.Settler, Notify: cfg.Notify}
+	dibsAPI := &api.API{Store: cfg.Store, Registry: cfg.Registry, History: cfg.History, News: cfg.News, Engine: cfg.Engine, Settler: cfg.Settler, Notify: cfg.Notify}
 	dibsAPI.Register(authed, base)
 
 	// Public routes + the auth-guarded rest. The UI page itself is public:
@@ -126,7 +126,7 @@ func New(cfg Config) http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"status":"ok","version":"` + cfg.Version + `"}` + "\n"))
 	})
-	root.Handle(base+"/mcp", mcpserver.NewHandler(mcpserver.Config{Hub: cfg.Hub, Store: cfg.Store, Registry: cfg.Repos, BasePath: base}))
+	root.Handle(base+"/mcp", mcpserver.NewHandler(mcpserver.Config{Hub: cfg.Hub, Store: cfg.Store, Registry: cfg.Registry, BasePath: base}))
 	// With a prefix, the bare base path (no trailing slash) redirects to the
 	// canonical UI URL: relative asset and API URLs in the page only resolve
 	// correctly under "{base}/". At the root there is no bare form.

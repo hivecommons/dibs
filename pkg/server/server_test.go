@@ -39,9 +39,9 @@ func newTestServer(t *testing.T, basePath string) http.Handler {
 			"alice-session": {Username: "alice", DisplayName: "Alice A"},
 			"bob-session":   {Username: "bob", DisplayName: "Bob B"},
 		}},
-		Store:   st,
-		Repos:   reg,
-		Version: "test-hash",
+		Store:    st,
+		Registry: reg,
+		Version:  "test-hash",
 	})
 }
 

@@ -159,7 +159,7 @@ func main() {
 		HubURL:   hubURL,
 		Hub:      &auth.HTTPHubClient{BaseURL: hubURL},
 		Store:    st,
-		Repos:    reg,
+		Registry: reg,
 		History:  hist,
 		News:     newsStore,
 		Engine:   engine,
