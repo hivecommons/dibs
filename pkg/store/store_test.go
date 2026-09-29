@@ -246,3 +246,20 @@ func TestPrivateInvariantAtStoreLevel(t *testing.T) {
 		t.Fatalf("author should see 2 ideas, got %d", len(mine))
 	}
 }
+
+// TestPing verifies Ping succeeds against a healthy data dir and fails once
+// the dependency it checks (the data dir itself) is gone — this is what the
+// server's /readyz handler relies on to keep unready pods out of rotation.
+func TestPing(t *testing.T) {
+	s, _ := newTestStore(t)
+	if err := s.Ping(); err != nil {
+		t.Fatalf("Ping on healthy store: %v", err)
+	}
+
+	if err := os.RemoveAll(s.dir); err != nil {
+		t.Fatalf("RemoveAll: %v", err)
+	}
+	if err := s.Ping(); err == nil {
+		t.Fatal("Ping should fail once the data dir is removed")
+	}
+}

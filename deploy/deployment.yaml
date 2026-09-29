@@ -52,7 +52,7 @@ spec:
               drop: ["ALL"]
           readinessProbe:
             httpGet:
-              path: /healthz
+              path: /readyz
               port: http
             initialDelaySeconds: 2
             periodSeconds: 10
