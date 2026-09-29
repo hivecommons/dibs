@@ -122,8 +122,25 @@ func New(cfg Config) http.Handler {
 	root.HandleFunc("GET "+base+"/api/repos/{org}/{repo}/index", dibsAPI.HandleRepoIndex)
 	root.HandleFunc("GET "+base+"/api/repos/{org}/{repo}/news", dibsAPI.HandleRepoNews)
 	root.HandleFunc("GET "+base+"/api/repos/{org}/{repo}/qr.png", dibsAPI.HandleRepoQR)
+	// /healthz is a liveness check only: it must stay cheap and independent
+	// of downstream dependencies, so a transient store hiccup (which a
+	// restart cannot fix on a single-replica, single-writer store) never
+	// triggers a crash-loop.
 	root.HandleFunc("GET "+base+"/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"ok","version":"` + cfg.Version + `"}` + "\n"))
+	})
+	// /readyz is the readiness check: it verifies the store's data
+	// directory — the dependency every API call needs to serve traffic —
+	// is actually accessible and writable before the pod is added to the
+	// service endpoints.
+	root.HandleFunc("GET "+base+"/readyz", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if err := cfg.Store.Ping(); err != nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(`{"status":"unavailable","error":"` + template.JSEscapeString(err.Error()) + `"}` + "\n"))
+			return
+		}
 		_, _ = w.Write([]byte(`{"status":"ok","version":"` + cfg.Version + `"}` + "\n"))
 	})
 	root.Handle(base+"/mcp", mcpserver.NewHandler(mcpserver.Config{Hub: cfg.Hub, Store: cfg.Store, Registry: cfg.Registry, BasePath: base}))

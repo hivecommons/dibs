@@ -303,6 +303,37 @@ func New(dir string) (*Store, error) {
 func (s *Store) indexPath() string         { return filepath.Join(s.dir, "index.json") }
 func (s *Store) ideaPath(id string) string { return filepath.Join(s.dir, id+".json") }
 
+// Ping reports whether the store's data directory is still accessible and
+// writable, i.e. the dependency required to actually serve traffic (every
+// mutating API call and most reads go through this directory). It is meant
+// for readiness probes: a stat failure here means the pod cannot serve
+// requests even though the process itself is alive.
+func (s *Store) Ping() error {
+	s.mu.RLock()
+	dir := s.dir
+	s.mu.RUnlock()
+
+	info, err := os.Stat(dir)
+	if err != nil {
+		return fmt.Errorf("store: data dir unavailable: %w", err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("store: data dir path is not a directory: %s", dir)
+	}
+	// Confirm the directory is writable (not just present) with a
+	// zero-cost probe file; the store is single-writer so a stray
+	// leftover file from a crashed probe is harmless and self-heals on
+	// the next successful check.
+	probe := filepath.Join(dir, ".healthz-probe")
+	f, err := os.OpenFile(probe, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	if err != nil {
+		return fmt.Errorf("store: data dir not writable: %w", err)
+	}
+	_ = f.Close()
+	_ = os.Remove(probe)
+	return nil
+}
+
 // newID returns a short random id (10 chars, url-safe).
 func newID() (string, error) {
 	const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789"

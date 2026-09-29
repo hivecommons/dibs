@@ -6,6 +6,8 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -175,6 +177,48 @@ func TestBasePathRouting(t *testing.T) {
 
 // TestPrivateIdeaInvariant is THE invariant: a private idea never appears in
 // any listing (or fetch) other than its author's own.
+// TestReadyz: readiness must reflect the store dependency, not just process
+// liveness — /healthz always says ok, but /readyz must flip to 503 once the
+// store's data dir is gone, so a broken pod is pulled out of rotation.
+func TestReadyz(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.New(dir)
+	if err != nil {
+		t.Fatalf("store.New: %v", err)
+	}
+	reg, err := registry.New(dir)
+	if err != nil {
+		t.Fatalf("registry.New: %v", err)
+	}
+	h := New(Config{
+		HubURL:   "https://hive.kubestellar.io",
+		Hub:      &auth.FakeHub{},
+		Store:    st,
+		Registry: reg,
+		Version:  "test-hash",
+	})
+
+	rec := doJSON(t, h, "GET", "/readyz", "", nil)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"status":"ok"`) {
+		t.Fatalf("readyz healthy: %d %s", rec.Code, rec.Body.String())
+	}
+
+	// Break the dependency /readyz checks.
+	if err := os.RemoveAll(filepath.Join(dir, "ideas")); err != nil {
+		t.Fatalf("RemoveAll: %v", err)
+	}
+	rec = doJSON(t, h, "GET", "/readyz", "", nil)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("readyz after dir removal: got %d, want 503: %s", rec.Code, rec.Body.String())
+	}
+
+	// /healthz stays a pure liveness check regardless of the store.
+	rec = doJSON(t, h, "GET", "/healthz", "", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("healthz should stay ok despite store outage: %d %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestPrivateIdeaInvariant(t *testing.T) {
 	h := newTestServer(t, "/ideas")
 

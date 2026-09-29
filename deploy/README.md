@@ -64,4 +64,8 @@ kubectl -n dibs create secret generic dibs-secrets \
 - Single replica: the JSON file store is single-writer by design. The PVC is
   `ReadWriteMany` (OCI FSS) so `RollingUpdate` (maxSurge=1, maxUnavailable=0)
   can overlap the old and new pods — rollouts are zero-downtime.
-- Health/readiness: `GET /healthz` returns `{"status":"ok","version":"<git sha>"}`.
+- Health/readiness: `GET /healthz` is a liveness-only check (process is up)
+  returning `{"status":"ok","version":"<git sha>"}`. `GET /readyz` additionally
+  verifies the `/data` store directory is accessible and writable, returning
+  503 if not — this is what the readiness probe uses, so a pod is never
+  routed traffic before (or after) its store dependency is usable.
