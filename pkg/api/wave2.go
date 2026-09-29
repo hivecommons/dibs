@@ -457,7 +457,7 @@ func (a *API) accept(w http.ResponseWriter, r *http.Request, idea *store.Idea, r
 		}
 	}
 
-	if a.Settler != nil && a.Settler.GitHub != nil {
+	if a.Settler != nil && a.Settler.HasGitHub() {
 		a.legacySettle(w, r, updated, rp)
 		return
 	}

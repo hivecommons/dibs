@@ -10,6 +10,7 @@ import (
 
 	"github.com/hivecommons/dibs/pkg/match"
 	"github.com/hivecommons/dibs/pkg/notify"
+	"github.com/hivecommons/dibs/pkg/registry"
 	"github.com/hivecommons/dibs/pkg/settle"
 	"github.com/hivecommons/dibs/pkg/store"
 )
@@ -30,7 +31,7 @@ func TestWave2OfferFeedDecideAndNotifications(t *testing.T) {
 		t.Fatalf("notify.New: %v", err)
 	}
 	a.Notify = ns
-	a.Engine = &match.Engine{Store: a.Store, Registry: a.Registry}
+	a.Engine = &match.Engine{Store: a.Store.(*store.Store), Registry: a.Registry.(*registry.Registry)}
 
 	private := mustCreate(t, a, "bob", "Private reveal", store.VisibilityPrivate, store.StatusDraft)
 	public := mustCreate(t, a, "bob", "Public candidate", store.VisibilityPublic, store.StatusDraft)

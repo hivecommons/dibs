@@ -193,6 +193,10 @@ type Settler struct {
 	GitHub Client
 }
 
+// HasGitHub reports whether the settler is wired to a real GitHub client
+// (vs. the fake/legacy no-GitHub configuration).
+func (s *Settler) HasGitHub() bool { return s.GitHub != nil }
+
 // IssueTitle builds the settled issue's title.
 func IssueTitle(idea *store.Idea) string {
 	return "💡 " + idea.Title

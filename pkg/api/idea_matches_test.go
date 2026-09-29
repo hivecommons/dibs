@@ -8,6 +8,7 @@ import (
 
 	"github.com/hivecommons/dibs/pkg/catalog"
 	"github.com/hivecommons/dibs/pkg/match"
+	"github.com/hivecommons/dibs/pkg/registry"
 	"github.com/hivecommons/dibs/pkg/store"
 )
 
@@ -48,7 +49,7 @@ func TestIdeaMatchesWithoutEngineIs503(t *testing.T) {
 
 func TestIdeaMatchesFallbackScoringAndCNCFFilter(t *testing.T) {
 	a, mux := newAPIFixture(t)
-	a.Engine = &match.Engine{Store: a.Store, Registry: a.Registry, Catalog: seedCatalog(t, t.TempDir())}
+	a.Engine = &match.Engine{Store: a.Store.(*store.Store), Registry: a.Registry.(*registry.Registry), Catalog: seedCatalog(t, t.TempDir())}
 
 	idea := mustCreate(t, a, "bob", "Kubernetes ideas exchange", store.VisibilityPrivate, store.StatusDraft)
 	rec := do(t, mux, ident("bob"), "GET", "/api/ideas/"+idea.ID+"/matches", "")
@@ -97,7 +98,7 @@ func TestIdeaMatchesFallbackScoringAndCNCFFilter(t *testing.T) {
 
 func TestIdeaMatchesSkipsPassedAndOfferedRepos(t *testing.T) {
 	a, mux := newAPIFixture(t)
-	a.Engine = &match.Engine{Store: a.Store, Registry: a.Registry}
+	a.Engine = &match.Engine{Store: a.Store.(*store.Store), Registry: a.Registry.(*registry.Registry)}
 
 	idea := mustCreate(t, a, "bob", "Kubernetes ideas exchange", store.VisibilityPrivate, store.StatusDraft)
 	if _, err := a.Store.Mutate(idea.ID, false, func(i *store.Idea) error {

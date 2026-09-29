@@ -20,7 +20,6 @@ import (
 	"sort"
 	"time"
 
-	"github.com/hivecommons/dibs/pkg/history"
 	"github.com/hivecommons/dibs/pkg/indexformula"
 	"github.com/hivecommons/dibs/pkg/registry"
 	"github.com/hivecommons/dibs/pkg/store"
@@ -166,7 +165,7 @@ func (c *ideaCoverage) covers(date string, at time.Time) bool {
 	return false
 }
 
-func historyIdeaCoverage(hist *history.Store, repoID string) *ideaCoverage {
+func historyIdeaCoverage(hist RepoHistory, repoID string) *ideaCoverage {
 	if hist == nil {
 		return nil
 	}
@@ -184,7 +183,7 @@ func historyIdeaCoverage(hist *history.Store, repoID string) *ideaCoverage {
 	return out
 }
 
-func combinedRepoEvents(ideas []*store.Idea, hist *history.Store, repoID string) []repoEvent {
+func combinedRepoEvents(ideas []*store.Idea, hist RepoHistory, repoID string) []repoEvent {
 	evs := append(repoEvents(ideas, repoID, historyIdeaCoverage(hist, repoID)), historyEvents(hist, repoID)...)
 	sort.Slice(evs, func(i, j int) bool { return evs[i].at.Before(evs[j].at) })
 	return evs
@@ -192,7 +191,7 @@ func combinedRepoEvents(ideas []*store.Idea, hist *history.Store, repoID string)
 
 // historyEvents converts backfilled GitHub activity into weighted composite
 // events using the same formula as live Dibs-native movement.
-func historyEvents(hist *history.Store, repoID string) []repoEvent {
+func historyEvents(hist RepoHistory, repoID string) []repoEvent {
 	if hist == nil {
 		return nil
 	}

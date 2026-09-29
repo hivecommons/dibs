@@ -92,7 +92,7 @@ func New(cfg Config) http.Handler {
 
 	// Authenticated routes.
 	authed := http.NewServeMux()
-	dibsAPI := &api.API{Store: cfg.Store, Registry: cfg.Registry, History: cfg.History, News: cfg.News, Engine: cfg.Engine, Settler: cfg.Settler, Notify: cfg.Notify}
+	dibsAPI := api.NewFromConfig(cfg.Store, cfg.Registry, cfg.History, cfg.News, cfg.Engine, cfg.Settler, cfg.Notify)
 	dibsAPI.Register(authed, base)
 
 	// Public routes + the auth-guarded rest. The UI page itself is public:
