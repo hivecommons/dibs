@@ -14,13 +14,9 @@ import (
 	"time"
 
 	"github.com/hivecommons/dibs/pkg/auth"
-	"github.com/hivecommons/dibs/pkg/history"
 	"github.com/hivecommons/dibs/pkg/intake"
 	"github.com/hivecommons/dibs/pkg/match"
-	"github.com/hivecommons/dibs/pkg/news"
-	"github.com/hivecommons/dibs/pkg/notify"
 	"github.com/hivecommons/dibs/pkg/registry"
-	"github.com/hivecommons/dibs/pkg/settle"
 	"github.com/hivecommons/dibs/pkg/store"
 )
 
@@ -36,17 +32,17 @@ const adminRematchTimeout = 5 * time.Minute
 // API wires the store, registry, match engine, settler, and notifications
 // into HTTP handlers.
 type API struct {
-	Store    *store.Store
-	Registry *registry.Registry
-	History  *history.Store
-	News     *news.Store
+	Store    IdeaStore
+	Registry RepoRegistry
+	History  RepoHistory
+	News     RepoNews
 	// Engine is nil when matching is disabled (Wave-2 features degrade).
-	Engine *match.Engine
+	Engine Matcher
 	// Settler opens credited GitHub issues; a nil-GitHub settler records
 	// accepts without opening issues.
-	Settler *settle.Settler
+	Settler IdeaSettler
 	// Notify is the in-app notification store (nil disables).
-	Notify *notify.Store
+	Notify Notifier
 
 	rematchMu   sync.Mutex
 	rematchJobs map[string]*adminRematchJob

@@ -10,6 +10,7 @@ import (
 
 	"github.com/hivecommons/dibs/pkg/match"
 	"github.com/hivecommons/dibs/pkg/notify"
+	"github.com/hivecommons/dibs/pkg/registry"
 	"github.com/hivecommons/dibs/pkg/settle"
 	"github.com/hivecommons/dibs/pkg/store"
 )
@@ -43,7 +44,7 @@ func TestRefineWithEngine(t *testing.T) {
 	a, mux := newAPIFixture(t)
 	var lastUser string
 	srv := fakeChatServer(t, "Sharper title\n\nSharper body.", &lastUser)
-	a.Engine = &match.Engine{Store: a.Store, Registry: a.Registry,
+	a.Engine = &match.Engine{Store: a.Store.(*store.Store), Registry: a.Registry.(*registry.Registry),
 		LLM: &match.LLM{BaseURL: srv.URL, Model: "test", Client: srv.Client()}}
 
 	rec := do(t, mux, ident("bob"), "POST", "/api/refine", `{"title":"T","body":"B"}`)

@@ -219,7 +219,7 @@ func TestAdminRematchWithoutEngine(t *testing.T) {
 func TestAdminRematchUnknownIdeaAndStaleApply(t *testing.T) {
 	t.Setenv("DIBS_ADMINS", "root")
 	a, mux := newAPIFixture(t)
-	a.Engine = &match.Engine{Store: a.Store, Registry: a.Registry}
+	a.Engine = &match.Engine{Store: a.Store.(*store.Store), Registry: a.Registry.(*registry.Registry)}
 
 	rec := do(t, mux, ident("root"), "POST", "/api/admin/ideas/nope/rematch", "")
 	if rec.Code != http.StatusNotFound {
@@ -240,7 +240,7 @@ func TestAdminRematchUnknownIdeaAndStaleApply(t *testing.T) {
 func TestAdminRematchDryRunThenApply(t *testing.T) {
 	t.Setenv("DIBS_ADMINS", "root")
 	a, mux := newAPIFixture(t)
-	a.Engine = &match.Engine{Store: a.Store, Registry: a.Registry}
+	a.Engine = &match.Engine{Store: a.Store.(*store.Store), Registry: a.Registry.(*registry.Registry)}
 	idea := mustCreate(t, a, "alice", "Kubernetes idea marketplace", store.VisibilityPublic, store.StatusDraft)
 
 	rec := do(t, mux, ident("root"), "POST", "/api/admin/ideas/"+idea.ID+"/rematch?dry=1", "")
