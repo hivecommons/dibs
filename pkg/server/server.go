@@ -12,6 +12,7 @@ import (
 	"bytes"
 	"embed"
 	"html/template"
+	"log"
 	"net/http"
 	"strings"
 
@@ -137,8 +138,12 @@ func New(cfg Config) http.Handler {
 	root.HandleFunc("GET "+base+"/readyz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if err := cfg.Store.Ping(); err != nil {
+			// The route is unauthenticated, so keep the body generic
+			// and log the detail (which includes filesystem paths)
+			// server-side instead.
+			log.Printf("readyz: store ping failed: %v", err)
 			w.WriteHeader(http.StatusServiceUnavailable)
-			_, _ = w.Write([]byte(`{"status":"unavailable","error":"` + template.JSEscapeString(err.Error()) + `"}` + "\n"))
+			_, _ = w.Write([]byte(`{"status":"unavailable"}` + "\n"))
 			return
 		}
 		_, _ = w.Write([]byte(`{"status":"ok","version":"` + cfg.Version + `"}` + "\n"))

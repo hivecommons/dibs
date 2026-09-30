@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 func newTestStore(t *testing.T) (*Store, string) {
@@ -261,5 +262,34 @@ func TestPing(t *testing.T) {
 	}
 	if err := s.Ping(); err == nil {
 		t.Fatal("Ping should fail once the data dir is removed")
+	}
+}
+
+// TestPingWriteProbeThrottled verifies the write probe runs at most once per
+// pingWriteProbeInterval: /readyz is unauthenticated, so without the cap any
+// remote caller could turn readiness checks into arbitrary write I/O on the
+// data volume. Within the interval a read-only dir must still pass (stat
+// only); once the interval elapses the write probe runs again and fails.
+func TestPingWriteProbeThrottled(t *testing.T) {
+	s, _ := newTestStore(t)
+	if err := s.Ping(); err != nil {
+		t.Fatalf("Ping on healthy store: %v", err)
+	}
+
+	// Make the dir unwritable; a throttled Ping (stat only) still passes.
+	if err := os.Chmod(s.dir, 0o555); err != nil {
+		t.Fatalf("Chmod: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(s.dir, 0o755) })
+	if err := s.Ping(); err != nil {
+		t.Fatalf("Ping within probe interval should skip the write probe: %v", err)
+	}
+
+	// Expire the throttle: the write probe runs and detects the failure.
+	s.pingMu.Lock()
+	s.lastWriteProbe = time.Now().Add(-2 * pingWriteProbeInterval)
+	s.pingMu.Unlock()
+	if err := s.Ping(); err == nil {
+		t.Fatal("Ping past the probe interval should re-run the write probe and fail on a read-only dir")
 	}
 }
