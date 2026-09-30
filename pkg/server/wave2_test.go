@@ -458,10 +458,10 @@ func TestAdminRematchDryApplyAndPayload(t *testing.T) {
 	if rec.Code != http.StatusAccepted {
 		t.Fatalf("admin dry rematch start: %d %s", rec.Code, rec.Body.String())
 	}
-	rec = doJSON(t, f.h, "POST", "/api/admin/ideas/"+idea.ID+"/rematch", "alice-session", nil)
-	if rec.Code != http.StatusConflict {
-		t.Fatalf("double-start rematch: want 409, got %d %s", rec.Code, rec.Body.String())
-	}
+	// Double-start-while-running (409) is asserted in pkg/api's
+	// TestAdminRematchDoubleStartConflicts with a gated Matcher: here the
+	// real engine runs async and can finish before a second request lands,
+	// which would apply the completed dry run (200) instead.
 	var dry struct {
 		JobID  string `json:"jobID"`
 		Status string `json:"status"`
