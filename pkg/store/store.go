@@ -272,6 +272,11 @@ type Store struct {
 	mu    sync.RWMutex
 	dir   string
 	index map[string]indexEntry
+
+	// pingMu guards lastWriteProbe: the last time Ping's write probe
+	// succeeded, used to throttle probe-file churn (see Ping).
+	pingMu         sync.Mutex
+	lastWriteProbe time.Time
 }
 
 // New opens (creating if needed) a store rooted at dir. Ideas live in
@@ -303,6 +308,10 @@ func New(dir string) (*Store, error) {
 func (s *Store) indexPath() string         { return filepath.Join(s.dir, "index.json") }
 func (s *Store) ideaPath(id string) string { return filepath.Join(s.dir, id+".json") }
 
+// pingWriteProbeInterval caps how often Ping performs its write probe; in
+// between, a successful stat of the data dir is considered sufficient.
+const pingWriteProbeInterval = 5 * time.Second
+
 // Ping reports whether the store's data directory is still accessible and
 // writable, i.e. the dependency required to actually serve traffic (every
 // mutating API call and most reads go through this directory). It is meant
@@ -320,10 +329,19 @@ func (s *Store) Ping() error {
 	if !info.IsDir() {
 		return fmt.Errorf("store: data dir path is not a directory: %s", dir)
 	}
-	// Confirm the directory is writable (not just present) with a
-	// zero-cost probe file; the store is single-writer so a stray
-	// leftover file from a crashed probe is harmless and self-heals on
-	// the next successful check.
+	// Confirm the directory is writable (not just present) with a probe
+	// file; the store is single-writer so a stray leftover file from a
+	// crashed probe is harmless and self-heals on the next successful
+	// check. The probe is throttled: Ping is reachable through the
+	// unauthenticated /readyz route, and an uncapped create+delete per
+	// request would let any remote caller generate arbitrary write I/O
+	// on the (network-attached) data volume. The stat above still runs
+	// on every call, so a vanished data dir is detected immediately.
+	s.pingMu.Lock()
+	defer s.pingMu.Unlock()
+	if time.Since(s.lastWriteProbe) < pingWriteProbeInterval {
+		return nil
+	}
 	probe := filepath.Join(dir, ".healthz-probe")
 	f, err := os.OpenFile(probe, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
 	if err != nil {
@@ -331,6 +349,7 @@ func (s *Store) Ping() error {
 	}
 	_ = f.Close()
 	_ = os.Remove(probe)
+	s.lastWriteProbe = time.Now()
 	return nil
 }
 
