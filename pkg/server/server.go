@@ -161,5 +161,16 @@ func New(cfg Config) http.Handler {
 	// the shared registrable domain, so SameSite alone does not stop forged
 	// state-changing requests from sibling subdomains (see csrf.go).
 	root.Handle(base+"/", csrfGuard(mw.Wrap(authed)))
-	return root
+
+	// Bounded HTTP request visibility (see issue #184): counts/durations
+	// keyed only by method, a small fixed route-group label, and status
+	// class — never raw paths, idea/repo/user identifiers, or query
+	// strings. Wrapping outermost covers public, authenticated, rejected,
+	// and MCP requests alike, and accounts for /healthz and /readyz as
+	// their own route group rather than mixing them into application
+	// traffic. Log-only for now: no exporter, scrape endpoint, or metrics
+	// SDK is added until a backend is chosen.
+	reqMetrics := newRequestMetrics()
+	go reqMetrics.logPeriodically(metricsLogInterval)
+	return reqMetrics.wrap(base, root)
 }
