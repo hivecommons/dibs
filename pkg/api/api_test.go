@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -231,6 +232,72 @@ func TestAdminRematchUnknownIdeaAndStaleApply(t *testing.T) {
 	rec = do(t, mux, ident("root"), "POST", "/api/admin/ideas/"+idea.ID+"/rematch", "")
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("apply without dry run: status = %d, want 409", rec.Code)
+	}
+}
+
+// gatedMatcher wraps a Matcher and blocks RematchIdea until release is
+// closed, so tests can assert against a job that is deterministically
+// still running.
+type gatedMatcher struct {
+	Matcher
+	started chan struct{} // closed once RematchIdea has been entered
+	release chan struct{} // close to let RematchIdea proceed
+}
+
+func (g *gatedMatcher) RematchIdea(ctx context.Context, idea *store.Idea, persist bool, progress match.ProgressFunc) (string, []store.Match, []match.CNCFMatch, error) {
+	close(g.started)
+	select {
+	case <-g.release:
+	case <-ctx.Done():
+		return "", nil, nil, ctx.Err()
+	}
+	return g.Matcher.RematchIdea(ctx, idea, persist, progress)
+}
+
+// TestAdminRematchDoubleStartConflicts pins the busy branches: while a dry
+// rematch job is running, both a second dry start and a non-dry apply must
+// return 409 rather than starting another job or applying anything.
+func TestAdminRematchDoubleStartConflicts(t *testing.T) {
+	t.Setenv("DIBS_ADMINS", "root")
+	a, mux := newAPIFixture(t)
+	gate := &gatedMatcher{
+		Matcher: &match.Engine{Store: a.Store.(*store.Store), Registry: a.Registry.(*registry.Registry)},
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	a.Engine = gate
+	idea := mustCreate(t, a, "alice", "Kubernetes idea marketplace", store.VisibilityPublic, store.StatusDraft)
+
+	rec := do(t, mux, ident("root"), "POST", "/api/admin/ideas/"+idea.ID+"/rematch?dry=1", "")
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("start dry run: %d body=%s", rec.Code, rec.Body.String())
+	}
+	<-gate.started
+
+	rec = do(t, mux, ident("root"), "POST", "/api/admin/ideas/"+idea.ID+"/rematch", "")
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("apply while running: %d, want 409", rec.Code)
+	}
+	rec = do(t, mux, ident("root"), "POST", "/api/admin/ideas/"+idea.ID+"/rematch?dry=1", "")
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("dry start while running: %d, want 409", rec.Code)
+	}
+
+	close(gate.release)
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		rec = do(t, mux, ident("root"), "GET", "/api/admin/ideas/"+idea.ID+"/rematch", "")
+		if rec.Code != http.StatusOK {
+			t.Fatalf("poll status: %d body=%s", rec.Code, rec.Body.String())
+		}
+		status := decodeBody[adminRematchResponse](t, rec)
+		if status.Status == "done" {
+			break
+		}
+		if status.Status == "error" || time.Now().After(deadline) {
+			t.Fatalf("rematch did not finish cleanly: %+v", status)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
