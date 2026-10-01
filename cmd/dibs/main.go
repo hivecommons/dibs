@@ -16,6 +16,7 @@ import (
 	"github.com/hivecommons/dibs/pkg/api"
 	"github.com/hivecommons/dibs/pkg/auth"
 	"github.com/hivecommons/dibs/pkg/catalog"
+	"github.com/hivecommons/dibs/pkg/deps"
 	"github.com/hivecommons/dibs/pkg/history"
 	"github.com/hivecommons/dibs/pkg/match"
 	"github.com/hivecommons/dibs/pkg/news"
@@ -158,14 +159,16 @@ func main() {
 		BasePath: basePath,
 		HubURL:   hubURL,
 		Hub:      &auth.HTTPHubClient{BaseURL: hubURL},
-		Store:    st,
-		Registry: reg,
-		History:  hist,
-		News:     newsStore,
-		Engine:   engine,
-		Settler:  settler,
-		Notify:   notifications,
-		Version:  gitHash,
+		Deps: deps.Deps{
+			Store:    st,
+			Registry: reg,
+			History:  hist,
+			News:     newsStore,
+			Engine:   engine,
+			Settler:  settler,
+			Notify:   notifications,
+		},
+		Version: gitHash,
 	})
 
 	log.Printf("dibs %s listening on %s (base path %s, hub %s, data %s)", gitShort, addr, displayBasePath(basePath), hubURL, dataDir)

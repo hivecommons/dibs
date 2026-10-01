@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/hivecommons/dibs/pkg/auth"
+	"github.com/hivecommons/dibs/pkg/deps"
 	"github.com/hivecommons/dibs/pkg/registry"
 	"github.com/hivecommons/dibs/pkg/store"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -30,9 +31,12 @@ const (
 
 // Config wires Dibs dependencies into the MCP endpoint.
 type Config struct {
-	Hub      auth.HubClient
-	Store    *store.Store
-	Registry *registry.Registry
+	Hub auth.HubClient
+	// Deps is the shared dependency set (pkg/deps). MCP tools currently
+	// read only Store and Registry; embedding the whole set keeps this
+	// surface from silently drifting out of sync with the HTTP one when a
+	// new subsystem is added.
+	deps.Deps
 	BasePath string
 }
 

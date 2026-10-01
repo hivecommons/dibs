@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/hivecommons/dibs/pkg/auth"
+	"github.com/hivecommons/dibs/pkg/deps"
 	"github.com/hivecommons/dibs/pkg/registry"
 	"github.com/hivecommons/dibs/pkg/store"
 )
@@ -41,9 +42,8 @@ func newTestServer(t *testing.T, basePath string) http.Handler {
 			"alice-session": {Username: "alice", DisplayName: "Alice A"},
 			"bob-session":   {Username: "bob", DisplayName: "Bob B"},
 		}},
-		Store:    st,
-		Registry: reg,
-		Version:  "test-hash",
+		Deps:    deps.Deps{Store: st, Registry: reg},
+		Version: "test-hash",
 	})
 }
 
@@ -191,11 +191,10 @@ func TestReadyz(t *testing.T) {
 		t.Fatalf("registry.New: %v", err)
 	}
 	h := New(Config{
-		HubURL:   "https://hive.kubestellar.io",
-		Hub:      &auth.FakeHub{},
-		Store:    st,
-		Registry: reg,
-		Version:  "test-hash",
+		HubURL:  "https://hive.kubestellar.io",
+		Hub:     &auth.FakeHub{},
+		Deps:    deps.Deps{Store: st, Registry: reg},
+		Version: "test-hash",
 	})
 
 	rec := doJSON(t, h, "GET", "/readyz", "", nil)
