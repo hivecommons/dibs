@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -165,6 +166,37 @@ func TestOwnerAuthorization(t *testing.T) {
 		t.Fatalf("unknown repo: want ErrNotFound, got %v", err)
 	}
 }
+
+// TestOwnerUpdateBounds: every owner-editable text field is capped so a repo
+// owner cannot store oversized or blank values that are served publicly and
+// embedded in every match prompt.
+func TestOwnerUpdateBounds(t *testing.T) {
+	r, _ := newTestRegistry(t)
+	if err := r.Merge(sampleRepos()); err != nil {
+		t.Fatalf("Merge: %v", err)
+	}
+	cases := map[string]OwnerUpdate{
+		"too many topics": {Topics: ptr(make([]string, MaxTopics+1))},
+		"long topic":      {Topics: ptr([]string{strings.Repeat("x", MaxTopicLen+1)})},
+		"blank topic":     {Topics: ptr([]string{"ok", "  "})},
+		"long appetite":   {Appetite: ptr(strings.Repeat("x", MaxAppetiteLen+1))},
+	}
+	for name, upd := range cases {
+		if _, err := r.ApplyOwnerUpdate("kubestellar/dibs", "bob", upd); err == nil {
+			t.Errorf("%s: want error, got nil", name)
+		}
+	}
+	rp, _ := r.Get("kubestellar/dibs")
+	if len(rp.Topics) != 0 || rp.Appetite != "" {
+		t.Fatalf("rejected update took effect: %+v", rp)
+	}
+	ok := OwnerUpdate{Topics: ptr([]string{strings.Repeat("x", MaxTopicLen)}), Appetite: ptr(strings.Repeat("y", MaxAppetiteLen))}
+	if _, err := r.ApplyOwnerUpdate("kubestellar/dibs", "bob", ok); err != nil {
+		t.Fatalf("at-limit update rejected: %v", err)
+	}
+}
+
+func ptr[T any](v T) *T { return &v }
 
 func TestPersistenceAcrossReopen(t *testing.T) {
 	r, dir := newTestRegistry(t)
