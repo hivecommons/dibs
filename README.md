@@ -93,7 +93,15 @@ hub-cookie prerequisites.
 |---|---|
 | `GET /` | Landing page (pitch + sign-in) — signed-in users get the full app |
 | `GET /api/credits` | Credit wall data: settled ideas only (handle, title, TLDR, repo, issue URL) |
-| `GET /healthz` | Health + embedded git version |
+| `GET /api/leaderboard` | Aggregate ideator scores/levels/badges |
+| `GET /api/ticker` | Public idea ticker tape for the logged-out landing page |
+| `GET /api/board` | Live-markets board shown on the logged-out landing page |
+| `GET /api/stats` | Aggregate, non-identifying counts |
+| `GET /api/repos/{org}/{repo}/index` | Repo value-index chart series |
+| `GET /api/repos/{org}/{repo}/news` | Repo news feed |
+| `GET /api/repos/{org}/{repo}/qr.png` | Repo QR code |
+| `GET /healthz` | Liveness check + embedded git version |
+| `GET /readyz` | Readiness check — verifies the data store is accessible/writable |
 
 Everything else requires a hive hub session; signed-in ideators additionally
 get `GET /api/me/stats` (ideas posted / offered / accepted / settled).
