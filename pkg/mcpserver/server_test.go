@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/hivecommons/dibs/pkg/auth"
+	"github.com/hivecommons/dibs/pkg/deps"
 	"github.com/hivecommons/dibs/pkg/registry"
 	"github.com/hivecommons/dibs/pkg/store"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -32,7 +33,7 @@ func newTestTools(t *testing.T) *tools {
 			Sessions:     map[string]auth.Identity{"cookie-token": {Username: "carol", DisplayName: "Carol"}},
 			BearerTokens: map[string]auth.Identity{"github-token": {Username: "alice", DisplayName: "Alice"}},
 		},
-		Store: st, Registry: reg, BasePath: "",
+		Deps: deps.Deps{Store: st, Registry: reg}, BasePath: "",
 	}}
 }
 

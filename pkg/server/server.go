@@ -18,14 +18,8 @@ import (
 
 	"github.com/hivecommons/dibs/pkg/api"
 	"github.com/hivecommons/dibs/pkg/auth"
-	"github.com/hivecommons/dibs/pkg/history"
-	"github.com/hivecommons/dibs/pkg/match"
+	"github.com/hivecommons/dibs/pkg/deps"
 	"github.com/hivecommons/dibs/pkg/mcpserver"
-	"github.com/hivecommons/dibs/pkg/news"
-	"github.com/hivecommons/dibs/pkg/notify"
-	"github.com/hivecommons/dibs/pkg/registry"
-	"github.com/hivecommons/dibs/pkg/settle"
-	"github.com/hivecommons/dibs/pkg/store"
 )
 
 // DefaultBasePath is where Dibs is mounted when DIBS_BASE_PATH is unset:
@@ -41,19 +35,11 @@ type Config struct {
 	// for the root, or "/prefix" (no trailing slash) for path-based proxying.
 	BasePath string
 	// HubURL is the human-facing hub origin (sign-in interstitial link).
-	HubURL   string
-	Hub      auth.HubClient
-	Store    *store.Store
-	Registry *registry.Registry
-	History  *history.Store
-	News     *news.Store
-	// Engine scores idea↔repo matches (nil disables matching).
-	Engine *match.Engine
-	// Settler opens credited GitHub issues on accept (nil-GitHub records
-	// accepts without opening issues).
-	Settler *settle.Settler
-	// Notify is the in-app notification store (nil disables).
-	Notify *notify.Store
+	HubURL string
+	Hub    auth.HubClient
+	// Deps are the subsystem dependencies, declared once in pkg/deps and
+	// passed through to the API and MCP surfaces unchanged.
+	deps.Deps
 	// Version is the embedded git hash, exposed on the health endpoint.
 	Version string
 }
@@ -93,7 +79,7 @@ func New(cfg Config) http.Handler {
 
 	// Authenticated routes.
 	authed := http.NewServeMux()
-	dibsAPI := api.NewFromConfig(cfg.Store, cfg.Registry, cfg.History, cfg.News, cfg.Engine, cfg.Settler, cfg.Notify)
+	dibsAPI := api.NewFromDeps(cfg.Deps)
 	dibsAPI.Register(authed, base)
 
 	// Public routes + the auth-guarded rest. The UI page itself is public:
@@ -148,7 +134,7 @@ func New(cfg Config) http.Handler {
 		}
 		_, _ = w.Write([]byte(`{"status":"ok","version":"` + cfg.Version + `"}` + "\n"))
 	})
-	root.Handle(base+"/mcp", mcpserver.NewHandler(mcpserver.Config{Hub: cfg.Hub, Store: cfg.Store, Registry: cfg.Registry, BasePath: base}))
+	root.Handle(base+"/mcp", mcpserver.NewHandler(mcpserver.Config{Hub: cfg.Hub, Deps: cfg.Deps, BasePath: base}))
 	// With a prefix, the bare base path (no trailing slash) redirects to the
 	// canonical UI URL: relative asset and API URLs in the page only resolve
 	// correctly under "{base}/". At the root there is no bare form.

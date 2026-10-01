@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/hivecommons/dibs/pkg/deps"
 	"github.com/hivecommons/dibs/pkg/history"
 	"github.com/hivecommons/dibs/pkg/match"
 	"github.com/hivecommons/dibs/pkg/news"
@@ -106,4 +107,20 @@ func NewFromConfig(st IdeaStore, reg RepoRegistry, hist *history.Store, nw *news
 		a.Notify = ntf
 	}
 	return a
+}
+
+// NewFromDeps builds an API from the shared dependency set every Dibs entry
+// layer is wired with (pkg/deps), so the HTTP surface is constructed from
+// the same single declaration the server and MCP endpoint use rather than a
+// hand-copied field list.
+func NewFromDeps(d deps.Deps) *API {
+	var st IdeaStore
+	if d.Store != nil {
+		st = d.Store
+	}
+	var reg RepoRegistry
+	if d.Registry != nil {
+		reg = d.Registry
+	}
+	return NewFromConfig(st, reg, d.History, d.News, d.Engine, d.Settler, d.Notify)
 }

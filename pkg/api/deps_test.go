@@ -3,11 +3,14 @@ package api
 import (
 	"testing"
 
+	"github.com/hivecommons/dibs/pkg/deps"
 	"github.com/hivecommons/dibs/pkg/history"
 	"github.com/hivecommons/dibs/pkg/match"
 	"github.com/hivecommons/dibs/pkg/news"
 	"github.com/hivecommons/dibs/pkg/notify"
+	"github.com/hivecommons/dibs/pkg/registry"
 	"github.com/hivecommons/dibs/pkg/settle"
+	"github.com/hivecommons/dibs/pkg/store"
 )
 
 // TestNewFromConfig_NilPointersStayNilInterfaces pins the typed-nil guard
@@ -74,5 +77,36 @@ func TestNewFromConfig_NonNilDepsAreWired(t *testing.T) {
 	}
 	if a.Notify != Notifier(ntf) {
 		t.Errorf("Notify not wired: got %#v", a.Notify)
+	}
+}
+
+// TestNewFromDeps_WiresSharedDepsAndGuardsNils covers the shared-dependency
+// entry point: non-nil members land on the matching interface fields, and an
+// empty Deps leaves every optional field a true nil interface.
+func TestNewFromDeps_WiresSharedDepsAndGuardsNils(t *testing.T) {
+	st, err := store.New(t.TempDir())
+	if err != nil {
+		t.Fatalf("store.New: %v", err)
+	}
+	reg, err := registry.New(t.TempDir())
+	if err != nil {
+		t.Fatalf("registry.New: %v", err)
+	}
+	eng := &match.Engine{}
+
+	a := NewFromDeps(deps.Deps{Store: st, Registry: reg, Engine: eng})
+	if a.Store != IdeaStore(st) || a.Registry != RepoRegistry(reg) {
+		t.Fatalf("Store/Registry not wired: %#v %#v", a.Store, a.Registry)
+	}
+	if a.Engine != Matcher(eng) {
+		t.Errorf("Engine not wired: got %#v", a.Engine)
+	}
+	if a.History != nil || a.News != nil || a.Settler != nil || a.Notify != nil {
+		t.Errorf("unset deps should stay nil interfaces: %#v %#v %#v %#v", a.History, a.News, a.Settler, a.Notify)
+	}
+
+	empty := NewFromDeps(deps.Deps{})
+	if empty.Store != nil || empty.Registry != nil {
+		t.Errorf("empty Deps: Store/Registry should stay nil interfaces: %#v %#v", empty.Store, empty.Registry)
 	}
 }

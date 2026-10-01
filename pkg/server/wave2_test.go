@@ -13,6 +13,7 @@ import (
 	"github.com/hivecommons/dibs/pkg/api"
 	"github.com/hivecommons/dibs/pkg/auth"
 	"github.com/hivecommons/dibs/pkg/catalog"
+	"github.com/hivecommons/dibs/pkg/deps"
 	"github.com/hivecommons/dibs/pkg/match"
 	"github.com/hivecommons/dibs/pkg/notify"
 	"github.com/hivecommons/dibs/pkg/registry"
@@ -78,12 +79,14 @@ func newWave2Server(t *testing.T, github settle.Client, cncfProjects ...catalog.
 			"charlie-session": {Username: "charlie", DisplayName: "Charlie C"},
 			"oidc-session":    {Username: "okta:00u123", DisplayName: "OIDC User", AvatarURL: "https://avatars.example/oidc.png"},
 		}},
-		Store:    st,
-		Registry: reg,
-		Engine:   &match.Engine{Store: st, Registry: reg, Catalog: cncfCatalog, Notifier: &api.MatchNotifier{Notify: nt}},
-		Settler:  &settle.Settler{GitHub: github},
-		Notify:   nt,
-		Version:  "test-hash",
+		Deps: deps.Deps{
+			Store:    st,
+			Registry: reg,
+			Engine:   &match.Engine{Store: st, Registry: reg, Catalog: cncfCatalog, Notifier: &api.MatchNotifier{Notify: nt}},
+			Settler:  &settle.Settler{GitHub: github},
+			Notify:   nt,
+		},
+		Version: "test-hash",
 	})
 	return f
 }
