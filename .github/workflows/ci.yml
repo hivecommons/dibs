@@ -25,4 +25,28 @@ jobs:
       - name: Vet
         run: go vet ./...
       - name: Test
-        run: go test -race -count=1 ./...
+        run: |
+          go test -race -count=1 \
+            -coverpkg=./... \
+            -coverprofile=coverage.out \
+            ./...
+      - name: Coverage summary
+        run: |
+          total=$(go tool cover -func=coverage.out | awk '/^total:/ {sub("%","",$3); print $3}')
+          echo "total coverage: ${total}%"
+          {
+            echo "### Go coverage (\`-coverpkg=./...\`): ${total}%"
+            echo
+            echo '```'
+            go tool cover -func=coverage.out | sort -k3 -n | head -25
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          # Floor: main measured 88.8% with -coverpkg=./... (run 36872883136); start a few points below it and ratchet up.
+          awk -v t="$total" 'BEGIN { if (t+0 < 85) { print "coverage " t "% is below floor 85%"; exit 1 } }'
+      - name: Upload coverage profile
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: coverage-${{ github.sha }}
+          path: coverage.out
+          retention-days: 14
