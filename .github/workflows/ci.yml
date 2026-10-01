@@ -24,6 +24,16 @@ jobs:
         run: go build ./...
       - name: Vet
         run: go vet ./...
+      - name: Format and module tidiness
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "gofmt: the following files need formatting:"; echo "$unformatted"; exit 1
+          fi
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum || {
+            echo "go.mod/go.sum are not tidy; run 'go mod tidy' and commit the result"; exit 1
+          }
       - name: Test
         run: |
           go test -race -count=1 \
