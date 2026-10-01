@@ -6,13 +6,12 @@ name: Docker
 on:
   push:
     branches: [main]
+  # No paths filter: build-check is a required status check, and a
+  # path-filtered workflow leaves required checks permanently pending
+  # ("Expected — Waiting for status to be reported") on PRs whose diff
+  # doesn't touch the filtered paths. The job is cheap on docs-only PRs
+  # since the Go layers are fully cached via cache-from: type=gha.
   pull_request:
-    paths:
-      - Dockerfile
-      - .dockerignore
-      - 'go.*'
-      - '**/*.go'
-      - .github/workflows/docker.yml
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
