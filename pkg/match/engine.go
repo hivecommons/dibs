@@ -563,15 +563,6 @@ func (e *Engine) PersistRematchResults(ideaID string, expectedUpdatedAt time.Tim
 	return nil
 }
 
-func firstNonEmpty(values ...string) string {
-	for _, v := range values {
-		if v != "" {
-			return v
-		}
-	}
-	return ""
-}
-
 func bm25ToScore(score, top float64) float64 {
 	if top <= 0 {
 		return 0
