@@ -3,6 +3,7 @@ package intake
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -139,7 +140,7 @@ func generatedMultiPagePDF(pages int, text string) []byte {
 
 func TestProcessCapsReturnedText(t *testing.T) {
 	t.Parallel()
-	got, err := Process("idea.txt", "text/plain", []byte(strings.Repeat("x", MaxReturnedRunes+10)))
+	got, err := ProcessWithContext(context.Background(), "idea.txt", "text/plain", []byte(strings.Repeat("x", MaxReturnedRunes+10)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +151,7 @@ func TestProcessCapsReturnedText(t *testing.T) {
 
 func TestAudioWithoutConfigReturns501(t *testing.T) {
 	t.Setenv("DIBS_STT_URL", "")
-	_, err := Process("idea.wav", "audio/wav", []byte("RIFF----WAVEfmt "))
+	_, err := ProcessWithContext(context.Background(), "idea.wav", "audio/wav", []byte("RIFF----WAVEfmt "))
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -184,7 +185,7 @@ func TestTranscribeForwardsMultipart(t *testing.T) {
 	t.Setenv("DIBS_STT_URL", srv.URL)
 	t.Setenv("DIBS_STT_KEY", "secret")
 	t.Setenv("DIBS_STT_MODEL", "test-model")
-	got, err := Transcribe("idea.webm", "audio/webm", []byte("audio bytes"))
+	got, err := TranscribeWithContext(context.Background(), "idea.webm", "audio/webm", []byte("audio bytes"))
 	if err != nil {
 		t.Fatal(err)
 	}

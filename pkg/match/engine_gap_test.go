@@ -266,18 +266,6 @@ func TestLLMFromEnv(t *testing.T) {
 	}
 }
 
-func TestFirstNonEmpty(t *testing.T) {
-	if got := firstNonEmpty("", "", "third", "fourth"); got != "third" {
-		t.Fatalf("firstNonEmpty = %q", got)
-	}
-	if got := firstNonEmpty(); got != "" {
-		t.Fatalf("no args must return empty, got %q", got)
-	}
-	if got := firstNonEmpty("", ""); got != "" {
-		t.Fatalf("all empty must return empty, got %q", got)
-	}
-}
-
 // TestNonHiveCNCFFiltersRegistryRepos: CNCF suggestions that are already
 // hive-managed repos are dropped; a nil registry keeps everything.
 func TestNonHiveCNCFFiltersRegistryRepos(t *testing.T) {

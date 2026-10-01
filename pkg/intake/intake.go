@@ -101,10 +101,6 @@ func HandleUpload(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-func Process(filename, declaredType string, data []byte) (Response, error) {
-	return ProcessWithContext(context.Background(), filename, declaredType, data)
-}
-
 func ProcessWithContext(ctx context.Context, filename, declaredType string, data []byte) (Response, error) {
 	ext := strings.ToLower(filepath.Ext(filename))
 	sniff := http.DetectContentType(firstBytes(data, 512))
@@ -307,10 +303,6 @@ func StripRTF(s string) string {
 		}
 	}
 	return b.String()
-}
-
-func Transcribe(filename, contentType string, data []byte) (string, error) {
-	return TranscribeWithContext(context.Background(), filename, contentType, data)
 }
 
 func TranscribeWithContext(ctx context.Context, filename, contentType string, data []byte) (string, error) {
