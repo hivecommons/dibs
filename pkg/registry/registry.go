@@ -38,6 +38,11 @@ const MaxAppetiteLen = 500
 // MaxTopics caps the topics list.
 const MaxTopics = 20
 
+// MaxTopicLen caps a single topic. Matches GitHub's own topic limit, and
+// keeps owner-supplied text from inflating the public repo listing and the
+// per-idea match prompt (which embeds topics untruncated).
+const MaxTopicLen = 50
+
 // RepoProfile is one hive-managed repository's dibs profile.
 type RepoProfile struct {
 	RepoID      string `json:"repoID"` // org/name
@@ -366,8 +371,18 @@ func (r *Registry) ApplyOwnerUpdate(repoID, actor string, upd OwnerUpdate) (*Rep
 	if rp.Owner != actor {
 		return nil, ErrForbidden
 	}
-	if upd.Topics != nil && len(*upd.Topics) > MaxTopics {
-		return nil, fmt.Errorf("registry: more than %d topics", MaxTopics)
+	if upd.Topics != nil {
+		if len(*upd.Topics) > MaxTopics {
+			return nil, fmt.Errorf("registry: more than %d topics", MaxTopics)
+		}
+		for _, t := range *upd.Topics {
+			if strings.TrimSpace(t) == "" {
+				return nil, errors.New("registry: topics cannot be blank")
+			}
+			if len(t) > MaxTopicLen {
+				return nil, fmt.Errorf("registry: topic exceeds %d characters", MaxTopicLen)
+			}
+		}
 	}
 	if upd.Appetite != nil && len(*upd.Appetite) > MaxAppetiteLen {
 		return nil, fmt.Errorf("registry: appetite exceeds %d characters", MaxAppetiteLen)
