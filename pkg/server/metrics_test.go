@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -132,5 +133,55 @@ func TestRequestMetricsWrap(t *testing.T) {
 	}
 	if len(want) != 0 {
 		t.Errorf("missing samples: %+v", want)
+	}
+}
+
+func TestMethodLabelBounded(t *testing.T) {
+	for _, m := range []string{"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"} {
+		if got := methodLabel(m); got != m {
+			t.Errorf("methodLabel(%q) = %q, want verbatim", m, got)
+		}
+	}
+	for _, m := range []string{"PROPFIND", "get", "FOO-123", ""} {
+		if got := methodLabel(m); got != "OTHER" {
+			t.Errorf("methodLabel(%q) = %q, want OTHER", m, got)
+		}
+	}
+}
+
+func TestWrapUnknownMethodsCollapse(t *testing.T) {
+	m := newRequestMetrics()
+	wrapped := m.wrap("", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+
+	// Go's net/http accepts any token as a method; a probing client must
+	// not be able to mint one metric key per request.
+	for i := 0; i < 100; i++ {
+		req := httptest.NewRequest(fmt.Sprintf("M%03d", i), "/healthz", nil)
+		wrapped.ServeHTTP(httptest.NewRecorder(), req)
+	}
+	samples := m.snapshotAndReset()
+	if len(samples) != 1 {
+		t.Fatalf("got %d samples, want 1: %+v", len(samples), samples)
+	}
+	if samples[0].Method != "OTHER" || samples[0].Count != 100 {
+		t.Errorf("sample = %+v, want Method=OTHER Count=100", samples[0])
+	}
+}
+
+func TestStatusRecorderUnwrapPreservesFlush(t *testing.T) {
+	m := newRequestMetrics()
+	var flushErr error
+	wrapped := m.wrap("", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// The MCP streamable-HTTP handler flushes every SSE event this way;
+		// it must reach the real writer through the metrics wrapper.
+		flushErr = http.NewResponseController(w).Flush()
+	}))
+	rr := httptest.NewRecorder()
+	wrapped.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/mcp", nil))
+	if flushErr != nil {
+		t.Fatalf("Flush through metrics wrapper: %v", flushErr)
+	}
+	if !rr.Flushed {
+		t.Fatal("underlying recorder was not flushed")
 	}
 }

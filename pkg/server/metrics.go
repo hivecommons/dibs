@@ -36,6 +36,29 @@ var apiRouteSegments = map[string]bool{
 	"stats":         true,
 }
 
+// methodLabels is the closed set of HTTP methods recorded verbatim. Go's
+// net/http accepts any RFC 7230 token as a method, so echoing r.Method
+// directly would let an unauthenticated client mint a fresh label (and
+// map entry, and flushed log line) per request. Anything else collapses
+// into a single "OTHER" bucket.
+var methodLabels = map[string]bool{
+	http.MethodGet:     true,
+	http.MethodHead:    true,
+	http.MethodPost:    true,
+	http.MethodPut:     true,
+	http.MethodPatch:   true,
+	http.MethodDelete:  true,
+	http.MethodOptions: true,
+}
+
+// methodLabel bounds a request method to methodLabels or "OTHER".
+func methodLabel(method string) string {
+	if methodLabels[method] {
+		return method
+	}
+	return "OTHER"
+}
+
 // routeGroup maps a request path to a small, fixed set of route labels.
 // It never returns the raw path, an idea/repo ID, a token, or a query
 // string — only method + this label + status class are ever recorded,
@@ -187,6 +210,15 @@ func (w *statusRecorder) Write(b []byte) (int, error) {
 	return w.ResponseWriter.Write(b)
 }
 
+// Unwrap lets http.NewResponseController reach the underlying writer so
+// Flush/Hijack/SetWriteDeadline keep working through this wrapper. The MCP
+// streamable-HTTP handler flushes every SSE event via ResponseController;
+// without Unwrap those flushes fail with ErrNotSupported and events sit
+// buffered until the handler returns.
+func (w *statusRecorder) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
+}
+
 // wrap instruments every request through next — public, authenticated,
 // rejected, and MCP alike — with bounded (method, route group, status
 // class) counts and durations. It sits outermost in New so it also
@@ -201,6 +233,6 @@ func (m *requestMetrics) wrap(base string, next http.Handler) http.Handler {
 		if !rec.written {
 			status = http.StatusOK
 		}
-		m.record(r.Method, routeGroup(base, r.URL.Path), status, time.Since(start))
+		m.record(methodLabel(r.Method), routeGroup(base, r.URL.Path), status, time.Since(start))
 	})
 }
