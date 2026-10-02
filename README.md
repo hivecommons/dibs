@@ -215,3 +215,5 @@ go run ./cmd/dibs            # serves on :8080 at /
 ## License
 
 Apache-2.0 — see [LICENSE](LICENSE).
+
+Handshake icon: [Twemoji](https://twemoji.twitter.com/), [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/).
