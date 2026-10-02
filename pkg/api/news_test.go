@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -65,3 +66,59 @@ type apiNewsFetcher struct {
 func (f *apiNewsFetcher) FetchMergedPullRequests(context.Context, string) ([]history.MergedPullRequest, error) {
 	return append([]history.MergedPullRequest(nil), f.prs...), nil
 }
+
+// TestHandleRepoNewsDegradedDependencies pins the fallbacks a deployment
+// without a news store (or without a registry) relies on: the handler must
+// answer 200 with an empty JSON array — never null, never 500 — so the
+// repo page's news column renders empty instead of breaking.
+func TestHandleRepoNewsDegradedDependencies(t *testing.T) {
+	reg, err := registry.New(t.TempDir())
+	if err != nil {
+		t.Fatalf("registry New: %v", err)
+	}
+	if err := reg.Merge([]registry.RepoProfile{{RepoID: "org/repo"}}); err != nil {
+		t.Fatalf("registry Merge: %v", err)
+	}
+	ns, err := news.NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("news NewStore: %v", err)
+	}
+
+	cases := map[string]*API{
+		"nil news store":          {Registry: reg},
+		"nil registry":            {News: ns},
+		"known repo without news": {Registry: reg, News: ns},
+	}
+	for name, api := range cases {
+		t.Run(name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("GET /api/repos/{org}/{repo}/news", api.HandleRepoNews)
+			rec := httptest.NewRecorder()
+			mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/repos/org/repo/news", nil))
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+			}
+			if got := strings.TrimSpace(rec.Body.String()); got != "[]" {
+				t.Fatalf("body = %q, want empty JSON array", got)
+			}
+		})
+	}
+}
+
+// TestHandleRepoNewsRegistryFailure: a registry error that is not
+// ErrNotFound must surface as 500, not be mistaken for a missing repo.
+func TestHandleRepoNewsRegistryFailure(t *testing.T) {
+	api := &API{Registry: &getFailRegistry{}}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/repos/{org}/{repo}/news", api.HandleRepoNews)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/repos/org/repo/news", nil))
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d body=%s, want 500", rec.Code, rec.Body.String())
+	}
+}
+
+// getFailRegistry fails every lookup with a non-ErrNotFound error.
+type getFailRegistry struct{ RepoRegistry }
+
+func (getFailRegistry) Get(string) (*registry.RepoProfile, error) { return nil, errBoom }
