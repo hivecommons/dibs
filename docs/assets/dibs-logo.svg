@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Dibs idea flag logo</title>
+  <desc id="desc">A golden idea spark on a claimed pennant.</desc>
+  <defs>
+    <linearGradient id="flag" x1="74" y1="34" x2="198" y2="198" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F5C451"/>
+      <stop offset="1" stop-color="#D98A1A"/>
+    </linearGradient>
+  </defs>
+  <path d="M62 224V42" fill="none" stroke="#3A2A16" stroke-width="14" stroke-linecap="round"/>
+  <path d="M70 47h130l-30 45 30 45H70Z" fill="url(#flag)" stroke="#9A5E12" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M122 69l9 20 21 4-16 15 3 22-19-11-20 10 5-22-15-16 22-3Z" fill="#FFF4C2" stroke="#B96F11" stroke-width="5" stroke-linejoin="round"/>
+</svg>

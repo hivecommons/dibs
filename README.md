@@ -1,8 +1,12 @@
-# Dibs — a marketplace of ideas
+<p align="center">
+  <img src="docs/assets/dibs-logo.svg" alt="Dibs" width="120" height="120">
+</p>
 
-> **Your idea, your credit, their code.**
->
-> The missing contributor layer for the AI-agent era.
+# Dibs
+
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
+Dibs is a marketplace for claiming, matching, and routing open source ideas to hive-managed repositories.
 
 Dibs is a two-sided marketplace that connects **ideators** — people who call
 dibs on ideas: great insight, but no time, tooling, or inclination to write
