@@ -43,6 +43,12 @@ kubectl apply -f deploy/ingress.yaml
 | `DIBS_LLM_API_KEY` | Secret (optional) | unset | Gateway API key |
 | `DIBS_LLM_MODEL` | Secret (optional) | gateway default | Model name |
 | `DIBS_GITHUB_TOKEN` | Secret (optional) | unset | Token used to open credited settlement issues; unset ⇒ accepts recorded, issues not opened |
+| `DIBS_ADMINS` | Secret (optional) | unset | Comma-separated, case-insensitive GitHub logins granted admin access (idea-moderation endpoints) |
+| `DIBS_CLANKER_MARKERS` | ConfigMap (optional) | `hive: agent=,kubestellar-hive[bot]` | Comma-separated, case-insensitive markers matched against PR branch/labels/body/author to classify agent activity |
+| `DIBS_INTAKE_MAX_MB` | ConfigMap (optional) | `25` | Max upload size (MB) accepted for idea-intake file uploads |
+| `DIBS_STT_URL` | Secret (optional) | unset | Speech-to-text gateway; unset ⇒ voice/audio idea submission disabled |
+| `DIBS_STT_KEY` | Secret (optional) | unset | ****** for the STT gateway |
+| `DIBS_STT_MODEL` | Secret (optional) | unset | Model name routed by the STT gateway |
 | `REPOS_SEED_FILE` | — (optional) | unset | Static repo-registry seed for dev/demo |
 
 The legacy `IDEATE_*` names (the product's pre-rename prefix) are still
