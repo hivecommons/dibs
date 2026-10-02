@@ -22,8 +22,8 @@ kubectl apply -f deploy/ingress.yaml
    the TLS cert via the `cert-manager.io/cluster-issuer` annotation; adjust
    the issuer name in `ingress.yaml` if yours differs).
 3. **Image**: `ghcr.io/hivecommons/dibs` is published automatically by the
-   `docker.yml` workflow on every push to `main` (tags `latest` + commit sha).
-   Pin the Deployment to a sha for production.
+   `docker.yml` workflow on every push to `main` whose CI run is green (tags
+   `latest` + commit sha). Pin the Deployment to a sha for production.
 4. **Hub session sharing**: Dibs authenticates by validating the hub's
    `hive_hub_user` session cookie, so Dibs and the hub must share a
    registrable domain — the hub scopes the cookie to `.hivecommons.dev`, and
