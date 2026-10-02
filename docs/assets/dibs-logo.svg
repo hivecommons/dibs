@@ -1,0 +1,13 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Dibs logo</title>
+  <desc id="desc">A warm gold idea bulb held in a dark market token with a teal spark.</desc>
+  <circle cx="128" cy="128" r="104" fill="#1A1510"/>
+  <path d="M70 162c18 28 42 42 58 42s40-14 58-42" fill="none" stroke="#E0B04F" stroke-width="16" stroke-linecap="round"/>
+  <path d="M128 50c-34 0-60 25-60 57 0 22 12 39 29 50 8 5 13 14 13 24h36c0-10 5-19 13-24 17-11 29-28 29-50 0-32-26-57-60-57z" fill="#E0B04F"/>
+  <path d="M102 185h52" stroke="#FFF4D5" stroke-width="12" stroke-linecap="round"/>
+  <path d="M107 205h42" stroke="#FFF4D5" stroke-width="10" stroke-linecap="round" opacity="0.75"/>
+  <path d="M128 78v52" stroke="#1A1510" stroke-width="12" stroke-linecap="round"/>
+  <path d="M105 103h46" stroke="#1A1510" stroke-width="12" stroke-linecap="round"/>
+  <path d="M184 55l14-14M199 86h20M57 86h20" stroke="#1F7A8C" stroke-width="10" stroke-linecap="round"/>
+</svg>

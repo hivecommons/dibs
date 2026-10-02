@@ -1,4 +1,12 @@
-# Dibs — a marketplace of ideas
+<p align="center">
+  <img src="docs/assets/dibs-logo.svg" alt="Dibs" width="120" height="120">
+</p>
+
+# Dibs
+
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
+Marketplace of ideas for connecting ideators with hive-managed repositories.
 
 > **Your idea, your credit, their code.**
 >
