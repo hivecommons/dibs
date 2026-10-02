@@ -15,6 +15,7 @@ concurrency:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
@@ -51,8 +52,8 @@ jobs:
             go tool cover -func=coverage.out | sort -k3 -n | head -25
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-          # Floor: main measured 88.8% with -coverpkg=./... (run 36872883136); start a few points below it and ratchet up.
-          awk -v t="$total" 'BEGIN { if (t+0 < 85) { print "coverage " t "% is below floor 85%"; exit 1 } }'
+          # Floor: main measured 90.3–90.7% with -coverpkg=./... over runs 36916974386..36953509862; keep ~2 points below and ratchet up.
+          awk -v t="$total" 'BEGIN { if (t+0 < 88) { print "coverage " t "% is below floor 88%"; exit 1 } }'
       - name: Upload coverage profile
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
