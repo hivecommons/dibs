@@ -1,4 +1,6 @@
-<p align="center"><img src="docs/assets/dibs-logo.svg" alt="Dibs — handshake logo" width="200"></p>
+<p align="center">
+  <img src="docs/assets/dibs-logo.svg" alt="Dibs" width="120" height="120">
+</p>
 
 # Dibs
 
