@@ -66,6 +66,12 @@ deployments also work.
 | `DIBS_LLM_API_KEY` | (unset) | Bearer token for the LLM gateway |
 | `DIBS_LLM_MODEL` | `gpt-4o-mini` | Model name routed by the gateway |
 | `DIBS_GITHUB_TOKEN` | (unset) | **Legacy mode only.** When set, Dibs opens the credited issue server-side on accept. Unset (default), the ideator files a prefilled GitHub issue themselves — native attribution |
+| `DIBS_ADMINS` | (unset) | Comma-separated, case-insensitive GitHub logins granted admin access (idea-moderation endpoints) |
+| `DIBS_CLANKER_MARKERS` | `hive: agent=,kubestellar-hive[bot]` | Comma-separated, case-insensitive markers matched against PR branch/labels/body/author to classify agent activity |
+| `DIBS_INTAKE_MAX_MB` | `25` | Max upload size (MB) accepted for idea-intake file uploads |
+| `DIBS_STT_URL` | (unset) | Speech-to-text gateway URL; when set, enables voice/audio idea submission |
+| `DIBS_STT_KEY` | (unset) | ****** for the STT gateway |
+| `DIBS_STT_MODEL` | (unset) | Model name routed by the STT gateway |
 
 Legacy `IDEATE_*` names (the pre-rename prefix) are still honored as
 fallbacks for every `DIBS_*` variable.
