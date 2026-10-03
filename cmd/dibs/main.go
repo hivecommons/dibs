@@ -7,6 +7,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -66,11 +67,23 @@ func displayBasePath(base string) string {
 }
 
 func main() {
-	showVersion := flag.Bool("version", false, "print the embedded commit and exit")
-	flag.Parse()
+	if err := run(os.Args[1:], os.Stdout, os.Stderr, func(srv *http.Server) error { return srv.ListenAndServe() }); err != nil {
+		log.Fatal(err)
+	}
+}
+
+// run is main without the process exit: serve is injected so tests can
+// exercise startup wiring without binding a port.
+func run(args []string, stdout, stderr io.Writer, serve func(*http.Server) error) error {
+	fs := flag.NewFlagSet("dibs", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	showVersion := fs.Bool("version", false, "print the embedded commit and exit")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
 	if *showVersion {
-		fmt.Printf("dibs %s (%s)\n", gitShort, gitHash)
-		return
+		fmt.Fprintf(stdout, "dibs %s (%s)\n", gitShort, gitHash)
+		return nil
 	}
 
 	addr := envOr("DIBS_ADDR", defaultAddr)
@@ -80,29 +93,29 @@ func main() {
 
 	st, err := store.New(dataDir)
 	if err != nil {
-		log.Fatalf("opening idea store: %v", err)
+		return fmt.Errorf("opening idea store: %w", err)
 	}
 	reg, err := registry.New(dataDir)
 	if err != nil {
-		log.Fatalf("opening repo registry: %v", err)
+		return fmt.Errorf("opening repo registry: %w", err)
 	}
 	hist, err := history.NewStore(dataDir)
 	if err != nil {
-		log.Fatalf("opening repo history store: %v", err)
+		return fmt.Errorf("opening repo history store: %w", err)
 	}
 	newsStore, err := news.NewStore(dataDir)
 	if err != nil {
-		log.Fatalf("opening repo news store: %v", err)
+		return fmt.Errorf("opening repo news store: %w", err)
 	}
 	cncfCatalog, err := catalog.New(dataDir, envOr(settle.EnvGitHubToken, ""))
 	if err != nil {
-		log.Fatalf("opening CNCF catalog: %v", err)
+		return fmt.Errorf("opening CNCF catalog: %w", err)
 	}
 	cncfCatalog.RefreshAsync()
 
 	notifications, err := notify.New(dataDir)
 	if err != nil {
-		log.Fatalf("opening notification store: %v", err)
+		return fmt.Errorf("opening notification store: %w", err)
 	}
 
 	// Match engine: LLM via hive's litellm gateway when DIBS_LLM_BASE_URL
@@ -132,7 +145,7 @@ func main() {
 
 	if seed := os.Getenv("REPOS_SEED_FILE"); seed != "" {
 		if err := reg.LoadSeedFile(seed); err != nil {
-			log.Fatalf("loading REPOS_SEED_FILE: %v", err)
+			return fmt.Errorf("loading REPOS_SEED_FILE: %w", err)
 		}
 		log.Printf("seeded repo registry from %s", seed)
 	}
@@ -177,7 +190,8 @@ func main() {
 		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
-	if err := srv.ListenAndServe(); err != nil {
-		log.Fatalf("server: %v", err)
+	if err := serve(srv); err != nil {
+		return fmt.Errorf("server: %w", err)
 	}
+	return nil
 }
