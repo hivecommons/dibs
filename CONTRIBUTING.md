@@ -19,7 +19,12 @@ unsigned commits will not pass CI.
 1. Fork / branch from `main`.
 2. Make your change with tests.
 3. Ensure `go build ./...`, `go vet ./...`, and
-   `go test -race -count=1 ./...` are green.
+   `go test -race -count=1 -coverpkg=./... -coverprofile=coverage.out ./...`
+   are green. CI also requires:
+   - `gofmt -l .` prints nothing.
+   - `go mod tidy` leaves `go.mod` and `go.sum` unchanged.
+   - Total coverage (`go tool cover -func=coverage.out`) is at least 90%.
+   - The `go` version in `go.mod` matches the `golang:` tag in the `Dockerfile`.
 4. Open a PR with a clear description. Prow manages approvals via
    `/lgtm` and `/approve`.
 
