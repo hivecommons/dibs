@@ -41,6 +41,7 @@ func TestValidateTagLimits(t *testing.T) {
 
 	t.Run("at the limits is valid", func(t *testing.T) {
 		idea := validIdea("alice")
+		idea.Status = StatusDraft
 		idea.Tags = make([]string, MaxTags)
 		for i := range idea.Tags {
 			idea.Tags[i] = strings.Repeat("y", MaxTagLen)
