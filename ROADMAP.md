@@ -17,6 +17,8 @@ the project is headed next.
 
 1. **Trust and abuse controls:** improve spam resistance for public idea intake,
    including clearer moderation states and rate/quality signals for ideators.
+   See the [proposed idea-intake trust design](docs/idea-intake-trust.md);
+   implementation follows in separate issues.
 2. **Forge and repo coverage:** define what it takes to support non-GitHub issue
    targets while growing the repository registry beyond hive-managed projects.
 3. **Credit-wall integrations:** document and stabilize APIs that downstream
