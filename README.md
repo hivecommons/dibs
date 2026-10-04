@@ -128,6 +128,9 @@ hub-cookie prerequisites.
 Everything else requires a hive hub session; signed-in ideators additionally
 get `GET /api/me/stats` (ideas posted / offered / accepted / settled).
 
+For response schemas, eligibility/privacy rules, settlement actions, rewards,
+and stability levels, see the [credit-wall consumer API](docs/credit-wall-api.md).
+
 ## Submit ideas from your agent
 
 Dibs exposes a stateless Streamable HTTP MCP endpoint at

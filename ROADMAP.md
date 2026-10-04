@@ -19,8 +19,10 @@ the project is headed next.
    including clearer moderation states and rate/quality signals for ideators.
 2. **Forge and repo coverage:** define what it takes to support non-GitHub issue
    targets while growing the repository registry beyond hive-managed projects.
-3. **Credit-wall integrations:** document and stabilize APIs that downstream
-   consumers can use to understand eligibility, settlement state, and rewards.
+3. **Credit-wall integrations:** the [consumer API reference](docs/credit-wall-api.md)
+   documents eligibility, settlement state, rewards, and current experimental
+   stability levels. Next, define compatibility guarantees and stabilize the
+   downstream contract.
 
 ## Deferred / non-goals
 
