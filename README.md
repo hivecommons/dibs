@@ -94,6 +94,8 @@ fallbacks for every `DIBS_*` variable.
 
 ### Roadmap
 
+See [ROADMAP.md](ROADMAP.md) for what is planned next. Delivery history:
+
 - **Wave 1 (done):** scaffold, hub auth bridge, idea CRUD, repo registry.
 - **Wave 2 (done):** LLM matching + TLDRs, swipe UX ("offer" / "pass"), issue settlement (credited GitHub issues), notifications.
 - **Wave 3 (done):** deployment (GHCR image + [`deploy/` manifests](deploy/README.md) for dibs.hivecommons.dev), public landing page, public credit wall, ideator profile stats.
@@ -215,6 +217,12 @@ still call `prompts/get` directly.
   }
 }
 ```
+
+## Operations and further reading
+
+- [Runbooks](runbooks/): [incident response](runbooks/incident-response.md), [release rollback](runbooks/release-rollback.md), [SLOs](runbooks/slo.md), and a [postmortem template](runbooks/postmortem-template.md).
+- [CONTRIBUTING.md](CONTRIBUTING.md): DCO sign-off, CI requirements, and code conventions.
+- [Idea intake trust and abuse controls](docs/idea-intake-trust.md): a proposed design, not yet implemented.
 
 ## Development
 
