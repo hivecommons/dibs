@@ -99,6 +99,18 @@ const MaxTags = 20
 // MaxTagLen caps a single idea tag.
 const MaxTagLen = 40
 
+// MaxPassedRepos caps the ideator's swipe-away history. Every idea file is
+// decoded by the public listings, so per-idea lists that grow with each
+// request need a ceiling.
+const MaxPassedRepos = 500
+
+// MaxOffers caps the number of per-repo offers hanging off one idea.
+const MaxOffers = 100
+
+// MaxRepoIDLen caps a repo identifier stored on an idea ("org/name":
+// GitHub allows 39 + 1 + 100).
+const MaxRepoIDLen = 140
+
 // Match is a cached idea↔repo fit score. RepoHash fingerprints the repo
 // profile the score was computed against so repo edits invalidate the cache;
 // idea edits clear Matches wholesale (see Update).
@@ -245,6 +257,22 @@ func Validate(idea *Idea) error {
 	}
 	if len(idea.Body) > MaxBodyBytes {
 		return &ValidationError{fmt.Sprintf("body exceeds %d bytes", MaxBodyBytes)}
+	}
+	if len(idea.PassedRepos) > MaxPassedRepos {
+		return &ValidationError{fmt.Sprintf("more than %d passed repos", MaxPassedRepos)}
+	}
+	for _, r := range idea.PassedRepos {
+		if len(r) > MaxRepoIDLen {
+			return &ValidationError{fmt.Sprintf("passed repo id exceeds %d characters", MaxRepoIDLen)}
+		}
+	}
+	if len(idea.Offers) > MaxOffers {
+		return &ValidationError{fmt.Sprintf("more than %d offers", MaxOffers)}
+	}
+	for _, o := range idea.Offers {
+		if len(o.RepoID) > MaxRepoIDLen {
+			return &ValidationError{fmt.Sprintf("offer repo id exceeds %d characters", MaxRepoIDLen)}
+		}
 	}
 	if idea.Visibility != VisibilityPublic && idea.Visibility != VisibilityPrivate {
 		return &ValidationError{`visibility must be "public" or "private"`}

@@ -52,6 +52,82 @@ func TestValidateTagLimits(t *testing.T) {
 	})
 }
 
+// TestValidateListCaps pins the ceilings on the per-idea lists that grow by
+// one entry per request (swipe-away history and offers): without them a
+// single idea file can be inflated until every listing that decodes it
+// stalls.
+func TestValidateListCaps(t *testing.T) {
+	repo := func(n int) string { return "org/repo" + strings.Repeat("0", n) }
+	manyPassed := make([]string, MaxPassedRepos+1)
+	for i := range manyPassed {
+		manyPassed[i] = "org/r"
+	}
+	manyOffers := make([]Offer, MaxOffers+1)
+	for i := range manyOffers {
+		manyOffers[i] = Offer{RepoID: "org/r", Status: OfferPending}
+	}
+	cases := []struct {
+		name   string
+		passed []string
+		offers []Offer
+		want   string
+	}{
+		{"too many passed repos", manyPassed, nil, "more than"},
+		{"long passed repo id", []string{repo(MaxRepoIDLen)}, nil, "passed repo id exceeds"},
+		{"too many offers", nil, manyOffers, "more than"},
+		{"long offer repo id", nil, []Offer{{RepoID: repo(MaxRepoIDLen), Status: OfferPending}}, "offer repo id exceeds"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			idea := validIdea("alice")
+			idea.PassedRepos = tc.passed
+			idea.Offers = tc.offers
+			err := Validate(idea)
+			var ve *ValidationError
+			if !errors.As(err, &ve) {
+				t.Fatalf("err = %v, want ValidationError", err)
+			}
+			if !strings.Contains(ve.Msg, tc.want) {
+				t.Fatalf("msg = %q, want substring %q", ve.Msg, tc.want)
+			}
+		})
+	}
+
+	t.Run("at the limits is valid", func(t *testing.T) {
+		idea := validIdea("alice")
+		idea.Status = StatusDraft
+		idea.PassedRepos = manyPassed[:MaxPassedRepos]
+		idea.Offers = manyOffers[:MaxOffers]
+		if err := Validate(idea); err != nil {
+			t.Fatalf("Validate at limits: %v", err)
+		}
+	})
+
+	t.Run("mutate refuses to grow past the cap", func(t *testing.T) {
+		s, _ := newTestStore(t)
+		idea := validIdea("alice")
+		idea.PassedRepos = append([]string(nil), manyPassed[:MaxPassedRepos]...)
+		if err := s.Create(idea); err != nil {
+			t.Fatalf("Create: %v", err)
+		}
+		_, err := s.Mutate(idea.ID, false, func(i *Idea) error {
+			i.PassedRepos = append(i.PassedRepos, "org/one-more")
+			return nil
+		})
+		var ve *ValidationError
+		if !errors.As(err, &ve) {
+			t.Fatalf("Mutate past cap: err = %v, want ValidationError", err)
+		}
+		got, err := s.Get(idea.ID)
+		if err != nil {
+			t.Fatalf("Get: %v", err)
+		}
+		if len(got.PassedRepos) != MaxPassedRepos {
+			t.Fatalf("persisted PassedRepos = %d, want unchanged %d", len(got.PassedRepos), MaxPassedRepos)
+		}
+	})
+}
+
 // TestNewOpenErrors covers the three ways New can fail before serving: the
 // data dir cannot be created, index.json cannot be read, index.json is
 // not valid JSON.

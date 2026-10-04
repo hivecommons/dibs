@@ -128,6 +128,17 @@ func TestIdeatorPassValidation(t *testing.T) {
 	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "repoID is required") {
 		t.Fatalf("empty repoID pass: status=%d body=%s", rec.Code, rec.Body.String())
 	}
+	// The list is persisted on the idea: anything that is not org/repo
+	// shaped is rejected rather than appended.
+	for _, bad := range []string{"not-a-repo", "a/b/c", strings.Repeat("x", 4096)} {
+		rec = do(t, mux, ident("bob"), "POST", "/api/ideas/"+idea.ID+"/pass", `{"repoID":"`+bad+`"}`)
+		if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "org/repo format") {
+			t.Fatalf("malformed repoID %q pass: status=%d body=%s", bad[:min(len(bad), 20)], rec.Code, rec.Body.String())
+		}
+	}
+	if got := decodeBody[store.Idea](t, do(t, mux, ident("bob"), "GET", "/api/ideas/"+idea.ID, "")).PassedRepos; len(got) != 0 {
+		t.Fatalf("PassedRepos after rejected passes = %+v, want empty", got)
+	}
 	for range 2 { // second pass must not duplicate the entry
 		rec = do(t, mux, ident("bob"), "POST", "/api/ideas/"+idea.ID+"/pass", `{"repoID":"kubestellar/dibs"}`)
 		if rec.Code != http.StatusOK {
