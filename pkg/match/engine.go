@@ -131,10 +131,15 @@ func (e *Engine) generateTLDR(ctx context.Context, idea *store.Idea) string {
 			"You summarize open-source project ideas. Reply with ONLY a punchy TLDR of at most two sentences, third person, no preamble.",
 			"Title: "+idea.Title+"\n\n"+truncate(idea.Body, maxPromptBody))
 		if err == nil && out != "" {
+			llmStats.record(opTLDR, outcomeLLMOK)
 			return truncate(out, MaxTLDRLen)
 		}
 		if err != nil {
+			llmStats.record(opTLDR, outcomeLLMError)
 			log.Printf("match: tldr llm failed, using fallback: %v", err)
+		} else {
+			llmStats.record(opTLDR, outcomeLLMEmpty)
+			log.Printf("match: tldr llm returned empty reply, using fallback")
 		}
 	}
 	return FallbackTLDR(idea)
@@ -248,9 +253,11 @@ func (e *Engine) score(ctx context.Context, idea *store.Idea, rp *registry.RepoP
 	m := store.Match{RepoID: rp.RepoID, SuggestedAt: time.Now().UTC(), RepoHash: hash}
 	if e.LLM != nil {
 		if score, reason, err := e.llmScore(ctx, idea, rp); err == nil {
+			llmStats.record(opScore, outcomeLLMOK)
 			m.Score, m.Reason, m.ByLLM = score, reason, true
 			return m
 		} else {
+			llmStats.record(opScore, outcomeForErr(err))
 			log.Printf("match: llm score failed for %s×%s, using fallback: %v", idea.ID, rp.RepoID, err)
 		}
 
@@ -303,8 +310,10 @@ func (e *Engine) cncfMatchesForIdea(ctx context.Context, idea *store.Idea, persi
 			if score, reason, err := e.llmScoreCNCF(ctx, idea, c.Project); err == nil {
 				// Blend with the BM25 baseline instead of replacing it — see
 				// blendScores.
+				llmStats.record(opCNCFScore, outcomeLLMOK)
 				m.Score, m.Reason, m.ByLLM = blendScores(m.Score, score), reason, true
 			} else {
+				llmStats.record(opCNCFScore, outcomeForErr(err))
 				log.Printf("match: cncf llm score failed for %s×%s, using BM25 fallback: %v", idea.ID, c.Project.RepoID, err)
 			}
 		}
@@ -586,16 +595,19 @@ func (e *Engine) llmScore(ctx context.Context, idea *store.Idea, rp *registry.Re
 	if err != nil {
 		return 0, "", err
 	}
+	if strings.TrimSpace(out) == "" {
+		return 0, "", errLLMEmpty
+	}
 	raw := llmJSONRe.FindString(out)
 	if raw == "" {
-		return 0, "", fmt.Errorf("match: no JSON in llm reply: %.80s", out)
+		return 0, "", fmt.Errorf("%w: no JSON in llm reply: %.80s", errLLMUnparsable, out)
 	}
 	var parsed struct {
 		Score  float64 `json:"score"`
 		Reason string  `json:"reason"`
 	}
 	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
-		return 0, "", err
+		return 0, "", fmt.Errorf("%w: %v", errLLMUnparsable, err)
 	}
 	if parsed.Score < 0 {
 		parsed.Score = 0
@@ -617,16 +629,19 @@ func (e *Engine) llmScoreCNCF(ctx context.Context, idea *store.Idea, p catalog.P
 	if err != nil {
 		return 0, "", err
 	}
+	if strings.TrimSpace(out) == "" {
+		return 0, "", errLLMEmpty
+	}
 	raw := llmJSONRe.FindString(out)
 	if raw == "" {
-		return 0, "", fmt.Errorf("match: no JSON in llm reply: %.80s", out)
+		return 0, "", fmt.Errorf("%w: no JSON in llm reply: %.80s", errLLMUnparsable, out)
 	}
 	var parsed struct {
 		Score  float64 `json:"score"`
 		Reason string  `json:"reason"`
 	}
 	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
-		return 0, "", err
+		return 0, "", fmt.Errorf("%w: %v", errLLMUnparsable, err)
 	}
 	if parsed.Score < 0 {
 		parsed.Score = 0

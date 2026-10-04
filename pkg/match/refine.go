@@ -51,11 +51,19 @@ func (e *Engine) Refine(ctx context.Context, title, body string, repo *registry.
 	}
 	out, err := e.LLM.Chat(ctx, system, user)
 	if err != nil {
+		llmStats.record(opRefine, outcomeLLMError)
 		log.Printf("match: refine llm failed, skipping refinement: %v", err)
 		return nil
 	}
 	draft := parseRefined(out)
-	if draft == nil {
+	if draft != nil {
+		llmStats.record(opRefine, outcomeLLMOK)
+	} else {
+		if strings.TrimSpace(out) == "" {
+			llmStats.record(opRefine, outcomeLLMEmpty)
+		} else {
+			llmStats.record(opRefine, outcomeUnparsable)
+		}
 		log.Printf("match: refine llm reply unparsable, skipping refinement: %.80s", out)
 	}
 	return draft
