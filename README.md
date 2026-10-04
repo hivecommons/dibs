@@ -60,6 +60,14 @@ deployments also work.
 | `pkg/match` | LLM idea↔repo scoring via litellm gateway, cached TLDRs, "✨ Embellish" draft refinement, deterministic keyword fallback |
 | `pkg/settle` | Settlement — prefilled GitHub new-issue URL the ideator files themselves (`ideated` label, 🐝 Dibs footer, URL-length budget) + issue-URL confirmation; legacy token mode. Ideas can target ANY GitHub repo: non-hive targets skip acceptance and their issues carry a "request a hive" growth CTA |
 | `pkg/notify` | In-app notification feed (bell): matches, offers, decisions, issues |
+| `pkg/mcpserver` | Streamable HTTP MCP endpoint exposing Dibs tools (see [Submit ideas from your agent](#submit-ideas-from-your-agent)) |
+| `pkg/intake` | Extracts idea text from uploaded documents or transcribed audio |
+| `pkg/game` | Gamification layer — points, levels, badges — recomputed from stored idea state, never a mutable counter |
+| `pkg/catalog` | Builds and searches a separate CNCF project catalog |
+| `pkg/history` | Backfills public GitHub activity for hive-managed repos; persists daily counts for repo index charts |
+| `pkg/indexformula` | Weighted composite behind the repo market index |
+| `pkg/news` | Turns recent merged PRs into repo news cards |
+| `pkg/deps` | Single place declaring the subsystem dependencies the HTTP server, JSON API, and MCP endpoint are wired with |
 
 ### Configuration
 
@@ -208,9 +216,9 @@ still call `prompts/get` directly.
 ## Development
 
 ```sh
-go build ./...
 go test -race -count=1 ./...
 go run ./cmd/dibs            # serves on :8080 at /
+go build -o dibs ./cmd/dibs  # builds the binary (plain `go build ./...` writes none)
 ./dibs --version             # prints the embedded commit
 ```
 
