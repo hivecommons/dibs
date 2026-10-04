@@ -95,6 +95,7 @@ func TestValidateListCaps(t *testing.T) {
 
 	t.Run("at the limits is valid", func(t *testing.T) {
 		idea := validIdea("alice")
+		idea.Status = StatusDraft
 		idea.PassedRepos = manyPassed[:MaxPassedRepos]
 		idea.Offers = manyOffers[:MaxOffers]
 		if err := Validate(idea); err != nil {
