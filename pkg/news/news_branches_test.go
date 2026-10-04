@@ -55,7 +55,7 @@ func TestStoreGetGuards(t *testing.T) {
 func TestNormalizeRepoNewsTrimsToMaxItemsNewestFirst(t *testing.T) {
 	items := make([]cachedItem, 0, MaxItems+6)
 	for i := 0; i < MaxItems+6; i++ {
-		items = append(items, cachedItem{Item: Item{Date: fmt.Sprintf("2026-07-%02d", i+1), TLDR: "x."}})
+		items = append(items, cachedItem{Item: Item{Date: fmt.Sprintf("2026-07-%02d", i+1), PRCount: 1, TLDR: "x."}})
 	}
 	rn := normalizeRepoNews(repoNews{RepoID: "org/repo", Items: items})
 	if len(rn.Items) != MaxItems {
