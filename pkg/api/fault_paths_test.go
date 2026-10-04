@@ -50,6 +50,13 @@ func (f *faultStore) ListPublic() ([]*store.Idea, error) {
 	return f.IdeaStore.ListPublic()
 }
 
+func (f *faultStore) ListSettled() ([]*store.Idea, error) {
+	if f.fail["ListSettled"] {
+		return nil, errBoom
+	}
+	return f.IdeaStore.ListSettled()
+}
+
 func (f *faultStore) ListOfferedTo(repoIDs []string) ([]*store.Idea, error) {
 	if f.fail["ListOfferedTo"] {
 		return nil, errBoom
@@ -247,9 +254,21 @@ func TestDecidePassRegistryFailure(t *testing.T) {
 		`{"ideaID":"`+idea.ID+`","decision":"pass"}`), "pass")
 }
 
-type faultRegistry struct{ RepoRegistry }
+// faultRegistry wraps a RepoRegistry: AddPassedIdea always fails, and Get
+// fails with getErr when set (nil keeps the real lookup).
+type faultRegistry struct {
+	RepoRegistry
+	getErr error
+}
 
 func (r *faultRegistry) AddPassedIdea(repoID, actor, ideaID string) error { return errBoom }
+
+func (r *faultRegistry) Get(repoID string) (*registry.RepoProfile, error) {
+	if r.getErr != nil {
+		return nil, r.getErr
+	}
+	return r.RepoRegistry.Get(repoID)
+}
 
 // TestIdeaMatchesEngineFailures walks each engine failure in GET
 // /api/ideas/{id}/matches: TLDR, hive matches, CNCF matches.
