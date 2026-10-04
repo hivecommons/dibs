@@ -255,6 +255,13 @@ func (a *API) handleIdeatorPass(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "repoID is required")
 		return
 	}
+	// Same shape rule offerExternal applies: the list is persisted on the
+	// idea, so an arbitrary string here is an arbitrary string in every
+	// listing that decodes the idea file.
+	if err := settle.ValidateRepoID(in.RepoID); err != nil {
+		writeError(w, http.StatusBadRequest, "repoID must be in org/repo format")
+		return
+	}
 	updated, err := a.Store.Mutate(idea.ID, false, func(i *store.Idea) error {
 		if !i.HasPassed(in.RepoID) {
 			i.PassedRepos = append(i.PassedRepos, in.RepoID)
