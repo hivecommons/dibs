@@ -600,14 +600,14 @@ func (e *Engine) llmScore(ctx context.Context, idea *store.Idea, rp *registry.Re
 	}
 	raw := llmJSONRe.FindString(out)
 	if raw == "" {
-		return 0, "", fmt.Errorf("%w: no JSON in llm reply: %.80s", errLLMUnparsable, out)
+		return 0, "", fmt.Errorf("match: no JSON in llm reply: %.80s (%w)", out, errLLMUnparsable)
 	}
 	var parsed struct {
 		Score  float64 `json:"score"`
 		Reason string  `json:"reason"`
 	}
 	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
-		return 0, "", fmt.Errorf("%w: %v", errLLMUnparsable, err)
+		return 0, "", fmt.Errorf("%w: %w", errLLMUnparsable, err)
 	}
 	if parsed.Score < 0 {
 		parsed.Score = 0
@@ -634,14 +634,14 @@ func (e *Engine) llmScoreCNCF(ctx context.Context, idea *store.Idea, p catalog.P
 	}
 	raw := llmJSONRe.FindString(out)
 	if raw == "" {
-		return 0, "", fmt.Errorf("%w: no JSON in llm reply: %.80s", errLLMUnparsable, out)
+		return 0, "", fmt.Errorf("match: no JSON in llm reply: %.80s (%w)", out, errLLMUnparsable)
 	}
 	var parsed struct {
 		Score  float64 `json:"score"`
 		Reason string  `json:"reason"`
 	}
 	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
-		return 0, "", fmt.Errorf("%w: %v", errLLMUnparsable, err)
+		return 0, "", fmt.Errorf("%w: %w", errLLMUnparsable, err)
 	}
 	if parsed.Score < 0 {
 		parsed.Score = 0
