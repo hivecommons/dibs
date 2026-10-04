@@ -228,11 +228,22 @@ func (m *requestMetrics) wrap(base string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rec := &statusRecorder{ResponseWriter: w}
 		start := time.Now()
+		// Deferred so a panicking handler (recovered by net/http) is still
+		// counted, as a 5xx, instead of silently vanishing from the SLO data.
+		defer func() {
+			status := rec.status
+			if p := recover(); p != nil {
+				if !rec.written {
+					status = http.StatusInternalServerError
+				}
+				m.record(methodLabel(r.Method), routeGroup(base, r.URL.Path), status, time.Since(start))
+				panic(p)
+			}
+			if !rec.written {
+				status = http.StatusOK
+			}
+			m.record(methodLabel(r.Method), routeGroup(base, r.URL.Path), status, time.Since(start))
+		}()
 		next.ServeHTTP(rec, r)
-		status := rec.status
-		if !rec.written {
-			status = http.StatusOK
-		}
-		m.record(methodLabel(r.Method), routeGroup(base, r.URL.Path), status, time.Since(start))
 	})
 }
