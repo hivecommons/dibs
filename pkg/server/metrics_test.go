@@ -185,3 +185,20 @@ func TestStatusRecorderUnwrapPreservesFlush(t *testing.T) {
 		t.Fatal("underlying recorder was not flushed")
 	}
 }
+
+func TestWrapRecordsPanickingHandlerAs5xx(t *testing.T) {
+	m := newRequestMetrics()
+	h := m.wrap("", http.HandlerFunc(func(http.ResponseWriter, *http.Request) { panic("boom") }))
+	func() {
+		defer func() {
+			if recover() == nil {
+				t.Fatal("expected panic to propagate")
+			}
+		}()
+		h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/api/me", nil))
+	}()
+	got := m.snapshotAndReset()
+	if len(got) != 1 || got[0].StatusClass != "5xx" || got[0].Count != 1 {
+		t.Fatalf("unexpected samples: %+v", got)
+	}
+}
