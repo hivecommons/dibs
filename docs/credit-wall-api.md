@@ -50,7 +50,7 @@ API errors have shape `{"error":"message"}`. Relevant statuses are:
 | 401 | Missing/invalid session on a protected route |
 | 403 | Not the author/repo owner, or CSRF rejection |
 | 404 | Missing idea/repo, or a private idea hidden from this caller |
-| 413 | Request body exceeds the input limit (1 MiB) |
+| 413 | Request body exceeds the input limit (128 KiB) |
 | 500 | Store/internal failure |
 | 502 | Hub authentication backend unavailable |
 
