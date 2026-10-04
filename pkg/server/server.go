@@ -19,6 +19,7 @@ import (
 	"github.com/hivecommons/dibs/pkg/api"
 	"github.com/hivecommons/dibs/pkg/auth"
 	"github.com/hivecommons/dibs/pkg/deps"
+	"github.com/hivecommons/dibs/pkg/match"
 	"github.com/hivecommons/dibs/pkg/mcpserver"
 )
 
@@ -158,5 +159,6 @@ func New(cfg Config) http.Handler {
 	// SDK is added until a backend is chosen.
 	reqMetrics := newRequestMetrics()
 	go reqMetrics.logPeriodically(metricsLogInterval)
+	go match.LogLLMOutcomesPeriodically(metricsLogInterval)
 	return reqMetrics.wrap(base, root)
 }
