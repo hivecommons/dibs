@@ -1,4 +1,4 @@
-// Wave-3 API: the public credit wall and ideator profile stats.
+// Credits API: the public credit wall and ideator profile stats.
 //
 // Credit-wall positioning: ideators are a first-class contributor class —
 // the all-contributors spec has had a 💡 "ideas" emoji since 2016 and the
