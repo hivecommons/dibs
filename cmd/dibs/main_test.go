@@ -2,12 +2,14 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestEnvOr(t *testing.T) {
@@ -153,5 +155,28 @@ func TestRunBadSeedFile(t *testing.T) {
 	t.Setenv("REPOS_SEED_FILE", filepath.Join(t.TempDir(), "missing.json"))
 	if err := run(nil, io.Discard, io.Discard, testServe(nil, nil)); err == nil {
 		t.Fatal("expected error for missing seed file")
+	}
+}
+
+func TestServeUntilDrainsOnCancel(t *testing.T) {
+	srv := &http.Server{Addr: "127.0.0.1:0", Handler: http.NewServeMux()}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- serveUntil(ctx, srv, time.Second) }()
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("serveUntil: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("serveUntil did not return after cancel")
+	}
+}
+
+func TestServeUntilListenError(t *testing.T) {
+	srv := &http.Server{Addr: "bad-address-no-port"}
+	if err := serveUntil(context.Background(), srv, time.Second); err == nil {
+		t.Fatal("expected listen error")
 	}
 }
