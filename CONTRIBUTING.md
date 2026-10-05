@@ -34,3 +34,8 @@ unsigned commits will not pass CI.
 - Every HTTP route must work behind the `DIBS_BASE_PATH` prefix.
 - Private ideas must never appear in any listing other than the author's own —
   add a test if you touch listing code.
+
+## Security
+
+Do not file public issues for security vulnerabilities. See
+[SECURITY.md](SECURITY.md) for how to report them privately.
