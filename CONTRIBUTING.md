@@ -23,7 +23,9 @@ unsigned commits will not pass CI.
    are green. CI also requires:
    - `gofmt -l .` prints nothing.
    - `go mod tidy` leaves `go.mod` and `go.sum` unchanged.
-   - Total coverage (`go tool cover -func=coverage.out`) is at least 90%.
+   - Total coverage (`go tool cover -func=coverage.out`) is at least 93%.
+     The floor is enforced by the `Coverage summary` step in
+     `.github/workflows/ci.yml`; when it is ratcheted, update this line too.
    - The `go` version in `go.mod` matches the `golang:` tag in the `Dockerfile`.
 4. Open a PR with a clear description. Prow manages approvals via
    `/lgtm` and `/approve`.
