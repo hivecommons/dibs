@@ -276,10 +276,10 @@ thresholds. Rules and derivation are implemented in [`pkg/game`](../pkg/game/gam
 
 ## Implementation and regression references
 
-- Public wall/rewards: [`pkg/api/wave3.go`](../pkg/api/wave3.go),
-  [`pkg/server/wave3_test.go`](../pkg/server/wave3_test.go).
+- Public wall/rewards: [`pkg/api/credits.go`](../pkg/api/credits.go),
+  [`pkg/server/credits_test.go`](../pkg/server/credits_test.go).
 - Settlement writes: [`pkg/api/settlement.go`](../pkg/api/settlement.go),
-  [`pkg/api/wave2.go`](../pkg/api/wave2.go),
+  [`pkg/api/offers.go`](../pkg/api/offers.go),
   [`pkg/server/settlement_test.go`](../pkg/server/settlement_test.go).
 - Access and prefix routing: [`pkg/api/api.go`](../pkg/api/api.go),
   [`pkg/server/server.go`](../pkg/server/server.go).

@@ -1,4 +1,4 @@
-// Wave-2 API: matching, offers, the repo-side feed, decisions, and the
+// Offers API: matching, offers, the repo-side feed, decisions, and the
 // notification bell. Settlement itself moved to the matchmaker URL flow in
 // settlement.go; accept only records the acceptance (plus the demoted
 // legacy token-based settlement).
@@ -25,8 +25,8 @@ const (
 	maxIdeaCNCFMatches = 2
 )
 
-// registerWave2 mounts the matching/settlement/notification routes.
-func (a *API) registerWave2(mux *http.ServeMux, basePath string) {
+// registerOfferRoutes mounts the matching/settlement/notification routes.
+func (a *API) registerOfferRoutes(mux *http.ServeMux, basePath string) {
 	mux.HandleFunc("GET "+basePath+"/api/ideas/{id}/matches", a.handleIdeaMatches)
 	mux.HandleFunc("POST "+basePath+"/api/ideas/{id}/matches/seen", a.handleIdeaMatchesSeen)
 	mux.HandleFunc("POST "+basePath+"/api/ideas/{id}/offer", a.handleOffer)

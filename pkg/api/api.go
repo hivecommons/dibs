@@ -66,7 +66,7 @@ func (a *API) Register(mux *http.ServeMux, basePath string) {
 	mux.HandleFunc("DELETE "+basePath+"/api/ideas/{id}", a.handleDeleteIdea)
 	mux.HandleFunc("GET "+basePath+"/api/repos", a.handleListRepos)
 	mux.HandleFunc("PUT "+basePath+"/api/repos/{org}/{repo}", a.handleUpdateRepo)
-	a.registerWave2(mux, basePath)
+	a.registerOfferRoutes(mux, basePath)
 	a.registerSettlement(mux, basePath)
 }
 
