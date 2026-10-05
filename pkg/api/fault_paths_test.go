@@ -88,6 +88,13 @@ func (f *faultStore) Mutate(id string, touch bool, fn func(*store.Idea) error) (
 	return f.IdeaStore.Mutate(id, touch, fn)
 }
 
+func (f *faultStore) Transition(id, to string) (*store.Idea, error) {
+	if f.fail["Transition"] {
+		return nil, errBoom
+	}
+	return f.IdeaStore.Transition(id, to)
+}
+
 // faultMatcher wraps a Matcher and fails the configured calls.
 type faultMatcher struct {
 	Matcher
