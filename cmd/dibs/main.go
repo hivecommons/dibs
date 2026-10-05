@@ -11,7 +11,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/hivecommons/dibs/pkg/api"
@@ -42,6 +44,9 @@ const (
 	// registrySyncInterval is how often the hub's repo list is re-pulled.
 	registrySyncInterval = 5 * time.Minute
 	hubSyncTimeout       = 30 * time.Second
+	// shutdownTimeout stays under the Kubernetes default 30s termination
+	// grace period.
+	shutdownTimeout = 20 * time.Second
 )
 
 // envOr reads key, honoring the legacy IDEATE_-prefixed name (the product's
@@ -67,9 +72,37 @@ func displayBasePath(base string) string {
 }
 
 func main() {
-	if err := run(os.Args[1:], os.Stdout, os.Stderr, func(srv *http.Server) error { return srv.ListenAndServe() }); err != nil {
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
+	defer stop()
+	err := run(os.Args[1:], os.Stdout, os.Stderr, func(srv *http.Server) error {
+		return serveUntil(ctx, srv, shutdownTimeout)
+	})
+	if err != nil {
+		stop()
 		log.Fatal(err)
 	}
+}
+
+// serveUntil runs srv until ctx is cancelled (SIGTERM during a rollout), then
+// drains in-flight requests for up to timeout so a replaced pod does not cut
+// off requests or a store write midway.
+func serveUntil(ctx context.Context, srv *http.Server, timeout time.Duration) error {
+	errc := make(chan error, 1)
+	go func() { errc <- srv.ListenAndServe() }()
+	select {
+	case err := <-errc:
+		return err
+	case <-ctx.Done():
+	}
+	sctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	if err := srv.Shutdown(sctx); err != nil {
+		return err
+	}
+	if err := <-errc; err != nil && err != http.ErrServerClosed {
+		return err
+	}
+	return nil
 }
 
 // run is main without the process exit: serve is injected so tests can
