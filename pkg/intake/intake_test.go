@@ -10,6 +10,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -230,4 +231,76 @@ func generatedPDF(text string) []byte {
 	}
 	fmt.Fprintf(&b, "trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n", len(objects)+1, xref)
 	return b.Bytes()
+}
+
+// TestExtractDOCXBoundsDecompressedText pins the decompression-bomb guard:
+// a tiny DOCX whose document.xml is one deflate-packed text node far
+// larger than maxDOCXXMLBytes must extract without inflating the whole
+// node into memory. Without the LimitedReader this allocates the full
+// decompressed size (a 300 KiB upload reached 1.3 GiB of heap).
+func TestExtractDOCXBoundsDecompressedText(t *testing.T) {
+	const textSize = 16 * maxDOCXXMLBytes
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	w, err := zw.Create("word/document.xml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = io.WriteString(w, `<w:document><w:body><w:p><w:r><w:t>`)
+	chunk := []byte(strings.Repeat("A", 1<<20))
+	for written := 0; written < textSize; written += len(chunk) {
+		if _, err := w.Write(chunk); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, _ = io.WriteString(w, `</w:t></w:r></w:p></w:body></w:document>`)
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if buf.Len() > 1<<20 {
+		t.Fatalf("fixture should compress to well under 1 MiB, got %d bytes", buf.Len())
+	}
+
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	got, err := ExtractDOCX(buf.Bytes())
+	runtime.ReadMemStats(&after)
+	if err != nil {
+		t.Fatalf("ExtractDOCX: %v", err)
+	}
+	if len(got) > extractRunesLimit {
+		t.Fatalf("returned %d runes, want <= %d", len(got), extractRunesLimit)
+	}
+	// The budget plus decoder buffer growth lands around 3x the budget
+	// (48 MiB observed); the unbounded read would allocate the full
+	// 256 MiB node.
+	if allocated := after.TotalAlloc - before.TotalAlloc; allocated > 6*maxDOCXXMLBytes {
+		t.Fatalf("ExtractDOCX allocated %d bytes for a %d-byte upload; decompressed read is unbounded", allocated, buf.Len())
+	}
+}
+
+// TestExtractDOCXBudgetKeepsCollectedText checks the budget path returns the
+// text gathered before the cut instead of a decode error.
+func TestExtractDOCXBudgetKeepsCollectedText(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	w, err := zw.Create("word/document.xml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = io.WriteString(w, `<w:document><w:body><w:p><w:r><w:t>kept paragraph</w:t></w:r></w:p><w:p><w:r><w:t>`)
+	_, _ = io.WriteString(w, strings.Repeat("B", maxDOCXXMLBytes+1024))
+	_, _ = io.WriteString(w, `</w:t></w:r></w:p></w:body></w:document>`)
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ExtractDOCX(buf.Bytes())
+	if err != nil {
+		t.Fatalf("ExtractDOCX: %v", err)
+	}
+	if !strings.HasPrefix(got, "kept paragraph") {
+		t.Fatalf("budget path dropped collected text: %q", got)
+	}
 }

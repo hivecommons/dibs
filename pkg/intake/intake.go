@@ -29,7 +29,11 @@ const (
 	DefaultMaxUploadMB = 25
 	MaxReturnedRunes   = 20000
 	extractRunesLimit  = MaxReturnedRunes + 1
-	sttTimeout         = 60 * time.Second
+	// maxDOCXXMLBytes caps the DECOMPRESSED word/document.xml bytes fed to
+	// the XML decoder (see ExtractDOCX). Far above any real document that
+	// yields MaxReturnedRunes of text, far below the pod memory limit.
+	maxDOCXXMLBytes = 16 << 20
+	sttTimeout      = 60 * time.Second
 )
 
 var (
@@ -204,7 +208,15 @@ func ExtractDOCX(data []byte) (string, error) {
 			return "", err
 		}
 		defer rc.Close()
-		dec := xml.NewDecoder(rc)
+		// The rune cap below bounds what is KEPT, not what the decoder must
+		// hold: xml.Decoder.Token materializes a whole CharData node before
+		// returning it, and the zip entry's decompressed size is unchecked,
+		// so one deflate-packed text node would inflate ~1000:1 into the
+		// heap before the cap is ever consulted. Budget the decompressed
+		// bytes instead; the decoder then sees EOF at the budget and the
+		// text gathered so far is returned, as with the rune cap.
+		lr := &io.LimitedReader{R: rc, N: maxDOCXXMLBytes}
+		dec := xml.NewDecoder(lr)
 		var b strings.Builder
 		runes := 0
 		for {
@@ -213,6 +225,9 @@ func ExtractDOCX(data []byte) (string, error) {
 				break
 			}
 			if err != nil {
+				if lr.N <= 0 {
+					return b.String(), nil
+				}
 				return "", err
 			}
 			switch t := tok.(type) {
