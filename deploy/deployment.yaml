@@ -22,6 +22,9 @@ spec:
       labels:
         app: dibs
     spec:
+      # Must stay above shutdownTimeout (20s, cmd/dibs/main.go) so SIGTERM
+      # drains in-flight requests before the kubelet sends SIGKILL.
+      terminationGracePeriodSeconds: 30
       securityContext:
         runAsNonRoot: true
         runAsUser: 65532
