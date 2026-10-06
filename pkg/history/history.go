@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hivecommons/dibs/pkg/fsutil"
 	"github.com/hivecommons/dibs/pkg/indexformula"
 	"github.com/hivecommons/dibs/pkg/registry"
 	"github.com/hivecommons/dibs/pkg/settle"
@@ -140,31 +141,8 @@ func (s *Store) persistLocked() error {
 		histories = append(histories, h)
 	}
 	sort.Slice(histories, func(i, j int) bool { return histories[i].RepoID < histories[j].RepoID })
-	return atomicWriteJSON(s.path, histories)
-}
-
-func atomicWriteJSON(path string, v any) error {
-	data, err := json.MarshalIndent(v, "", "  ")
-	if err != nil {
-		return fmt.Errorf("history: marshaling: %w", err)
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".tmp-history-*")
-	if err != nil {
-		return fmt.Errorf("history: creating temp file: %w", err)
-	}
-	tmpName := tmp.Name()
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		os.Remove(tmpName)
-		return fmt.Errorf("history: writing temp file: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		os.Remove(tmpName)
-		return fmt.Errorf("history: closing temp file: %w", err)
-	}
-	if err := os.Rename(tmpName, path); err != nil {
-		os.Remove(tmpName)
-		return fmt.Errorf("history: renaming temp file: %w", err)
+	if err := fsutil.AtomicWriteJSON(s.path, histories); err != nil {
+		return fmt.Errorf("history: %w", err)
 	}
 	return nil
 }
