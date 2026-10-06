@@ -5,9 +5,11 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -147,6 +149,84 @@ func TestRunStoreOpenFailure(t *testing.T) {
 	}
 	if called {
 		t.Fatal("server must not start after a store failure")
+	}
+}
+
+// TestRunStoreOpenFailures corrupts each persisted file in turn so every
+// store constructor after the idea store fails, and asserts run surfaces the
+// matching "opening ..." context instead of starting the server.
+func TestRunStoreOpenFailures(t *testing.T) {
+	cases := []struct {
+		file string
+		want string
+	}{
+		{"repos.json", "opening repo registry"},
+		{"repo-history.json", "opening repo history store"},
+		{"repo-news.json", "opening repo news store"},
+		{"cncf-catalog.json", "opening CNCF catalog"},
+		{"notifications.json", "opening notification store"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.file, func(t *testing.T) {
+			dataDir := t.TempDir()
+			setupEnv(t, dataDir)
+			if err := os.WriteFile(filepath.Join(dataDir, tc.file), []byte("{not json"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			called := false
+			err := run(nil, io.Discard, io.Discard, func(*http.Server) error { called = true; return nil })
+			if err == nil {
+				t.Fatalf("expected error for corrupt %s", tc.file)
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("err = %q, want it to mention %q", err, tc.want)
+			}
+			if called {
+				t.Fatal("server must not start after a store failure")
+			}
+		})
+	}
+}
+
+// TestRunOptionalIntegrationsLogged exercises the startup arms taken when the
+// LLM gateway, the legacy settlement token, and a repo seed file are all
+// configured, and checks each announces itself in the startup log.
+func TestRunOptionalIntegrationsLogged(t *testing.T) {
+	dataDir := t.TempDir()
+	setupEnv(t, dataDir)
+	t.Setenv("DIBS_LLM_BASE_URL", "http://127.0.0.1:1/v1/")
+	t.Setenv("DIBS_LLM_MODEL", "test-model")
+	t.Setenv("DIBS_GITHUB_TOKEN", "ghp_test")
+	seed := filepath.Join(t.TempDir(), "seed.json")
+	seedBody := `[{"repoID":"example/repo","hiveID":"h1","owner":"someone","topics":["go"],"acceptingIdeas":true}]`
+	if err := os.WriteFile(seed, []byte(seedBody), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("REPOS_SEED_FILE", seed)
+
+	var logs bytes.Buffer
+	prev := log.Writer()
+	log.SetOutput(&logs)
+	t.Cleanup(func() { log.SetOutput(prev) })
+
+	var srv *http.Server
+	if err := run(nil, io.Discard, io.Discard, testServe(&srv, nil)); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if srv == nil || srv.Handler == nil {
+		t.Fatal("server was not built")
+	}
+	for _, want := range []string{
+		"match engine: llm gateway http://127.0.0.1:1/v1 (model test-model)",
+		"settlement: DIBS_GITHUB_TOKEN set — LEGACY server-side issue creation enabled",
+		"seeded repo registry from " + seed,
+	} {
+		if !strings.Contains(logs.String(), want) {
+			t.Errorf("startup log missing %q:\n%s", want, logs.String())
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dataDir, "repos.json")); err != nil {
+		t.Fatalf("seeded registry was not persisted: %v", err)
 	}
 }
 
