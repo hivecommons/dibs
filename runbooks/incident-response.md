@@ -35,5 +35,6 @@ each action taken with its time. Update it whenever the state changes.
 
 - Verify `/healthz` and `/readyz` are `ok` and the 5xx `metrics:` lines have
   stopped.
+- If data was lost or corrupted, follow [data-recovery.md](data-recovery.md).
 - Open a postmortem from [postmortem-template.md](postmortem-template.md) for
   any user-visible outage or data-affecting event.
