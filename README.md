@@ -233,6 +233,23 @@ go build -o dibs ./cmd/dibs  # builds the binary (plain `go build ./...` writes 
 ./dibs --version             # prints the embedded commit
 ```
 
+### Running locally with sign-in
+
+Every route except the [public surface](#public-surface-no-sign-in-required)
+needs a hive hub session. For local work, [`hack/fakehub`](hack/fakehub/main.go)
+is a dev-only stand-in for the hub: it accepts any non-empty `hive_hub_user`
+cookie as that user and serves a small static repo list. Run it in one
+terminal, then point Dibs at it in another:
+
+```sh
+go run ./hack/fakehub        # listens on :9999 (override with FAKEHUB_ADDR)
+HUB_URL=http://127.0.0.1:9999 DATA_DIR=./data go run ./cmd/dibs
+curl -H 'Cookie: hive_hub_user=dev' http://127.0.0.1:8080/api/me
+```
+
+To load richer repo profiles than fakehub's two entries, also set
+`REPOS_SEED_FILE=hack/seed-repos.example.json`.
+
 ## License
 
 Apache-2.0 — see [LICENSE](LICENSE).
