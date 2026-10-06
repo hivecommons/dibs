@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/hivecommons/dibs/pkg/fsutil"
 )
 
 // Visibility values.
@@ -394,37 +396,9 @@ func newID() (string, error) {
 	return string(b), nil
 }
 
-// atomicWriteJSON writes v to path via temp file + rename so a crash never
-// leaves a torn file.
-func atomicWriteJSON(path string, v any) error {
-	data, err := json.MarshalIndent(v, "", "  ")
-	if err != nil {
-		return fmt.Errorf("store: marshaling: %w", err)
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".tmp-*")
-	if err != nil {
-		return fmt.Errorf("store: creating temp file: %w", err)
-	}
-	tmpName := tmp.Name()
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		os.Remove(tmpName)
-		return fmt.Errorf("store: writing temp file: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		os.Remove(tmpName)
-		return fmt.Errorf("store: closing temp file: %w", err)
-	}
-	if err := os.Rename(tmpName, path); err != nil {
-		os.Remove(tmpName)
-		return fmt.Errorf("store: renaming temp file: %w", err)
-	}
-	return nil
-}
-
 // persistLocked writes the idea file and index. Caller holds s.mu.
 func (s *Store) persistLocked(idea *Idea) error {
-	if err := atomicWriteJSON(s.ideaPath(idea.ID), idea); err != nil {
+	if err := writeJSON(s.ideaPath(idea.ID), idea); err != nil {
 		return err
 	}
 	s.index[idea.ID] = indexEntry{ID: idea.ID, Author: idea.Author, Visibility: idea.Visibility, Symbol: idea.Symbol, UpdatedAt: idea.UpdatedAt}
@@ -437,7 +411,7 @@ func (s *Store) writeIndexLocked() error {
 		entries = append(entries, e)
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].ID < entries[j].ID })
-	return atomicWriteJSON(s.indexPath(), entries)
+	return writeJSON(s.indexPath(), entries)
 }
 
 // Create validates and persists a new idea, filling ID/timestamps.
@@ -679,4 +653,11 @@ func (s *Store) list(keep func(indexEntry) bool) ([]*Idea, error) {
 		out = []*Idea{}
 	}
 	return out, nil
+}
+
+func writeJSON(path string, v any) error {
+	if err := fsutil.AtomicWriteJSON(path, v, ".tmp-*"); err != nil {
+		return fmt.Errorf("store: %w", err)
+	}
+	return nil
 }

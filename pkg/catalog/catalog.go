@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -21,6 +20,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/hivecommons/dibs/pkg/fsutil"
 )
 
 const (
@@ -173,7 +174,7 @@ func (s *Store) Refresh(ctx context.Context) error {
 	defer s.mu.Unlock()
 	s.projects = projects
 	s.scorer = NewBM25(projects)
-	return atomicWriteJSON(s.path, projects)
+	return writeJSON(s.path, projects)
 }
 
 func (s *Store) setProjects(projects []Project) {
@@ -195,32 +196,6 @@ func (s *Store) now() time.Time {
 		return s.Now()
 	}
 	return time.Now().UTC()
-}
-
-func atomicWriteJSON(path string, v any) error {
-	data, err := json.MarshalIndent(v, "", "  ")
-	if err != nil {
-		return fmt.Errorf("catalog: marshaling: %w", err)
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".tmp-cncf-catalog-*")
-	if err != nil {
-		return fmt.Errorf("catalog: creating temp file: %w", err)
-	}
-	tmpName := tmp.Name()
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		os.Remove(tmpName)
-		return fmt.Errorf("catalog: writing temp file: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		os.Remove(tmpName)
-		return fmt.Errorf("catalog: closing temp file: %w", err)
-	}
-	if err := os.Rename(tmpName, path); err != nil {
-		os.Remove(tmpName)
-		return fmt.Errorf("catalog: renaming temp file: %w", err)
-	}
-	return nil
 }
 
 // FetchLandscape downloads and parses CNCF landscape.yml.
@@ -546,4 +521,11 @@ func (b *BM25) TopK(query string, k int) []Candidate {
 		out = out[:k]
 	}
 	return out
+}
+
+func writeJSON(path string, v any) error {
+	if err := fsutil.AtomicWriteJSON(path, v, ".tmp-cncf-catalog-*"); err != nil {
+		return fmt.Errorf("catalog: %w", err)
+	}
+	return nil
 }
