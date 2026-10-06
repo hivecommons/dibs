@@ -23,6 +23,14 @@ func main() {
 	if addr == "" {
 		addr = ":9999"
 	}
+	log.Printf("fakehub listening on %s", addr)
+	log.Fatal(http.ListenAndServe(addr, newHandler()))
+}
+
+// newHandler builds the fakehub mux. It is split from main so tests can
+// drive it through httptest against the real pkg/auth and pkg/registry hub
+// clients, keeping fakehub's response shapes in step with what Dibs decodes.
+func newHandler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/saas/whoami", func(w http.ResponseWriter, r *http.Request) {
 		c, err := r.Cookie("hive_hub_user")
@@ -45,6 +53,5 @@ func main() {
 			{"repoID": "kubestellar/dibs", "hiveID": "hive-ks", "owner": "dev", "description": "A marketplace of ideas"},
 		})
 	})
-	log.Printf("fakehub listening on %s", addr)
-	log.Fatal(http.ListenAndServe(addr, mux))
+	return mux
 }
