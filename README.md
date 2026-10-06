@@ -55,6 +55,7 @@ deployments also work.
 | `pkg/server` | HTTP server, base-path routing, embedded UI |
 | `pkg/auth` | Auth bridge — validates the hive hub session cookie against the hub |
 | `pkg/store` | Idea model + JSON file store (atomic writes, no external DB), offer/settlement state machine |
+| `pkg/fsutil` | Shared atomic JSON persistence helper (temp file + rename, mode 0600) used by the file stores |
 | `pkg/api` | Idea CRUD + matching/offer/feed/decide/notification API (author-scoped, private ideas never leak) |
 | `pkg/registry` | Hive-managed repo profiles + "accepting ideas" opt-in |
 | `pkg/match` | LLM idea↔repo scoring via litellm gateway, cached TLDRs, "✨ Embellish" draft refinement, deterministic keyword fallback |
