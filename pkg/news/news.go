@@ -18,6 +18,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/hivecommons/dibs/pkg/fsutil"
 	"github.com/hivecommons/dibs/pkg/history"
 	"github.com/hivecommons/dibs/pkg/match"
 	"github.com/hivecommons/dibs/pkg/registry"
@@ -127,31 +128,8 @@ func (s *Store) persistLocked() error {
 		repos = append(repos, rn)
 	}
 	sort.Slice(repos, func(i, j int) bool { return repos[i].RepoID < repos[j].RepoID })
-	return atomicWriteJSON(s.path, repos)
-}
-
-func atomicWriteJSON(path string, v any) error {
-	data, err := json.MarshalIndent(v, "", "  ")
-	if err != nil {
-		return fmt.Errorf("news: marshaling: %w", err)
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".tmp-news-*")
-	if err != nil {
-		return fmt.Errorf("news: creating temp file: %w", err)
-	}
-	tmpName := tmp.Name()
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		os.Remove(tmpName)
-		return fmt.Errorf("news: writing temp file: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		os.Remove(tmpName)
-		return fmt.Errorf("news: closing temp file: %w", err)
-	}
-	if err := os.Rename(tmpName, path); err != nil {
-		os.Remove(tmpName)
-		return fmt.Errorf("news: renaming temp file: %w", err)
+	if err := fsutil.AtomicWriteJSON(s.path, repos); err != nil {
+		return fmt.Errorf("news: %w", err)
 	}
 	return nil
 }

@@ -1,34 +1,22 @@
 package news
 
 import (
-	"math"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
-func TestAtomicWriteJSONErrors(t *testing.T) {
-	t.Run("marshal error", func(t *testing.T) {
-		err := atomicWriteJSON(filepath.Join(t.TempDir(), "x.json"), math.NaN())
-		if err == nil || !strings.Contains(err.Error(), "marshaling") {
-			t.Fatalf("err = %v, want marshaling error", err)
-		}
-	})
-	t.Run("temp file in missing dir", func(t *testing.T) {
-		err := atomicWriteJSON(filepath.Join(t.TempDir(), "missing", "x.json"), 1)
-		if err == nil || !strings.Contains(err.Error(), "creating temp file") {
-			t.Fatalf("err = %v, want creating temp file error", err)
-		}
-	})
-	t.Run("rename onto directory", func(t *testing.T) {
-		dest := filepath.Join(t.TempDir(), "x.json")
-		if err := os.MkdirAll(filepath.Join(dest, "sub"), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		err := atomicWriteJSON(dest, 1)
-		if err == nil || !strings.Contains(err.Error(), "renaming temp file") {
-			t.Fatalf("err = %v, want renaming temp file error", err)
-		}
-	})
+func TestUpsertPersistError(t *testing.T) {
+	s, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.path = filepath.Join(t.TempDir(), "missing", "repo-news.json")
+	err = s.upsert("org/repo", nil, time.Now())
+	if err == nil || !strings.HasPrefix(err.Error(), "news: creating temp file:") || !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("err = %v, want wrapped news persistence error", err)
+	}
 }
