@@ -310,11 +310,28 @@ func (r *Registry) LoadSeedFile(path string) error {
 	return r.persistLocked()
 }
 
-// Get returns a copy of one profile.
+// lookupLocked resolves repoID to a stored profile. GitHub treats
+// "org/name" case-insensitively, so an exact-key miss falls back to a
+// case-folded match; the returned profile carries the canonical RepoID.
+// Caller holds r.mu.
+func (r *Registry) lookupLocked(repoID string) (*RepoProfile, bool) {
+	if rp, ok := r.repos[repoID]; ok {
+		return rp, true
+	}
+	for id, rp := range r.repos {
+		if strings.EqualFold(id, repoID) {
+			return rp, true
+		}
+	}
+	return nil, false
+}
+
+// Get returns a copy of one profile. repoID is matched case-insensitively;
+// the copy's RepoID is the registered spelling.
 func (r *Registry) Get(repoID string) (*RepoProfile, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	rp, ok := r.repos[repoID]
+	rp, ok := r.lookupLocked(repoID)
 	if !ok {
 		return nil, ErrNotFound
 	}
@@ -364,7 +381,7 @@ type OwnerUpdate struct {
 func (r *Registry) ApplyOwnerUpdate(repoID, actor string, upd OwnerUpdate) (*RepoProfile, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	rp, ok := r.repos[repoID]
+	rp, ok := r.lookupLocked(repoID)
 	if !ok {
 		return nil, ErrNotFound
 	}
@@ -408,7 +425,7 @@ func (r *Registry) ApplyOwnerUpdate(repoID, actor string, upd OwnerUpdate) (*Rep
 func (r *Registry) AddPassedIdea(repoID, actor, ideaID string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	rp, ok := r.repos[repoID]
+	rp, ok := r.lookupLocked(repoID)
 	if !ok {
 		return ErrNotFound
 	}
