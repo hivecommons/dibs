@@ -54,3 +54,20 @@ affect `/readyz`, so the service can look healthy while they fail.
    and confirm the staleness gauge resets; otherwise fix the credential and
    restart with `kubectl -n dibs rollout restart deploy/dibs`.
 5. If errors began right after a rollout, follow [release-rollback.md](release-rollback.md).
+
+## 6. Match-engine LLM alert
+
+For `DibsMatchLLMErrorRatio`. LLM failures do not affect `/readyz`; matching
+falls back to the deterministic path, so the service looks healthy while match
+quality degrades.
+
+1. Identify the affected operation from the alert's `op` label.
+2. Confirm the failure rate: `dibs_match_llm_calls_total{op="<op>",outcome="llm_error"}`
+   against the total for the same `op`, or in logs:
+   `kubectl -n dibs logs deploy/dibs --since=1h | grep '"metrics match_llm"'`.
+3. Typical causes are a gateway outage or rate limiting, or an expired or wrong
+   `DIBS_LLM_API_KEY`, `DIBS_LLM_BASE_URL` or `DIBS_LLM_MODEL` in the `dibs` secret.
+4. If the upstream is down, wait for recovery and confirm the ratio drops. If a
+   credential or model name is wrong, fix the secret and restart with
+   `kubectl -n dibs rollout restart deploy/dibs`.
+5. If errors began right after a rollout, follow [release-rollback.md](release-rollback.md).

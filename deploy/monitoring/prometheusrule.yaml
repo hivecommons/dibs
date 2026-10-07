@@ -72,5 +72,5 @@ spec:
           labels:
             severity: warning
           annotations:
-            runbook_url: https://github.com/hivecommons/dibs/blob/main/runbooks/incident-response.md#2-decide
+            runbook_url: https://github.com/hivecommons/dibs/blob/main/runbooks/incident-response.md#6-match-engine-llm-alert
             summary: More than half of Dibs match-engine LLM calls for op {{ $labels.op }} are failing.
