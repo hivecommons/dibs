@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -61,13 +62,74 @@ func TestVerifyFiledIssue(t *testing.T) {
 	if err := VerifyFiledIssue(&FiledIssue{Author: "someone", CreatedAt: created.Add(time.Minute)}, idea); err == nil || !strings.Contains(err.Error(), "@octocat") {
 		t.Errorf("other author: %v", err)
 	}
-	// Legacy records without CreatedAt skip the age check; non-GitHub
-	// identities skip the author check.
+	// Legacy records without CreatedAt skip the age check.
 	if err := VerifyFiledIssue(&FiledIssue{Author: "octocat", CreatedAt: created.Add(-time.Hour)}, &store.Idea{Author: "octocat"}); err != nil {
 		t.Errorf("zero CreatedAt: %v", err)
 	}
-	if err := VerifyFiledIssue(&FiledIssue{Author: "anyone", CreatedAt: created.Add(time.Minute)}, &store.Idea{Author: "gitlab:9", CreatedAt: created}); err != nil {
-		t.Errorf("non-github author: %v", err)
+	// Non-GitHub identities have no login to compare, so the issue body
+	// must carry this idea's marker — any other issue on the repo is
+	// rejected, including one carrying a different idea's marker.
+	other := &store.Idea{ID: "idea123abc", Author: "gitlab:9", CreatedAt: created}
+	if err := VerifyFiledIssue(&FiledIssue{Author: "anyone", CreatedAt: created.Add(time.Minute), Body: "Some text\n\n---\n" + Footer + "\n" + IdeaMarker("idea123abc")}, other); err != nil {
+		t.Errorf("non-github author with marker: %v", err)
+	}
+	if err := VerifyFiledIssue(&FiledIssue{Author: "anyone", CreatedAt: created.Add(time.Minute)}, other); err == nil || !strings.Contains(err.Error(), "marker") {
+		t.Errorf("non-github author without marker: %v", err)
+	}
+	if err := VerifyFiledIssue(&FiledIssue{Author: "anyone", CreatedAt: created.Add(time.Minute), Body: IdeaMarker("zzzzzzzzzz")}, other); err == nil || !strings.Contains(err.Error(), "marker") {
+		t.Errorf("non-github author with another idea's marker: %v", err)
+	}
+	// A GitHub ideator is verified by login; the marker is not required.
+	if err := VerifyFiledIssue(&FiledIssue{Author: "octocat", CreatedAt: created.Add(time.Minute), Body: ""}, &store.Idea{ID: "idea123abc", Author: "octocat", CreatedAt: created}); err != nil {
+		t.Errorf("github author without marker: %v", err)
+	}
+}
+
+func TestIdeaMarker(t *testing.T) {
+	m := IdeaMarker("abc123")
+	if m != "<!-- dibs-idea: abc123 -->" {
+		t.Fatalf("marker = %q", m)
+	}
+	if !HasIdeaMarker("x\n"+m+"\n", "abc123") {
+		t.Error("HasIdeaMarker must find the marker anywhere in the body")
+	}
+	if HasIdeaMarker(m, "abc12") || HasIdeaMarker(m, "") || HasIdeaMarker("", "abc123") {
+		t.Error("HasIdeaMarker must not match a prefix, an empty id, or an empty body")
+	}
+}
+
+func TestLaunchBodyForMarker(t *testing.T) {
+	got := LaunchBodyFor("Idea text", true, "abc123")
+	if !strings.HasSuffix(got, "---\n"+Footer+"\n"+IdeaMarker("abc123")) {
+		t.Fatalf("body must end with footer then marker:\n%s", got)
+	}
+	if LaunchBodyFor(got, true, "abc123") != got {
+		t.Error("LaunchBodyFor must be idempotent when a marker already trails the footer")
+	}
+	if strings.Count(LaunchBodyFor(LaunchBody("x", false), false, "abc123"), ExternalFooter) != 1 {
+		t.Error("an existing footer without marker must not be duplicated")
+	}
+	if strings.Contains(LaunchBodyFor("x", true, ""), markerPrefix) {
+		t.Error("empty ideaID must not emit a marker")
+	}
+	if stripTrailingMarker("plain -->") != "plain -->" {
+		t.Error("a trailing --> without a marker line must be left alone")
+	}
+}
+
+func TestNewIssueURLForPreservesMarkerWhenTruncated(t *testing.T) {
+	huge := LaunchBodyFor(strings.Repeat("word ", 4000), false, "abc123")
+	got, truncated := NewIssueURLFor("org/repo", "Big", huge, false, "abc123")
+	if !truncated {
+		t.Fatal("expected truncation")
+	}
+	u, err := url.Parse(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := u.Query().Get("body")
+	if !strings.HasSuffix(body, ExternalFooter+"\n"+IdeaMarker("abc123")) {
+		t.Fatalf("truncated body must keep footer and marker:\n%.120s...%s", body, body[len(body)-80:])
 	}
 }
 
@@ -77,7 +139,7 @@ func TestHTTPClientGetIssue(t *testing.T) {
 		gotAuth, gotPath = r.Header.Get("Authorization"), r.URL.Path
 		switch r.URL.Path {
 		case "/repos/org/repo/issues/1":
-			_, _ = w.Write([]byte(`{"user":{"login":"octocat"},"created_at":"2026-09-01T12:00:00Z"}`))
+			_, _ = w.Write([]byte(`{"user":{"login":"octocat"},"created_at":"2026-09-01T12:00:00Z","body":"hello <!-- dibs-idea: abc -->"}`))
 		case "/repos/org/repo/issues/2":
 			_, _ = w.Write([]byte(`{"user":{"login":"octocat"},"created_at":"2026-09-01T12:00:00Z","pull_request":{"url":"x"}}`))
 		case "/repos/org/repo/issues/3":
@@ -93,7 +155,7 @@ func TestHTTPClientGetIssue(t *testing.T) {
 
 	c := &HTTPClient{BaseURL: srv.URL}
 	is, err := c.GetIssue(ctx, "org/repo", 1)
-	if err != nil || is.Author != "octocat" || is.PullRequest || !is.CreatedAt.Equal(time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)) {
+	if err != nil || is.Author != "octocat" || is.PullRequest || !is.CreatedAt.Equal(time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)) || !HasIdeaMarker(is.Body, "abc") {
 		t.Fatalf("issue 1: %+v, %v", is, err)
 	}
 	if gotAuth != "" || gotPath != "/repos/org/repo/issues/1" {

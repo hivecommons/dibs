@@ -22,6 +22,9 @@ type FiledIssue struct {
 	// PullRequest is true when the number resolves to a pull request; the
 	// issues endpoint returns those too.
 	PullRequest bool
+	// Body is the issue text, checked for the IdeaMarker the launch footer
+	// carries when no GitHub login is available to compare.
+	Body string
 }
 
 // ErrIssueNotFound means GitHub has no such issue on that repo (404/410).
@@ -60,6 +63,7 @@ func (c *HTTPClient) GetIssue(ctx context.Context, repoID string, number int) (*
 		} `json:"user"`
 		CreatedAt   time.Time       `json:"created_at"`
 		PullRequest *map[string]any `json:"pull_request,omitempty"`
+		Body        string          `json:"body"`
 	}
 	status, err := c.do(ctx, http.MethodGet, "/repos/"+repoID+"/issues/"+strconv.Itoa(number), nil, &got)
 	if err != nil {
@@ -67,7 +71,7 @@ func (c *HTTPClient) GetIssue(ctx context.Context, repoID string, number int) (*
 	}
 	switch status {
 	case http.StatusOK:
-		return &FiledIssue{Author: got.User.Login, CreatedAt: got.CreatedAt, PullRequest: got.PullRequest != nil}, nil
+		return &FiledIssue{Author: got.User.Login, CreatedAt: got.CreatedAt, PullRequest: got.PullRequest != nil, Body: got.Body}, nil
 	case http.StatusNotFound, http.StatusGone:
 		return nil, ErrIssueNotFound
 	default:
@@ -89,10 +93,11 @@ func githubLogin(author string) (string, bool) {
 
 // VerifyFiledIssue checks that issue is one the ideator could have filed for
 // idea through the launch flow: a real issue (not a pull request), opened no
-// earlier than the idea itself, and — when the ideator signed in with
-// GitHub — opened by that same login. A pasted URL that fails these checks
-// is somebody else's issue, and settling against it would credit the
-// ideator on the public wall for work that is not theirs.
+// earlier than the idea itself, and tied to the ideator — opened by the
+// same login when they signed in with GitHub, or otherwise carrying the
+// IdeaMarker the launch footer embeds for this idea. A pasted URL that
+// fails these checks is somebody else's issue, and settling against it
+// would credit the ideator on the public wall for work that is not theirs.
 func VerifyFiledIssue(issue *FiledIssue, idea *store.Idea) error {
 	if issue == nil {
 		return errors.New("settle: no issue to verify")
@@ -103,8 +108,14 @@ func VerifyFiledIssue(issue *FiledIssue, idea *store.Idea) error {
 	if !idea.CreatedAt.IsZero() && issue.CreatedAt.Before(idea.CreatedAt) {
 		return errors.New("settle: the issue predates this idea — file a new issue from the launch step")
 	}
-	if login, ok := githubLogin(idea.Author); ok && !strings.EqualFold(login, issue.Author) {
+	login, ok := githubLogin(idea.Author)
+	switch {
+	case ok && !strings.EqualFold(login, issue.Author):
 		return fmt.Errorf("settle: the issue was not opened by @%s", login)
+	case !ok && !HasIdeaMarker(issue.Body, idea.ID):
+		// No GitHub login to compare: without the marker any issue on the
+		// repo filed after the idea would be claimable.
+		return errors.New("settle: the issue does not carry this idea's Dibs marker — file it from the launch step, or add the marker line from the launch body to the issue")
 	}
 	return nil
 }

@@ -104,15 +104,29 @@ func TestConfirmIssueGitHubOutageIs502(t *testing.T) {
 	}
 }
 
-// TestConfirmIssueNonGitHubIdentitySkipsAuthorCheck: an ideator who signed
-// in through another provider has no GitHub login to compare, so only the
-// kind and age checks apply.
-func TestConfirmIssueNonGitHubIdentitySkipsAuthorCheck(t *testing.T) {
+// TestConfirmIssueNonGitHubIdentityRequiresMarker: an ideator who signed
+// in through another provider has no GitHub login to compare, so the issue
+// body must carry the idea marker the launch footer embeds; any other
+// issue on the repo is rejected and the idea stays unsettled.
+func TestConfirmIssueNonGitHubIdentityRequiresMarker(t *testing.T) {
 	lookup := &settle.FakeIssueLookup{Issues: map[string]settle.FiledIssue{
 		"kubestellar/dibs#7": {Author: "whoever", CreatedAt: time.Now().UTC().Add(time.Hour)},
 	}}
-	_, mux, idea := confirmFixture(t, "gitlab:12345", lookup)
+	a, mux, idea := confirmFixture(t, "gitlab:12345", lookup)
 	code, body := confirm(t, mux, "gitlab:12345", idea.ID, "https://github.com/kubestellar/dibs/issues/7")
+	if code != http.StatusBadRequest || !strings.Contains(body, "marker") {
+		t.Fatalf("status=%d body=%s, want 400 naming the marker", code, body)
+	}
+	if got, err := a.Store.Get(idea.ID); err != nil || got.Status != store.StatusAccepted {
+		t.Fatalf("unmarked issue must not settle: status=%v err=%v", got.Status, err)
+	}
+
+	lookup.Issues["kubestellar/dibs#8"] = settle.FiledIssue{
+		Author:    "whoever",
+		CreatedAt: time.Now().UTC().Add(time.Hour),
+		Body:      settle.LaunchBodyFor("filed from the launch step", true, idea.ID),
+	}
+	code, body = confirm(t, mux, "gitlab:12345", idea.ID, "https://github.com/kubestellar/dibs/issues/8")
 	if code != http.StatusOK {
 		t.Fatalf("status=%d body=%s, want 200", code, body)
 	}

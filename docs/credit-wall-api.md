@@ -204,8 +204,10 @@ Response:
 
 `url` is a prefilled GitHub **new-issue form**, not a filed issue URL. The author
 files it under their own GitHub account. `fullBody` contains the untruncated
-issue text; if `truncated` is true, the URL's body was shortened to fit its
-length budget. Launch records `issue_launched`; re-launching from that state
+issue text, ending with the Dibs footer and a hidden `<!-- dibs-idea: {id} -->`
+marker line that confirm-issue checks when the author did not sign in with
+GitHub; if `truncated` is true, the URL's body was shortened to fit its
+length budget (the footer and marker are preserved). Launch records `issue_launched`; re-launching from that state
 rebuilds the URL without awarding another milestone. Overrides do not edit the
 stored idea. Do not publish the returned body for a private idea.
 
@@ -217,9 +219,10 @@ Response: `{ result: "settled", idea: Idea }`.
 The validator requires HTTPS, a GitHub host (`github.com` or `www.github.com`),
 the target repo (case-insensitive), and a positive numeric issue number. The
 issue is then looked up on GitHub and must exist, be an issue (not a pull
-request), be no older than the idea, and — when the author signed in with
-GitHub — have been opened by that same login; otherwise the request fails
-with 400 and the idea stays unsettled. A GitHub lookup failure returns 502
+request), be no older than the idea, and be tied to the author: opened by the
+same login when they signed in with GitHub, or otherwise carrying the
+`<!-- dibs-idea: {id} -->` marker from the launch body; otherwise the request
+fails with 400 and the idea stays unsettled. A GitHub lookup failure returns 502
 (retry later). Implementation or merge state is still not checked.
 A repeated confirmation after settlement returns 400; after an ambiguous
 network failure, read the idea before retrying. Do not replay all writes

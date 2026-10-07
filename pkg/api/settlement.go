@@ -119,8 +119,8 @@ func (a *API) handleLaunch(w http.ResponseWriter, r *http.Request) {
 	if body == "" {
 		body = idea.Body
 	}
-	fullBody := settle.LaunchBody(body, hiveManaged)
-	issueURL, truncated := settle.NewIssueURL(idea.TargetRepo, title, fullBody, hiveManaged)
+	fullBody := settle.LaunchBodyFor(body, hiveManaged, idea.ID)
+	issueURL, truncated := settle.NewIssueURLFor(idea.TargetRepo, title, fullBody, hiveManaged, idea.ID)
 
 	if idea.Status != store.StatusIssueLaunched {
 		if _, err := a.Store.Transition(idea.ID, store.StatusIssueLaunched); err != nil {

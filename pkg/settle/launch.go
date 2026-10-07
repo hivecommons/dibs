@@ -35,7 +35,44 @@ func footerFor(hiveManaged bool) string {
 }
 
 // footerBlockFor is footerFor with its separator, as appended to bodies.
-func footerBlockFor(hiveManaged bool) string { return "\n\n---\n" + footerFor(hiveManaged) }
+// A non-empty ideaID appends IdeaMarker on its own line after the footer.
+func footerBlockFor(hiveManaged bool, ideaID string) string {
+	block := "\n\n---\n" + footerFor(hiveManaged)
+	if ideaID != "" {
+		block += "\n" + IdeaMarker(ideaID)
+	}
+	return block
+}
+
+// markerPrefix/markerSuffix delimit the HTML comment IdeaMarker emits.
+// GitHub does not render HTML comments but returns them verbatim through
+// the issues API, so the marker ties a filed issue to one Dibs idea.
+const (
+	markerPrefix = "<!-- dibs-idea: "
+	markerSuffix = " -->"
+)
+
+// IdeaMarker is the hidden line the launch footer carries so settlement can
+// verify that the pasted issue was filed for this idea and not merely on
+// the right repo (see VerifyFiledIssue).
+func IdeaMarker(ideaID string) string { return markerPrefix + ideaID + markerSuffix }
+
+// HasIdeaMarker reports whether body carries IdeaMarker(ideaID).
+func HasIdeaMarker(body, ideaID string) bool {
+	return ideaID != "" && strings.Contains(body, IdeaMarker(ideaID))
+}
+
+// stripTrailingMarker removes a trailing IdeaMarker line so footer
+// idempotence checks see the footer itself.
+func stripTrailingMarker(body string) string {
+	if !strings.HasSuffix(body, markerSuffix) {
+		return body
+	}
+	if i := strings.LastIndex(body, "\n"+markerPrefix); i >= 0 {
+		return strings.TrimRight(body[:i], "\n ")
+	}
+	return body
+}
 
 // MaxIssueURLLen is the budget for a prefilled new-issue URL. Browsers and
 // GitHub tolerate roughly 8k characters; stay safely under it.
@@ -49,11 +86,19 @@ const truncationNote = "\n\n_(Draft truncated to fit the URL. Paste the full tex
 // hiveManaged selects the footer: the short attribution for hive-managed
 // repos, the "request a hive" growth CTA for external ones.
 func LaunchBody(body string, hiveManaged bool) string {
+	return LaunchBodyFor(body, hiveManaged, "")
+}
+
+// LaunchBodyFor is LaunchBody with the IdeaMarker for ideaID appended after
+// the footer (omitted when ideaID is empty). A body that already ends with
+// the footer, with or without a marker, is returned unchanged.
+func LaunchBodyFor(body string, hiveManaged bool, ideaID string) string {
 	body = strings.TrimRight(body, "\n ")
-	if strings.HasSuffix(body, Footer) || strings.HasSuffix(body, ExternalFooter) {
+	bare := stripTrailingMarker(body)
+	if strings.HasSuffix(bare, Footer) || strings.HasSuffix(bare, ExternalFooter) {
 		return body
 	}
-	return body + footerBlockFor(hiveManaged)
+	return body + footerBlockFor(hiveManaged, ideaID)
 }
 
 // NewIssueURL builds the prefilled GitHub new-issue URL for repoID
@@ -62,6 +107,13 @@ func LaunchBody(body string, hiveManaged bool) string {
 // matching hiveManaged are preserved) and truncated=true — callers should
 // then offer the full body via copy-to-clipboard.
 func NewIssueURL(repoID, title, body string, hiveManaged bool) (issueURL string, truncated bool) {
+	return NewIssueURLFor(repoID, title, body, hiveManaged, "")
+}
+
+// NewIssueURLFor is NewIssueURL whose truncation tail also preserves the
+// IdeaMarker for ideaID (omitted when empty), so a shortened body still
+// identifies the idea it was filed for.
+func NewIssueURLFor(repoID, title, body string, hiveManaged bool, ideaID string) (issueURL string, truncated bool) {
 	build := func(b string) string {
 		q := url.Values{}
 		q.Set("title", title)
@@ -73,7 +125,7 @@ func NewIssueURL(repoID, title, body string, hiveManaged bool) (issueURL string,
 	if len(full) <= MaxIssueURLLen {
 		return full, false
 	}
-	tail := truncationNote + footerBlockFor(hiveManaged)
+	tail := truncationNote + footerBlockFor(hiveManaged, ideaID)
 	runes := []rune(body)
 	// Binary-search the longest body prefix whose encoded URL fits.
 	lo, hi := 0, len(runes)

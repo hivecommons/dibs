@@ -81,11 +81,11 @@ func TestExternalRepoOfferLaunchSettle(t *testing.T) {
 	}
 	body := u.Query().Get("body")
 	// The growth loop: non-hive issues advertise hive.
-	if !strings.HasSuffix(launch.FullBody, settle.ExternalFooter) ||
+	if !strings.HasSuffix(launch.FullBody, settle.ExternalFooter+"\n"+settle.IdeaMarker(idea.ID)) ||
 		!strings.Contains(body, "requesting a hive") {
 		t.Fatalf("external launch body missing the hive CTA:\n%s", launch.FullBody)
 	}
-	if strings.HasSuffix(launch.FullBody, settle.Footer) {
+	if strings.HasSuffix(launch.FullBody, settle.Footer+"\n"+settle.IdeaMarker(idea.ID)) {
 		t.Fatalf("external launch body must not use the hive footer:\n%s", launch.FullBody)
 	}
 	if st, _ := f.store.Get(idea.ID); st.Status != store.StatusIssueLaunched {
@@ -132,7 +132,7 @@ func TestExternalLaunchGuards(t *testing.T) {
 		t.Fatalf("hive launch: %d %s", rec.Code, rec.Body.String())
 	}
 	launch := decode[launchResp](t, rec)
-	if !strings.HasSuffix(launch.FullBody, settle.Footer) || strings.Contains(launch.FullBody, "Request a hive") {
+	if !strings.HasSuffix(launch.FullBody, settle.Footer+"\n"+settle.IdeaMarker(idea.ID)) || strings.Contains(launch.FullBody, "Request a hive") {
 		t.Fatalf("hive launch body must keep the short footer, no pitch:\n%s", launch.FullBody)
 	}
 
