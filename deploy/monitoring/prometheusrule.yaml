@@ -18,6 +18,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            runbook_url: https://github.com/hivecommons/dibs/blob/main/runbooks/incident-response.md#1-triage-first-5-minutes
             summary: More than 0.5% of Dibs requests are failing with 5xx.
         - alert: DibsReadyzFailing
           expr: sum(increase(dibs_http_requests_total{route_group="readyz",status_class="5xx"}[5m])) > 0
@@ -25,6 +26,7 @@ spec:
           labels:
             severity: critical
           annotations:
+            runbook_url: https://github.com/hivecommons/dibs/blob/main/runbooks/incident-response.md#2-decide
             summary: Dibs /readyz is failing; the store data directory is not usable.
         - alert: DibsBackgroundJobFailing
           expr: sum by (job) (increase(dibs_background_job_runs_total{result="error"}[30m])) > 0
@@ -32,6 +34,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            runbook_url: https://github.com/hivecommons/dibs/blob/main/runbooks/incident-response.md#5-background-job-alerts
             summary: Dibs background job {{ $labels.job }} is failing.
         - alert: DibsBackgroundJobStale
           expr: time() - dibs_background_job_last_success_timestamp_seconds > 3600
@@ -39,4 +42,5 @@ spec:
           labels:
             severity: warning
           annotations:
+            runbook_url: https://github.com/hivecommons/dibs/blob/main/runbooks/incident-response.md#5-background-job-alerts
             summary: Dibs background job {{ $labels.job }} has not succeeded for over an hour.

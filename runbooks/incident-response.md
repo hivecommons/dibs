@@ -38,3 +38,18 @@ each action taken with its time. Update it whenever the state changes.
 - If data was lost or corrupted, follow [data-recovery.md](data-recovery.md).
 - Open a postmortem from [postmortem-template.md](postmortem-template.md) for
   any user-visible outage or data-affecting event.
+
+## 5. Background job alerts
+
+For `DibsBackgroundJobFailing` and `DibsBackgroundJobStale`. These jobs do not
+affect `/readyz`, so the service can look healthy while they fail.
+
+1. Identify the job from the alert's `job` label.
+2. Find its errors: `kubectl -n dibs logs deploy/dibs --since=2h | grep -i '"job"'`.
+3. Check counters: `dibs_background_job_runs_total{job="<job>",result="error"}`
+   and `time() - dibs_background_job_last_success_timestamp_seconds{job="<job>"}`.
+4. Typical causes are an upstream (hub, GitHub, LLM) outage or an expired
+   credential in the `dibs` secret. If an upstream is down, wait for recovery
+   and confirm the staleness gauge resets; otherwise fix the credential and
+   restart with `kubectl -n dibs rollout restart deploy/dibs`.
+5. If errors began right after a rollout, follow [release-rollback.md](release-rollback.md).
