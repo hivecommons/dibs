@@ -68,7 +68,7 @@ func TestMatchmakerSettlementFlow(t *testing.T) {
 	if !strings.Contains(q.Get("body"), "Edited body for the repo.") || !strings.Contains(q.Get("body"), settle.Footer) {
 		t.Fatalf("launch body: %q", q.Get("body"))
 	}
-	if launch.Truncated || !strings.HasSuffix(launch.FullBody, settle.Footer) {
+	if launch.Truncated || !strings.HasSuffix(launch.FullBody, settle.Footer+"\n"+settle.IdeaMarker(idea.ID)) {
 		t.Fatalf("launch response: %+v", launch)
 	}
 	got, _ := f.store.Get(idea.ID)
