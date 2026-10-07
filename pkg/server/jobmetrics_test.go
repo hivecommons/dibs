@@ -86,3 +86,30 @@ func TestRecordJobGlobal(t *testing.T) {
 		t.Fatalf("snapshot = %v", got)
 	}
 }
+
+func TestJobOutcomesTotalsMonotonic(t *testing.T) {
+	j := newJobOutcomes()
+	at := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	j.now = func() time.Time { return at }
+	j.record(JobRegistrySync, nil)
+	j.snapshotAndReset()
+	j.record(JobRegistrySync, nil)
+	j.record(JobCatalogRefresh, errors.New("boom"))
+
+	var buf bytes.Buffer
+	j.writeProm(&buf)
+	out := buf.String()
+	for _, want := range []string{
+		`dibs_background_job_runs_total{job="registry_sync",result="ok"} 2` + "\n",
+		`dibs_background_job_runs_total{job="registry_sync",result="error"} 0` + "\n",
+		`dibs_background_job_runs_total{job="catalog_refresh",result="error"} 1` + "\n",
+		`dibs_background_job_last_success_timestamp_seconds{job="registry_sync"} ` + "1767323045\n",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output missing %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, `last_success_timestamp_seconds{job="catalog_refresh"}`) {
+		t.Errorf("catalog_refresh never succeeded; must have no timestamp:\n%s", out)
+	}
+}

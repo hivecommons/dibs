@@ -1,20 +1,35 @@
 # Service level objectives for Dibs
 
-These SLIs are measurable today without a metrics backend: readiness probe
-state from Kubernetes and the periodic `metrics` JSON log lines emitted by
-`pkg/server/metrics.go`. When a backend is chosen (issue #184), translate each
-SLI into a recorded query and add burn-rate alerts that link back to
+These SLIs are measurable from the cumulative counters on the internal
+`/metrics` endpoint (see `deploy/README.md`), from readiness probe state in
+Kubernetes, and from the periodic `metrics` JSON log lines emitted by
+`pkg/server/metrics.go`. Alert rules live in
+`deploy/monitoring/prometheusrule.yaml`; alerts should link back to
 [incident-response.md](incident-response.md).
 
 | SLI | Definition | Source | Objective (30 days) |
 |---|---|---|---|
-| Availability | Share of time at least one pod is Ready (`/readyz` 200) | Kubernetes pod Ready condition | 99.5% |
-| Request success | Share of requests not answered `5xx` | `metrics http` log lines, `status` class | 99.5% |
+| Availability | Share of time at least one pod is Ready (`/readyz` 200) | Kubernetes pod Ready condition; `dibs_http_requests_total{route_group="readyz",status_class="5xx"}` | 99.5% |
+| Request success | Share of requests not answered `5xx` | `dibs_http_requests_total` (`status_class="5xx"` over all), or `metrics http` log lines | 99.5% |
 | Latency | Average `avg_ms` for API routes stays under 500 ms in each 5-minute flush | `metrics http` log lines, `avg_ms` | 99% of flushes |
 
 Probe semantics: `/healthz` is liveness only (process is up). `/readyz`
 checks that the store's data directory is accessible and writable, which is
 required to serve traffic, so it is the signal for availability.
+
+## Measuring from /metrics
+
+Counters are cumulative since process start (never reset), so use `rate` or
+`increase`. Request success ratio:
+
+```
+1 - sum(rate(dibs_http_requests_total{status_class="5xx"}[30d]))
+      / sum(rate(dibs_http_requests_total[30d]))
+```
+
+Background jobs: `dibs_background_job_runs_total{job,result}` and
+`time() - dibs_background_job_last_success_timestamp_seconds{job}` for
+staleness. LLM outcomes: `dibs_match_llm_calls_total{op,outcome}`.
 
 ## Measuring from logs
 
@@ -26,8 +41,8 @@ kubectl -n dibs logs deploy/dibs --since=24h \
   | jq -c 'select(.msg == "metrics http" and .status == "5xx")'
 ```
 
-Sum `count` by `status` class to compute the success ratio. Flushes reset the
-counters, so each line covers one 5-minute window.
+Sum `count` by `status` class to compute the success ratio. Log flushes cover one 5-minute window;
+the `/metrics` totals are not reset.
 
 LLM outcome counters have `msg` `metrics match_llm` with `op`, `outcome`,
 `count`.

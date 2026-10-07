@@ -8,3 +8,4 @@ data:
   DIBS_BASE_PATH: "/"
   HUB_URL: "https://hive.hivecommons.dev"
   DATA_DIR: "/data"
+  DIBS_METRICS_ADDR: ":9090"

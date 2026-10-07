@@ -63,6 +63,18 @@ func envOr(key, def string) string {
 	return def
 }
 
+// listenMetrics serves the Prometheus /metrics endpoint on addr until it
+// fails. It is a separate listener so ingress, which only targets the
+// application port, can never expose it.
+func listenMetrics(addr string) error {
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           server.MetricsHandler(),
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+	return srv.ListenAndServe()
+}
+
 // displayBasePath renders the normalized base path ("" means root) for logs.
 func displayBasePath(base string) string {
 	if base == "" {
@@ -221,6 +233,12 @@ func run(args []string, stdout, stderr io.Writer, serve func(*http.Server) error
 		},
 		Version: gitHash,
 	})
+
+	// DIBS_METRICS_ADDR (e.g. ":9090") enables the internal /metrics
+	// listener; unset keeps it off.
+	if metricsAddr := envOr("DIBS_METRICS_ADDR", ""); metricsAddr != "" {
+		go func() { slog.Error("metrics listener stopped", "addr", metricsAddr, "err", listenMetrics(metricsAddr)) }()
+	}
 
 	slog.Info("listening", "version", gitShort, "addr", addr, "base_path", displayBasePath(basePath), "hub", hubURL, "data_dir", dataDir)
 	srv := &http.Server{

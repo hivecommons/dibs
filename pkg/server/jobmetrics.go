@@ -1,6 +1,8 @@
 package server
 
 import (
+	"fmt"
+	"io"
 	"log/slog"
 	"sort"
 	"sync"
@@ -27,19 +29,20 @@ type jobSample struct {
 }
 
 // jobOutcomes counts background-job runs by (job, outcome) and remembers
-// each job's last success. Log-only, like requestMetrics: no exporter until
-// a backend is chosen (see issue #184).
+// each job's last success. Like requestMetrics, window counts feed the log
+// and are reset; totals are cumulative for /metrics.
 type jobOutcomes struct {
 	mu          sync.Mutex
 	now         func() time.Time
 	counts      map[jobKey]int64
+	totals      map[jobKey]int64
 	lastSuccess map[string]time.Time
 }
 
 var jobStats = newJobOutcomes()
 
 func newJobOutcomes() *jobOutcomes {
-	return &jobOutcomes{now: time.Now, counts: map[jobKey]int64{}, lastSuccess: map[string]time.Time{}}
+	return &jobOutcomes{now: time.Now, counts: map[jobKey]int64{}, totals: map[jobKey]int64{}, lastSuccess: map[string]time.Time{}}
 }
 
 // RecordJob records one run of a background job; a nil err is a success.
@@ -57,13 +60,14 @@ func (j *jobOutcomes) record(job string, err error) {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	j.counts[jobKey{job, outcome}]++
+	j.totals[jobKey{job, outcome}]++
 	if err == nil {
 		j.lastSuccess[job] = j.now()
 	}
 }
 
-// snapshotAndReset returns the counts sorted deterministically and clears
-// them. Last-success times are kept: they are state, not a window count.
+// snapshotAndReset returns the window counts sorted deterministically and
+// clears them; cumulative totals are untouched. Last-success times are kept: they are state, not a window count.
 func (j *jobOutcomes) snapshotAndReset() []jobSample {
 	j.mu.Lock()
 	defer j.mu.Unlock()
@@ -93,6 +97,33 @@ func (j *jobOutcomes) lastSuccesses() map[string]time.Time {
 		out[k] = v
 	}
 	return out
+}
+
+// writeProm writes cumulative run totals and last-success timestamps in
+// Prometheus text exposition format. Every known job is emitted with both
+// results (zero when unseen) so rate/increase queries see a stable series.
+func (j *jobOutcomes) writeProm(w io.Writer) {
+	jobs := make([]string, 0, len(jobNames))
+	for job := range jobNames {
+		jobs = append(jobs, job)
+	}
+	sort.Strings(jobs)
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	fmt.Fprintln(w, "# HELP dibs_background_job_runs_total Background job runs by job and result.")
+	fmt.Fprintln(w, "# TYPE dibs_background_job_runs_total counter")
+	for _, job := range jobs {
+		for _, outcome := range []string{jobOutcomeError, jobOutcomeOK} {
+			fmt.Fprintf(w, "dibs_background_job_runs_total{job=%q,result=%q} %d\n", job, outcome, j.totals[jobKey{job, outcome}])
+		}
+	}
+	fmt.Fprintln(w, "# HELP dibs_background_job_last_success_timestamp_seconds Unix time of each job's last successful run.")
+	fmt.Fprintln(w, "# TYPE dibs_background_job_last_success_timestamp_seconds gauge")
+	for _, job := range jobs {
+		if t, ok := j.lastSuccess[job]; ok {
+			fmt.Fprintf(w, "dibs_background_job_last_success_timestamp_seconds{job=%q} %d\n", job, t.Unix())
+		}
+	}
 }
 
 // logSnapshot flushes window counts, then each job's last success, to the log.
