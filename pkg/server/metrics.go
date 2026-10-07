@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -126,13 +127,25 @@ type requestMetrics struct {
 	// totals are cumulative since process start and never reset, so a
 	// scraper sees monotonic counters; counts/durMS are the log window.
 	totals map[metricKey]int64
+	// hists are cumulative latency histograms keyed by the same bounded key.
+	hists map[metricKey]*latencyHist
+}
+
+// latencyBuckets are fixed upper bounds in seconds; the bucket set never
+// grows with traffic.
+var latencyBuckets = [...]float64{0.005, 0.025, 0.1, 0.25, 0.5, 1, 2.5, 5, 10}
+
+type latencyHist struct {
+	buckets [len(latencyBuckets)]int64
+	count   int64
+	sum     float64
 }
 
 // reqStats is the process-wide request counter set read by MetricsHandler.
 var reqStats = newRequestMetrics()
 
 func newRequestMetrics() *requestMetrics {
-	return &requestMetrics{counts: map[metricKey]int64{}, durMS: map[metricKey]int64{}, totals: map[metricKey]int64{}}
+	return &requestMetrics{counts: map[metricKey]int64{}, durMS: map[metricKey]int64{}, totals: map[metricKey]int64{}, hists: map[metricKey]*latencyHist{}}
 }
 
 func (m *requestMetrics) record(method, route string, status int, dur time.Duration) {
@@ -142,6 +155,19 @@ func (m *requestMetrics) record(method, route string, status int, dur time.Durat
 	m.counts[key]++
 	m.totals[key]++
 	m.durMS[key] += dur.Milliseconds()
+	h := m.hists[key]
+	if h == nil {
+		h = &latencyHist{}
+		m.hists[key] = h
+	}
+	secs := dur.Seconds()
+	for i, ub := range latencyBuckets {
+		if secs <= ub {
+			h.buckets[i]++
+		}
+	}
+	h.count++
+	h.sum += secs
 }
 
 // writeProm writes the cumulative request totals in Prometheus text
@@ -153,6 +179,10 @@ func (m *requestMetrics) writeProm(w io.Writer) {
 	for k, n := range m.totals {
 		keys = append(keys, k)
 		vals[k] = n
+	}
+	hists := make(map[metricKey]latencyHist, len(m.hists))
+	for k, h := range m.hists {
+		hists[k] = *h
 	}
 	m.mu.Unlock()
 	sort.Slice(keys, func(i, j int) bool {
@@ -169,6 +199,18 @@ func (m *requestMetrics) writeProm(w io.Writer) {
 	fmt.Fprintln(w, "# TYPE dibs_http_requests_total counter")
 	for _, k := range keys {
 		fmt.Fprintf(w, "dibs_http_requests_total{method=%q,route_group=%q,status_class=%q} %d\n", k.Method, k.Route, k.StatusClass, vals[k])
+	}
+	fmt.Fprintln(w, "# HELP dibs_http_request_duration_seconds HTTP request latency by method, route group and status class.")
+	fmt.Fprintln(w, "# TYPE dibs_http_request_duration_seconds histogram")
+	for _, k := range keys {
+		h := hists[k]
+		lbl := fmt.Sprintf("method=%q,route_group=%q,status_class=%q", k.Method, k.Route, k.StatusClass)
+		for i, ub := range latencyBuckets {
+			fmt.Fprintf(w, "dibs_http_request_duration_seconds_bucket{%s,le=%q} %d\n", lbl, strconv.FormatFloat(ub, 'g', -1, 64), h.buckets[i])
+		}
+		fmt.Fprintf(w, "dibs_http_request_duration_seconds_bucket{%s,le=\"+Inf\"} %d\n", lbl, h.count)
+		fmt.Fprintf(w, "dibs_http_request_duration_seconds_sum{%s} %g\n", lbl, h.sum)
+		fmt.Fprintf(w, "dibs_http_request_duration_seconds_count{%s} %d\n", lbl, h.count)
 	}
 }
 
