@@ -96,3 +96,7 @@ list above:
 ```sh
 kubectl apply -f deploy/monitoring/
 ```
+
+A Grafana dashboard for the same metrics lives at
+`docs/grafana/dibs-dashboard.json` (import it and pick your Prometheus data
+source; no endpoint is baked in).
