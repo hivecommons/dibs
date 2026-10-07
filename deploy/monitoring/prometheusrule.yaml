@@ -39,6 +39,14 @@ spec:
           annotations:
             runbook_url: https://github.com/hivecommons/dibs/blob/main/runbooks/incident-response.md#2-decide
             summary: Dibs /readyz is failing; the store data directory is not usable.
+        - alert: DibsDown
+          expr: absent(up{namespace="dibs",job="dibs"} == 1)
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            runbook_url: https://github.com/hivecommons/dibs/blob/main/runbooks/incident-response.md#2-decide
+            summary: No Dibs pod is being scraped successfully; the service may be fully down. The request-based alerts cannot fire when there is no traffic data.
         - alert: DibsBackgroundJobFailing
           expr: sum by (job) (increase(dibs_background_job_runs_total{result="error"}[30m])) > 0
           for: 5m

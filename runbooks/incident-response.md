@@ -21,6 +21,7 @@ is not yet known. If a recent merge is the obvious cause, go straight to
 
 | Symptom | Likely cause | Action |
 |---|---|---|
+| `DibsDown` firing (no successful scrape) | no pods running, pods crash-looping, or the metrics port/ServiceMonitor is broken | `kubectl -n dibs get pods -l app=dibs`; if pods are Ready, check the `dibs` Service `metrics` port and the ServiceMonitor target. |
 | `/readyz` 503, pod not Ready | data volume unavailable or read-only | Check the `dibs-data-rwx` PVC and mount (`kubectl -n dibs describe pod`, `kubectl -n dibs get pvc`). Do not delete the PVC. |
 | Errors began right after a rollout | bad release | Follow [release-rollback.md](release-rollback.md). |
 | Pod restarting | crash or OOM | `kubectl -n dibs describe pod` for last state; `kubectl -n dibs logs --previous`. |
