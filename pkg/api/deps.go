@@ -75,6 +75,11 @@ type IdeaSettler interface {
 	HasGitHub() bool
 }
 
+// IssueLookup resolves a pasted GitHub issue URL to the facts settlement
+// verifies (see settle.VerifyFiledIssue). A nil IssueLookup skips the
+// check; production always wires settle.HTTPClient.
+type IssueLookup = settle.IssueLookup
+
 // Notifier is the in-app notification surface pkg/api uses. A nil Notifier
 // disables notifications.
 type Notifier interface {
@@ -122,5 +127,9 @@ func NewFromDeps(d deps.Deps) *API {
 	if d.Registry != nil {
 		reg = d.Registry
 	}
-	return NewFromConfig(st, reg, d.History, d.News, d.Engine, d.Settler, d.Notify)
+	a := NewFromConfig(st, reg, d.History, d.News, d.Engine, d.Settler, d.Notify)
+	if d.Issues != nil {
+		a.Issues = d.Issues
+	}
+	return a
 }

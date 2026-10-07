@@ -188,6 +188,9 @@ func run(args []string, stdout, stderr io.Writer, serve func(*http.Server) error
 	} else {
 		slog.Info("settlement matchmaker mode")
 	}
+	// Confirmed issue URLs are checked against GitHub before an idea settles;
+	// the token is optional (public repos read anonymously).
+	issueLookup := &settle.HTTPClient{Token: envOr(settle.EnvGitHubToken, "")}
 	backfiller := history.NewBackfiller(hist, envOr(settle.EnvGitHubToken, ""))
 	newsGen := news.NewGenerator(newsStore, backfiller, llm)
 
@@ -229,6 +232,7 @@ func run(args []string, stdout, stderr io.Writer, serve func(*http.Server) error
 			News:     newsStore,
 			Engine:   engine,
 			Settler:  settler,
+			Issues:   issueLookup,
 			Notify:   notifications,
 		},
 		Version: gitHash,

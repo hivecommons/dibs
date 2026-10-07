@@ -82,7 +82,7 @@ deployments also work.
 | `DIBS_LLM_BASE_URL` | (unset) | OpenAI-compatible gateway (hive litellm), e.g. `http://litellm:4000/v1`. Unset → deterministic keyword matcher |
 | `DIBS_LLM_API_KEY` | (unset) | Bearer token for the LLM gateway |
 | `DIBS_LLM_MODEL` | `gpt-4o-mini` | Model name routed by the gateway |
-| `DIBS_GITHUB_TOKEN` | (unset) | **Legacy mode only.** When set, Dibs opens the credited issue server-side on accept. Unset (default), the ideator files a prefilled GitHub issue themselves — native attribution |
+| `DIBS_GITHUB_TOKEN` | (unset) | **Legacy mode only** for issue creation: when set, Dibs opens the credited issue server-side on accept. Unset (default), the ideator files a prefilled GitHub issue themselves — native attribution. Also used, when present, to authenticate the GitHub lookup that verifies a confirmed issue URL (anonymous otherwise) |
 | `DIBS_ADMINS` | (unset) | Comma-separated, case-insensitive GitHub logins granted admin access (idea-moderation endpoints) |
 | `DIBS_CLANKER_MARKERS` | `hive: agent=,kubestellar-hive[bot]` | Comma-separated, case-insensitive markers matched against PR branch/labels/body/author to classify agent activity |
 | `DIBS_INTAKE_MAX_MB` | `25` | Max upload size (MB) accepted for idea-intake file uploads |

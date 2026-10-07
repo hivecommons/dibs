@@ -93,13 +93,17 @@ func TestNewFromDeps_WiresSharedDepsAndGuardsNils(t *testing.T) {
 		t.Fatalf("registry.New: %v", err)
 	}
 	eng := &match.Engine{}
+	issues := &settle.HTTPClient{}
 
-	a := NewFromDeps(deps.Deps{Store: st, Registry: reg, Engine: eng})
+	a := NewFromDeps(deps.Deps{Store: st, Registry: reg, Engine: eng, Issues: issues})
 	if a.Store != IdeaStore(st) || a.Registry != RepoRegistry(reg) {
 		t.Fatalf("Store/Registry not wired: %#v %#v", a.Store, a.Registry)
 	}
 	if a.Engine != Matcher(eng) {
 		t.Errorf("Engine not wired: got %#v", a.Engine)
+	}
+	if a.Issues != IssueLookup(issues) {
+		t.Errorf("Issues not wired: got %#v", a.Issues)
 	}
 	if a.History != nil || a.News != nil || a.Settler != nil || a.Notify != nil {
 		t.Errorf("unset deps should stay nil interfaces: %#v %#v %#v %#v", a.History, a.News, a.Settler, a.Notify)
@@ -108,5 +112,8 @@ func TestNewFromDeps_WiresSharedDepsAndGuardsNils(t *testing.T) {
 	empty := NewFromDeps(deps.Deps{})
 	if empty.Store != nil || empty.Registry != nil {
 		t.Errorf("empty Deps: Store/Registry should stay nil interfaces: %#v %#v", empty.Store, empty.Registry)
+	}
+	if empty.Issues != nil {
+		t.Errorf("empty Deps: Issues should stay a nil interface: %#v", empty.Issues)
 	}
 }

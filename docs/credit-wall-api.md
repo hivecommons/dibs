@@ -215,9 +215,12 @@ Request: `{ "issueURL": "https://github.com/org/repo/issues/42" }`.
 Response: `{ result: "settled", idea: Idea }`.
 
 The validator requires HTTPS, a GitHub host (`github.com` or `www.github.com`),
-the target repo (case-insensitive), and a positive numeric issue number. It
-validates **URL shape only**, not issue existence, authorship, implementation,
-or merge state. This is author-attested settlement, not external verification.
+the target repo (case-insensitive), and a positive numeric issue number. The
+issue is then looked up on GitHub and must exist, be an issue (not a pull
+request), be no older than the idea, and — when the author signed in with
+GitHub — have been opened by that same login; otherwise the request fails
+with 400 and the idea stays unsettled. A GitHub lookup failure returns 502
+(retry later). Implementation or merge state is still not checked.
 A repeated confirmation after settlement returns 400; after an ambiguous
 network failure, read the idea before retrying. Do not replay all writes
 blindly: offer/accept/confirm are not generally idempotent.
