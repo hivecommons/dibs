@@ -286,3 +286,65 @@ func TestLookupIsCaseInsensitive(t *testing.T) {
 		t.Fatalf("unknown repo: err=%v, want ErrNotFound", err)
 	}
 }
+
+func TestMergeRecasedIDKeepsSingleProfile(t *testing.T) {
+	r, _ := newTestRegistry(t)
+	if err := r.Sync(context.Background(), &FakeHub{Repos: sampleRepos()}); err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	on := true
+	topics := []string{"ai"}
+	appetite := "small"
+	if _, err := r.ApplyOwnerUpdate("kubestellar/dibs", "bob", OwnerUpdate{AcceptingIdeas: &on, Topics: &topics, Appetite: &appetite}); err != nil {
+		t.Fatalf("ApplyOwnerUpdate: %v", err)
+	}
+	if err := r.AddPassedIdea("kubestellar/dibs", "bob", "idea-1"); err != nil {
+		t.Fatalf("AddPassedIdea: %v", err)
+	}
+	before := len(r.List(false))
+	symbol, _ := r.Get("kubestellar/dibs")
+
+	recased := RepoProfile{RepoID: "KubeStellar/Dibs", HiveID: "hive-x", Owner: "bob"}
+	if err := r.Merge([]RepoProfile{recased}); err != nil {
+		t.Fatalf("Merge: %v", err)
+	}
+	if got := len(r.List(false)); got != before {
+		t.Fatalf("re-cased Merge created a duplicate: %d profiles, want %d", got, before)
+	}
+	rp, err := r.Get("kubestellar/dibs")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if rp.RepoID != "kubestellar/dibs" || rp.Symbol != symbol.Symbol {
+		t.Fatalf("canonical ID/symbol changed: %+v", rp)
+	}
+	if !rp.AcceptingIdeas || len(rp.Topics) != 1 || rp.Appetite != appetite || !rp.HasPassed("idea-1") {
+		t.Fatalf("re-cased Merge lost owner fields: %+v", rp)
+	}
+}
+
+func TestSeedFileRecasedEntryDoesNotClobberOrDuplicate(t *testing.T) {
+	r, dir := newTestRegistry(t)
+	if err := r.Merge([]RepoProfile{{RepoID: "demo/repo", HiveID: "hive-demo", Owner: "alice", AcceptingIdeas: true}}); err != nil {
+		t.Fatalf("Merge: %v", err)
+	}
+	off := false
+	if _, err := r.ApplyOwnerUpdate("demo/repo", "alice", OwnerUpdate{AcceptingIdeas: &off}); err != nil {
+		t.Fatalf("ApplyOwnerUpdate: %v", err)
+	}
+	seed := filepath.Join(dir, "seed.json")
+	raw, _ := json.Marshal([]RepoProfile{{RepoID: "Demo/Repo", HiveID: "hive-demo", Owner: "alice", AcceptingIdeas: true}})
+	if err := os.WriteFile(seed, raw, 0o644); err != nil {
+		t.Fatalf("writing seed: %v", err)
+	}
+	if err := r.LoadSeedFile(seed); err != nil {
+		t.Fatalf("LoadSeedFile: %v", err)
+	}
+	if got := len(r.List(false)); got != 1 {
+		t.Fatalf("re-cased seed entry created a duplicate: %d profiles", got)
+	}
+	rp, _ := r.Get("demo/repo")
+	if rp.AcceptingIdeas {
+		t.Fatal("re-cased seed entry clobbered a local edit")
+	}
+}
