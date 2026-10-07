@@ -245,6 +245,29 @@ func TestRequestMetricsTotalsMonotonic(t *testing.T) {
 	}
 }
 
+func TestRequestMetricsLatencyHistogram(t *testing.T) {
+	m := newRequestMetrics()
+	m.record("GET", "api/ideas", 200, 30*time.Millisecond)
+	m.record("GET", "api/ideas", 200, 3*time.Second)
+
+	var buf bytes.Buffer
+	m.writeProm(&buf)
+	out := buf.String()
+	lbl := `method="GET",route_group="api/ideas",status_class="2xx"`
+	for _, want := range []string{
+		"# TYPE dibs_http_request_duration_seconds histogram\n",
+		`dibs_http_request_duration_seconds_bucket{` + lbl + `,le="0.005"} 0` + "\n",
+		`dibs_http_request_duration_seconds_bucket{` + lbl + `,le="0.1"} 1` + "\n",
+		`dibs_http_request_duration_seconds_bucket{` + lbl + `,le="5"} 2` + "\n",
+		`dibs_http_request_duration_seconds_bucket{` + lbl + `,le="+Inf"} 2` + "\n",
+		`dibs_http_request_duration_seconds_count{` + lbl + `} 2` + "\n",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output missing %q:\n%s", want, out)
+		}
+	}
+}
+
 func TestMetricsHandler(t *testing.T) {
 	reqStats.record("POST", "api/ideas", 201, time.Millisecond)
 	RecordJob(JobRegistrySync, nil)

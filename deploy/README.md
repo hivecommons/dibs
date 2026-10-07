@@ -84,6 +84,7 @@ format) on a separate internal listener, `DIBS_METRICS_ADDR` (`:9090`). The
 Service exposes it as port `metrics`; the ingress only routes `http`, so the
 endpoint is not reachable from the public host. Metrics:
 `dibs_http_requests_total{method,route_group,status_class}`,
+`dibs_http_request_duration_seconds{method,route_group,status_class}` (histogram, fixed buckets),
 `dibs_background_job_runs_total{job,result}`,
 `dibs_background_job_last_success_timestamp_seconds{job}` and
 `dibs_match_llm_calls_total{op,outcome}`.

@@ -20,6 +20,17 @@ spec:
           annotations:
             runbook_url: https://github.com/hivecommons/dibs/blob/main/runbooks/incident-response.md#1-triage-first-5-minutes
             summary: More than 0.5% of Dibs requests are failing with 5xx.
+        - alert: DibsHighLatencyP95
+          expr: |
+            histogram_quantile(0.95,
+              sum by (le) (rate(dibs_http_request_duration_seconds_bucket{route_group!="readyz"}[5m]))
+            ) > 1
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            runbook_url: https://github.com/hivecommons/dibs/blob/main/runbooks/incident-response.md#1-triage-first-5-minutes
+            summary: Dibs p95 request latency has been above 1s for 15 minutes.
         - alert: DibsReadyzFailing
           expr: sum(increase(dibs_http_requests_total{route_group="readyz",status_class="5xx"}[5m])) > 0
           for: 5m
