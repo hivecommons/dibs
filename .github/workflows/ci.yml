@@ -36,7 +36,12 @@ jobs:
             "https://github.com/yannh/kubeconform/releases/download/${ver}/kubeconform-linux-amd64.tar.gz"
           echo "${sum}  kubeconform.tgz" | sha256sum -c -
           tar xzf kubeconform.tgz kubeconform
-          ./kubeconform -strict -summary deploy/
+          # deploy/monitoring/ holds Prometheus Operator CRs; their schemas
+          # come from the community CRDs-catalog, not the core k8s set.
+          ./kubeconform -strict -summary \
+            -schema-location default \
+            -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
+            deploy/
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: go.mod

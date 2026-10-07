@@ -223,3 +223,53 @@ func TestRequestMetricsLogSnapshot(t *testing.T) {
 		t.Fatalf("logSnapshot must reset, got %v", got)
 	}
 }
+
+func TestRequestMetricsTotalsMonotonic(t *testing.T) {
+	m := newRequestMetrics()
+	m.record("GET", "api/ideas", 200, time.Millisecond)
+	m.snapshotAndReset()
+	m.record("GET", "api/ideas", 200, time.Millisecond)
+	m.record("GET", "readyz", 503, time.Millisecond)
+
+	var buf bytes.Buffer
+	m.writeProm(&buf)
+	out := buf.String()
+	for _, want := range []string{
+		"# TYPE dibs_http_requests_total counter\n",
+		`dibs_http_requests_total{method="GET",route_group="api/ideas",status_class="2xx"} 2` + "\n",
+		`dibs_http_requests_total{method="GET",route_group="readyz",status_class="5xx"} 1` + "\n",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestMetricsHandler(t *testing.T) {
+	reqStats.record("POST", "api/ideas", 201, time.Millisecond)
+	RecordJob(JobRegistrySync, nil)
+	rr := httptest.NewRecorder()
+	MetricsHandler().ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d", rr.Code)
+	}
+	if got := rr.Header().Get("Content-Type"); got != "text/plain; version=0.0.4; charset=utf-8" {
+		t.Errorf("Content-Type = %q", got)
+	}
+	out := rr.Body.String()
+	for _, want := range []string{
+		"dibs_http_requests_total{",
+		`dibs_background_job_runs_total{job="registry_sync",result="ok"}`,
+		"# TYPE dibs_background_job_last_success_timestamp_seconds gauge",
+		"# TYPE dibs_match_llm_calls_total counter",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output missing %q:\n%s", want, out)
+		}
+	}
+	rr = httptest.NewRecorder()
+	MetricsHandler().ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/other", nil))
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("/other status = %d, want 404", rr.Code)
+	}
+}

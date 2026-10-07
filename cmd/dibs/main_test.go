@@ -93,6 +93,8 @@ func setupEnv(t *testing.T, dataDir string) {
 	t.Setenv("DATA_DIR", dataDir)
 	t.Setenv("IDEATE_ADDR", "")
 	t.Setenv("DIBS_ADDR", "")
+	t.Setenv("DIBS_METRICS_ADDR", "")
+	t.Setenv("IDEATE_METRICS_ADDR", "")
 	t.Setenv("DIBS_BASE_PATH", "")
 	t.Setenv("IDEATE_BASE_PATH", "")
 	t.Setenv("HUB_URL", "http://127.0.0.1:1")
@@ -258,5 +260,19 @@ func TestServeUntilListenError(t *testing.T) {
 	srv := &http.Server{Addr: "bad-address-no-port"}
 	if err := serveUntil(context.Background(), srv, time.Second); err == nil {
 		t.Fatal("expected listen error")
+	}
+}
+
+func TestListenMetricsBadAddr(t *testing.T) {
+	if err := listenMetrics("not-an-addr"); err == nil {
+		t.Fatal("expected listen error for invalid address")
+	}
+}
+
+func TestRunStartsMetricsListener(t *testing.T) {
+	setupEnv(t, t.TempDir())
+	t.Setenv("DIBS_METRICS_ADDR", "127.0.0.1:0")
+	if err := run(nil, io.Discard, io.Discard, testServe(nil, nil)); err != nil {
+		t.Fatalf("run: %v", err)
 	}
 }

@@ -155,9 +155,9 @@ func New(cfg Config) http.Handler {
 	// strings. Wrapping outermost covers public, authenticated, rejected,
 	// and MCP requests alike, and accounts for /healthz and /readyz as
 	// their own route group rather than mixing them into application
-	// traffic. Log-only for now: no exporter, scrape endpoint, or metrics
-	// SDK is added until a backend is chosen.
-	reqMetrics := newRequestMetrics()
+	// traffic. Totals are scraped from the separate internal listener
+	// (MetricsHandler), never from this public mux.
+	reqMetrics := reqStats
 	go reqMetrics.logPeriodically(metricsLogInterval)
 	go match.LogLLMOutcomesPeriodically(metricsLogInterval)
 	go jobStats.logPeriodically(metricsLogInterval)

@@ -1,0 +1,42 @@
+# Optional: requires the Prometheus Operator CRDs (see deploy/README.md).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: dibs
+  namespace: dibs
+  labels:
+    app: dibs
+spec:
+  groups:
+    - name: dibs
+      rules:
+        - alert: DibsHigh5xxRatio
+          expr: |
+            sum(rate(dibs_http_requests_total{status_class="5xx"}[5m]))
+              / sum(rate(dibs_http_requests_total[5m])) > 0.005
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: More than 0.5% of Dibs requests are failing with 5xx.
+        - alert: DibsReadyzFailing
+          expr: sum(increase(dibs_http_requests_total{route_group="readyz",status_class="5xx"}[5m])) > 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: Dibs /readyz is failing; the store data directory is not usable.
+        - alert: DibsBackgroundJobFailing
+          expr: sum by (job) (increase(dibs_background_job_runs_total{result="error"}[30m])) > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: Dibs background job {{ $labels.job }} is failing.
+        - alert: DibsBackgroundJobStale
+          expr: time() - dibs_background_job_last_success_timestamp_seconds > 3600
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: Dibs background job {{ $labels.job }} has not succeeded for over an hour.

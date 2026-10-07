@@ -1,0 +1,18 @@
+# Optional: requires the Prometheus Operator CRDs (see deploy/README.md).
+# Scrapes the internal "metrics" port of the dibs Service; the ingress only
+# routes the "http" port, so /metrics is never publicly reachable.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: dibs
+  namespace: dibs
+  labels:
+    app: dibs
+spec:
+  selector:
+    matchLabels:
+      app: dibs
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s

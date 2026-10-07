@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"sort"
@@ -122,10 +123,16 @@ type requestMetrics struct {
 	mu     sync.Mutex
 	counts map[metricKey]int64
 	durMS  map[metricKey]int64
+	// totals are cumulative since process start and never reset, so a
+	// scraper sees monotonic counters; counts/durMS are the log window.
+	totals map[metricKey]int64
 }
 
+// reqStats is the process-wide request counter set read by MetricsHandler.
+var reqStats = newRequestMetrics()
+
 func newRequestMetrics() *requestMetrics {
-	return &requestMetrics{counts: map[metricKey]int64{}, durMS: map[metricKey]int64{}}
+	return &requestMetrics{counts: map[metricKey]int64{}, durMS: map[metricKey]int64{}, totals: map[metricKey]int64{}}
 }
 
 func (m *requestMetrics) record(method, route string, status int, dur time.Duration) {
@@ -133,13 +140,42 @@ func (m *requestMetrics) record(method, route string, status int, dur time.Durat
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.counts[key]++
+	m.totals[key]++
 	m.durMS[key] += dur.Milliseconds()
 }
 
+// writeProm writes the cumulative request totals in Prometheus text
+// exposition format, sorted deterministically.
+func (m *requestMetrics) writeProm(w io.Writer) {
+	m.mu.Lock()
+	keys := make([]metricKey, 0, len(m.totals))
+	vals := make(map[metricKey]int64, len(m.totals))
+	for k, n := range m.totals {
+		keys = append(keys, k)
+		vals[k] = n
+	}
+	m.mu.Unlock()
+	sort.Slice(keys, func(i, j int) bool {
+		a, b := keys[i], keys[j]
+		if a.Route != b.Route {
+			return a.Route < b.Route
+		}
+		if a.Method != b.Method {
+			return a.Method < b.Method
+		}
+		return a.StatusClass < b.StatusClass
+	})
+	fmt.Fprintln(w, "# HELP dibs_http_requests_total HTTP requests by method, route group and status class.")
+	fmt.Fprintln(w, "# TYPE dibs_http_requests_total counter")
+	for _, k := range keys {
+		fmt.Fprintf(w, "dibs_http_requests_total{method=%q,route_group=%q,status_class=%q} %d\n", k.Method, k.Route, k.StatusClass, vals[k])
+	}
+}
+
 // snapshotAndReset returns the accumulated samples sorted deterministically
-// and clears the counters, so memory stays bounded to the number of
-// distinct keys seen since the last flush (itself bounded by the fixed
-// label sets above).
+// and clears the window counters (not the cumulative totals), so memory
+// stays bounded to the number of distinct keys seen since the last flush
+// (itself bounded by the fixed label sets above).
 func (m *requestMetrics) snapshotAndReset() []metricSample {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -177,11 +213,10 @@ func (m *requestMetrics) logSnapshot() {
 	}
 }
 
-// logPeriodically flushes accumulated metrics on a fixed interval. This is
-// intentionally log-only: no external exporter, scrape endpoint, or
-// metrics SDK dependency is added until a backend is chosen (see issue
-// #184) — it just gives operators the bounded request visibility the
-// current /healthz and /readyz probes cannot.
+// logPeriodically flushes accumulated metrics on a fixed interval. The
+// cumulative totals are separately exposed on the internal /metrics
+// listener (see MetricsHandler); no exporter or metrics SDK dependency is
+// involved.
 func (m *requestMetrics) logPeriodically(interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()

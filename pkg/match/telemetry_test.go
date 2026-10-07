@@ -1,9 +1,11 @@
 package match
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/hivecommons/dibs/pkg/store"
@@ -72,4 +74,29 @@ func TestGenerateTLDREmptyReplyRecorded(t *testing.T) {
 		}
 	}
 	t.Fatal("expected a tldr fallback outcome to be recorded")
+}
+
+func TestLLMOutcomesTotalsMonotonic(t *testing.T) {
+	c := &llmOutcomes{counts: map[llmKey]int64{}, totals: map[llmKey]int64{}}
+	c.record(opScore, outcomeLLMOK)
+	c.snapshotAndReset()
+	c.record(opScore, outcomeLLMOK)
+	c.record(opTLDR, outcomeLLMError)
+	var buf bytes.Buffer
+	c.writeProm(&buf)
+	out := buf.String()
+	for _, want := range []string{
+		"# TYPE dibs_match_llm_calls_total counter\n",
+		`dibs_match_llm_calls_total{op="score",outcome="llm_ok"} 2` + "\n",
+		`dibs_match_llm_calls_total{op="tldr",outcome="llm_error"} 1` + "\n",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output missing %q:\n%s", want, out)
+		}
+	}
+	buf.Reset()
+	WritePrometheus(&buf)
+	if !strings.Contains(buf.String(), "# HELP dibs_match_llm_calls_total") {
+		t.Errorf("WritePrometheus missing header:\n%s", buf.String())
+	}
 }

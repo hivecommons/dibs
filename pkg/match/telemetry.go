@@ -2,6 +2,8 @@ package match
 
 import (
 	"errors"
+	"fmt"
+	"io"
 	"log/slog"
 	"sort"
 	"sync"
@@ -36,23 +38,57 @@ type llmSample struct {
 
 // llmOutcomes counts LLM call outcomes by (op, outcome) so the
 // LLM-to-fallback rate is visible without grepping per-call log lines.
-// Log-only, like the HTTP request metrics: no exporter until a backend is
-// chosen.
+// Window counts feed the log and are reset; totals are cumulative for
+// /metrics.
 type llmOutcomes struct {
 	mu     sync.Mutex
 	counts map[llmKey]int64
+	totals map[llmKey]int64
 }
 
-var llmStats = &llmOutcomes{counts: map[llmKey]int64{}}
+var llmStats = &llmOutcomes{counts: map[llmKey]int64{}, totals: map[llmKey]int64{}}
 
 func (c *llmOutcomes) record(op, outcome string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.counts == nil {
+		c.counts = map[llmKey]int64{}
+	}
+	if c.totals == nil {
+		c.totals = map[llmKey]int64{}
+	}
 	c.counts[llmKey{op, outcome}]++
+	c.totals[llmKey{op, outcome}]++
 }
 
-// snapshotAndReset returns the counts sorted deterministically and clears
-// them.
+// WritePrometheus writes the cumulative LLM outcome totals in Prometheus
+// text exposition format.
+func WritePrometheus(w io.Writer) { llmStats.writeProm(w) }
+
+func (c *llmOutcomes) writeProm(w io.Writer) {
+	c.mu.Lock()
+	keys := make([]llmKey, 0, len(c.totals))
+	vals := make(map[llmKey]int64, len(c.totals))
+	for k, n := range c.totals {
+		keys = append(keys, k)
+		vals[k] = n
+	}
+	c.mu.Unlock()
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i].Op != keys[j].Op {
+			return keys[i].Op < keys[j].Op
+		}
+		return keys[i].Outcome < keys[j].Outcome
+	})
+	fmt.Fprintln(w, "# HELP dibs_match_llm_calls_total Match-engine LLM call outcomes by operation and outcome.")
+	fmt.Fprintln(w, "# TYPE dibs_match_llm_calls_total counter")
+	for _, k := range keys {
+		fmt.Fprintf(w, "dibs_match_llm_calls_total{op=%q,outcome=%q} %d\n", k.Op, k.Outcome, vals[k])
+	}
+}
+
+// snapshotAndReset returns the window counts sorted deterministically and
+// clears them; cumulative totals are untouched.
 func (c *llmOutcomes) snapshotAndReset() []llmSample {
 	c.mu.Lock()
 	defer c.mu.Unlock()

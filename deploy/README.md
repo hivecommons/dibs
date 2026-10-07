@@ -38,6 +38,7 @@ kubectl apply -f deploy/ingress.yaml
 | `DIBS_ADDR` | ConfigMap | `:8080` | Listen address |
 | `DIBS_BASE_PATH` | ConfigMap | `/` | URL prefix (root on the subdomain) |
 | `HUB_URL` | ConfigMap | `https://hive.hivecommons.dev` | Hub origin for auth + registry sync |
+| `DIBS_METRICS_ADDR` | ConfigMap | unset (off); `:9090` in `configmap.yaml` | Internal Prometheus `/metrics` listener |
 | `DATA_DIR` | ConfigMap | `/data` | JSON store root (backed by the PVC) |
 | `DIBS_LLM_BASE_URL` | Secret (optional) | unset | litellm gateway; unset ⇒ deterministic fallback matcher |
 | `DIBS_LLM_API_KEY` | Secret (optional) | unset | Gateway API key |
@@ -75,3 +76,22 @@ kubectl -n dibs create secret generic dibs-secrets \
   verifies the `/data` store directory is accessible and writable, returning
   503 if not — this is what the readiness probe uses, so a pod is never
   routed traffic before (or after) its store dependency is usable.
+
+## Metrics and alerts (optional)
+
+Dibs serves cumulative, bounded counters at `/metrics` (Prometheus text
+format) on a separate internal listener, `DIBS_METRICS_ADDR` (`:9090`). The
+Service exposes it as port `metrics`; the ingress only routes `http`, so the
+endpoint is not reachable from the public host. Metrics:
+`dibs_http_requests_total{method,route_group,status_class}`,
+`dibs_background_job_runs_total{job,result}`,
+`dibs_background_job_last_success_timestamp_seconds{job}` and
+`dibs_match_llm_calls_total{op,outcome}`.
+
+`deploy/monitoring/` holds a `ServiceMonitor` and a `PrometheusRule`. They
+need the Prometheus Operator CRDs and are deliberately not part of the apply
+list above:
+
+```sh
+kubectl apply -f deploy/monitoring/
+```
