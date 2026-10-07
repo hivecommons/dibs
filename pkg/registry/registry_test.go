@@ -255,3 +255,34 @@ func TestSeedFile(t *testing.T) {
 		t.Fatal("seed re-load clobbered a local edit")
 	}
 }
+
+func TestLookupIsCaseInsensitive(t *testing.T) {
+	r, _ := newTestRegistry(t)
+	if err := r.Sync(context.Background(), &FakeHub{Repos: sampleRepos()}); err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	rp, err := r.Get("KubeStellar/DIBS")
+	if err != nil {
+		t.Fatalf("Get case-folded: %v", err)
+	}
+	if rp.RepoID != "kubestellar/dibs" {
+		t.Fatalf("Get must return the registered spelling, got %q", rp.RepoID)
+	}
+	on := true
+	if _, err := r.ApplyOwnerUpdate("Kubestellar/Dibs", "bob", OwnerUpdate{AcceptingIdeas: &on}); err != nil {
+		t.Fatalf("ApplyOwnerUpdate case-folded: %v", err)
+	}
+	if err := r.AddPassedIdea("KUBESTELLAR/dibs", "bob", "idea-1"); err != nil {
+		t.Fatalf("AddPassedIdea case-folded: %v", err)
+	}
+	canon, _ := r.Get("kubestellar/dibs")
+	if !canon.AcceptingIdeas || !canon.HasPassed("idea-1") {
+		t.Fatalf("case-folded writes must land on the canonical entry: %+v", canon)
+	}
+	if len(r.List(false)) != 2 {
+		t.Fatalf("case-folded writes must not create a second entry: %+v", r.List(false))
+	}
+	if _, err := r.Get("kubestellar/unknown"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("unknown repo: err=%v, want ErrNotFound", err)
+	}
+}

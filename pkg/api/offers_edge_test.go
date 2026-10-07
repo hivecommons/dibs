@@ -339,3 +339,26 @@ func TestNotificationsWithoutStore(t *testing.T) {
 		t.Fatalf("mark read without store: status=%d, want 204", rec.Code)
 	}
 }
+
+// A hive-managed repo typed in a different case must still take the hive
+// path (owner acceptance, AcceptingIdeas gate, canonical RepoID) rather
+// than falling through to the external-target flow.
+func TestOfferCaseFoldedRepoStaysHiveManaged(t *testing.T) {
+	a, mux := newAPIFixture(t)
+
+	idea := mustCreate(t, a, "bob", "Case folded offer", store.VisibilityPublic, store.StatusDraft)
+	rec := do(t, mux, ident("bob"), "POST", "/api/ideas/"+idea.ID+"/offer", `{"repoID":"Org/Other"}`)
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "not accepting") {
+		t.Fatalf("closed repo in different case must still be gated: status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	rec = do(t, mux, ident("bob"), "POST", "/api/ideas/"+idea.ID+"/offer", `{"repoID":"KubeStellar/Dibs"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("case-folded hive offer: status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	offered := decodeBody[store.Idea](t, rec)
+	o := offered.OfferTo("kubestellar/dibs")
+	if o == nil || o.External || offered.TargetRepo != "" {
+		t.Fatalf("case-folded offer must be a pending hive offer under the canonical RepoID, got %+v", offered)
+	}
+}

@@ -12,6 +12,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/hivecommons/dibs/pkg/notify"
 	"github.com/hivecommons/dibs/pkg/registry"
@@ -162,6 +163,7 @@ func (a *API) handleConfirmIssue(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "idea has no target repo")
 		return
 	}
+	in.IssueURL = strings.TrimSpace(in.IssueURL)
 	if err := settle.ValidateIssueURL(in.IssueURL, idea.TargetRepo); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
