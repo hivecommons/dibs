@@ -1,7 +1,7 @@
 # Service level objectives for Dibs
 
 These SLIs are measurable today without a metrics backend: readiness probe
-state from Kubernetes and the periodic `metrics:` log lines emitted by
+state from Kubernetes and the periodic `metrics` JSON log lines emitted by
 `pkg/server/metrics.go`. When a backend is chosen (issue #184), translate each
 SLI into a recorded query and add burn-rate alerts that link back to
 [incident-response.md](incident-response.md).
@@ -9,8 +9,8 @@ SLI into a recorded query and add burn-rate alerts that link back to
 | SLI | Definition | Source | Objective (30 days) |
 |---|---|---|---|
 | Availability | Share of time at least one pod is Ready (`/readyz` 200) | Kubernetes pod Ready condition | 99.5% |
-| Request success | Share of requests not answered `5xx` | `metrics:` lines, `status` class | 99.5% |
-| Latency | Average `avg_ms` for API routes stays under 500 ms in each 5-minute flush | `metrics:` lines, `avg_ms` | 99% of flushes |
+| Request success | Share of requests not answered `5xx` | `metrics http` log lines, `status` class | 99.5% |
+| Latency | Average `avg_ms` for API routes stays under 500 ms in each 5-minute flush | `metrics http` log lines, `avg_ms` | 99% of flushes |
 
 Probe semantics: `/healthz` is liveness only (process is up). `/readyz`
 checks that the store's data directory is accessible and writable, which is
@@ -18,12 +18,29 @@ required to serve traffic, so it is the signal for availability.
 
 ## Measuring from logs
 
+Logs are JSON, one object per line. Request metrics have `msg` `metrics http`
+with fields `method`, `route`, `status` (class, e.g. `5xx`), `count`, `avg_ms`:
+
 ```sh
-kubectl -n dibs logs deploy/dibs --since=24h | grep 'metrics:' | grep 'status=5xx'
+kubectl -n dibs logs deploy/dibs --since=24h \
+  | jq -c 'select(.msg == "metrics http" and .status == "5xx")'
 ```
 
 Sum `count` by `status` class to compute the success ratio. Flushes reset the
 counters, so each line covers one 5-minute window.
+
+LLM outcome counters have `msg` `metrics match_llm` with `op`, `outcome`,
+`count`.
+
+Background jobs (`catalog_refresh`, `registry_sync`) flush `metrics job`
+lines with `job`, `outcome` (`ok` or `error`) and `count` per window, plus a
+`metrics job last success` line per job with `last_success` (RFC 3339). A job
+failing repeatedly, or whose `last_success` is stale, shows up with:
+
+```sh
+kubectl -n dibs logs deploy/dibs --since=1h \
+  | jq -c 'select(.msg == "metrics job" and .outcome == "error")'
+```
 
 ## Error budget policy
 

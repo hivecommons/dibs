@@ -476,3 +476,7 @@ func TestNewStoreLoadsAndNormalizesExistingFile(t *testing.T) {
 		t.Fatalf("normalization wrong: %+v", days)
 	}
 }
+
+func TestLogWarnDefault(t *testing.T) {
+	logWarn("history backfill %s: %v", "o/r", "boom") // must not panic
+}

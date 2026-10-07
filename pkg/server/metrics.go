@@ -2,7 +2,7 @@ package server
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"sort"
 	"strings"
@@ -170,6 +170,13 @@ func (m *requestMetrics) snapshotAndReset() []metricSample {
 	return samples
 }
 
+// logSnapshot flushes accumulated request metrics to the log and resets them.
+func (m *requestMetrics) logSnapshot() {
+	for _, s := range m.snapshotAndReset() {
+		slog.Info("metrics http", "method", s.Method, "route", s.Route, "status", s.StatusClass, "count", s.Count, "avg_ms", s.AvgMS)
+	}
+}
+
 // logPeriodically flushes accumulated metrics on a fixed interval. This is
 // intentionally log-only: no external exporter, scrape endpoint, or
 // metrics SDK dependency is added until a backend is chosen (see issue
@@ -179,9 +186,7 @@ func (m *requestMetrics) logPeriodically(interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for range ticker.C {
-		for _, s := range m.snapshotAndReset() {
-			log.Printf("metrics: method=%s route=%s status=%s count=%d avg_ms=%.1f", s.Method, s.Route, s.StatusClass, s.Count, s.AvgMS)
-		}
+		m.logSnapshot()
 	}
 }
 

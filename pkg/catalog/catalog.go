@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"math"
 	"net/http"
 	"net/url"
@@ -71,6 +71,9 @@ type Store struct {
 	Now     func() time.Time
 	Logf    func(string, ...any)
 
+	// OnRefresh, when set, receives the result of each background refresh.
+	OnRefresh func(error)
+
 	active bool
 }
 
@@ -79,7 +82,7 @@ func New(dir, token string) (*Store, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, fmt.Errorf("catalog: creating data dir: %w", err)
 	}
-	s := &Store{path: filepath.Join(dir, CacheFile), Token: token, Client: &http.Client{Timeout: requestTimeout}, Logf: log.Printf}
+	s := &Store{path: filepath.Join(dir, CacheFile), Token: token, Client: &http.Client{Timeout: requestTimeout}, Logf: logWarn}
 	raw, err := os.ReadFile(s.path)
 	switch {
 	case errors.Is(err, os.ErrNotExist):
@@ -121,7 +124,11 @@ func (s *Store) RefreshAsync() {
 		defer s.clearActive()
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
-		if err := s.Refresh(ctx); err != nil && s.Logf != nil {
+		err := s.Refresh(ctx)
+		if s.OnRefresh != nil {
+			s.OnRefresh(err)
+		}
+		if err != nil && s.Logf != nil {
 			s.Logf("catalog refresh: %v", err)
 		}
 	}()
@@ -524,4 +531,9 @@ func (b *BM25) TopK(query string, k int) []Candidate {
 		out = out[:k]
 	}
 	return out
+}
+
+// logWarn is the default Logf: a constant message with the detail as an attr.
+func logWarn(format string, args ...any) {
+	slog.Warn("catalog", "detail", fmt.Sprintf(format, args...))
 }

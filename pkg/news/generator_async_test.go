@@ -114,3 +114,7 @@ func TestTruncateOneLine(t *testing.T) {
 		})
 	}
 }
+
+func TestLogWarnDefault(t *testing.T) {
+	logWarn("news refresh %s: %v", "o/r", "boom") // must not panic
+}

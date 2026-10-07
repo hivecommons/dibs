@@ -8,7 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -72,6 +72,7 @@ func displayBasePath(base string) string {
 }
 
 func main() {
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, nil)))
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
 	defer stop()
 	err := run(os.Args[1:], os.Stdout, os.Stderr, func(srv *http.Server) error {
@@ -79,7 +80,8 @@ func main() {
 	})
 	if err != nil {
 		stop()
-		log.Fatal(err)
+		slog.Error("fatal", "err", err)
+		os.Exit(1)
 	}
 }
 
@@ -144,6 +146,7 @@ func run(args []string, stdout, stderr io.Writer, serve func(*http.Server) error
 	if err != nil {
 		return fmt.Errorf("opening CNCF catalog: %w", err)
 	}
+	cncfCatalog.OnRefresh = func(err error) { server.RecordJob(server.JobCatalogRefresh, err) }
 	cncfCatalog.RefreshAsync()
 
 	notifications, err := notify.New(dataDir)
@@ -156,9 +159,9 @@ func run(args []string, stdout, stderr io.Writer, serve func(*http.Server) error
 	// without a gateway.
 	llm := match.LLMFromEnv()
 	if llm != nil {
-		log.Printf("match engine: llm gateway %s (model %s)", llm.BaseURL, llm.Model)
+		slog.Info("match engine llm gateway", "base_url", llm.BaseURL, "model", llm.Model)
 	} else {
-		log.Printf("match engine: %s unset — deterministic fallback matcher", match.EnvLLMBaseURL)
+		slog.Info("match engine deterministic fallback", "unset_env", match.EnvLLMBaseURL)
 	}
 	engine := &match.Engine{Store: st, Registry: reg, Catalog: cncfCatalog, LLM: llm, Notifier: &api.MatchNotifier{Notify: notifications}}
 
@@ -169,9 +172,9 @@ func run(args []string, stdout, stderr io.Writer, serve func(*http.Server) error
 	settler := &settle.Settler{}
 	if gh := settle.FromEnv(); gh != nil {
 		settler.GitHub = gh
-		log.Printf("settlement: %s set — LEGACY server-side issue creation enabled", settle.EnvGitHubToken)
+		slog.Info("settlement legacy issue creation enabled", "env", settle.EnvGitHubToken)
 	} else {
-		log.Printf("settlement: matchmaker mode — ideators file issues via prefilled GitHub URLs")
+		slog.Info("settlement matchmaker mode")
 	}
 	backfiller := history.NewBackfiller(hist, envOr(settle.EnvGitHubToken, ""))
 	newsGen := news.NewGenerator(newsStore, backfiller, llm)
@@ -180,7 +183,7 @@ func run(args []string, stdout, stderr io.Writer, serve func(*http.Server) error
 		if err := reg.LoadSeedFile(seed); err != nil {
 			return fmt.Errorf("loading REPOS_SEED_FILE: %w", err)
 		}
-		log.Printf("seeded repo registry from %s", seed)
+		slog.Info("seeded repo registry", "path", seed)
 	}
 
 	// Background hub→registry sync. Failures are logged, never fatal: the
@@ -189,8 +192,10 @@ func run(args []string, stdout, stderr io.Writer, serve func(*http.Server) error
 	go func() {
 		for {
 			ctx, cancel := context.WithTimeout(context.Background(), hubSyncTimeout)
-			if err := reg.Sync(ctx, hubRepos); err != nil {
-				log.Printf("registry sync: %v", err)
+			err := reg.Sync(ctx, hubRepos)
+			server.RecordJob(server.JobRegistrySync, err)
+			if err != nil {
+				slog.Warn("registry sync failed", "job", server.JobRegistrySync, "err", err)
 			} else {
 				repos := reg.List(false)
 				backfiller.RefreshAsync(repos)
@@ -217,7 +222,7 @@ func run(args []string, stdout, stderr io.Writer, serve func(*http.Server) error
 		Version: gitHash,
 	})
 
-	log.Printf("dibs %s listening on %s (base path %s, hub %s, data %s)", gitShort, addr, displayBasePath(basePath), hubURL, dataDir)
+	slog.Info("listening", "version", gitShort, "addr", addr, "base_path", displayBasePath(basePath), "hub", hubURL, "data_dir", dataDir)
 	srv := &http.Server{
 		Addr:              addr,
 		Handler:           handler,

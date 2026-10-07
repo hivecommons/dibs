@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -189,7 +189,7 @@ func NewBackfiller(store *Store, token string) *Backfiller {
 		Store:  store,
 		Token:  token,
 		Client: &http.Client{Timeout: requestTimeout},
-		Logf:   log.Printf,
+		Logf:   logWarn,
 	}
 }
 
@@ -542,4 +542,9 @@ func shouldSkip(resp *http.Response) bool {
 	return resp.StatusCode == http.StatusTooManyRequests ||
 		(resp.StatusCode == http.StatusForbidden &&
 			(resp.Header.Get("Retry-After") != "" || resp.Header.Get("X-RateLimit-Remaining") == "0"))
+}
+
+// logWarn is the default Logf: a constant message with the detail as an attr.
+func logWarn(format string, args ...any) {
+	slog.Warn("history", "detail", fmt.Sprintf(format, args...))
 }

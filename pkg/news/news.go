@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -173,7 +173,7 @@ type Generator struct {
 
 // NewGenerator returns a production generator.
 func NewGenerator(store *Store, fetcher PullFetcher, llm *match.LLM) *Generator {
-	return &Generator{Store: store, Fetcher: fetcher, LLM: llm, Logf: log.Printf}
+	return &Generator{Store: store, Fetcher: fetcher, LLM: llm, Logf: logWarn}
 }
 
 // RefreshAsync starts bounded non-blocking generation for listed repos.
@@ -418,4 +418,9 @@ func ensurePeriod(s string) string {
 	default:
 		return s + "."
 	}
+}
+
+// logWarn is the default Logf: a constant message with the detail as an attr.
+func logWarn(format string, args ...any) {
+	slog.Warn("news", "detail", fmt.Sprintf(format, args...))
 }

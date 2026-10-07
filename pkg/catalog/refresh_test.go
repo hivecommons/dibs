@@ -308,6 +308,8 @@ func TestRefreshAsyncRunsOnceAndClearsActive(t *testing.T) {
 		_, _ = w.Write([]byte(refreshLandscapeYAML))
 	})
 
+	refreshed := make(chan error, 1)
+	s.OnRefresh = func(err error) { refreshed <- err }
 	s.RefreshAsync()
 	select {
 	case <-calls:
@@ -336,6 +338,15 @@ func TestRefreshAsyncRunsOnceAndClearsActive(t *testing.T) {
 			t.Fatal("refresh never completed or active flag never cleared")
 		case <-time.After(10 * time.Millisecond):
 		}
+	}
+
+	select {
+	case err := <-refreshed:
+		if err != nil {
+			t.Fatalf("OnRefresh err = %v, want nil", err)
+		}
+	default:
+		t.Fatal("OnRefresh was not called")
 	}
 
 	// A fresh catalog does not refresh again.
@@ -384,4 +395,8 @@ func TestReadmeIntroStripsNoiseAndTruncates(t *testing.T) {
 	if got := truncateRunes("short", 10); got != "short" {
 		t.Fatalf("truncateRunes = %q, want unchanged", got)
 	}
+}
+
+func TestLogWarnDefault(t *testing.T) {
+	logWarn("catalog refresh: %v", "boom") // must not panic
 }
