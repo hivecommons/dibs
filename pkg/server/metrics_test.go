@@ -1,9 +1,12 @@
 package server
 
 import (
+	"bytes"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -200,5 +203,23 @@ func TestWrapRecordsPanickingHandlerAs5xx(t *testing.T) {
 	got := m.snapshotAndReset()
 	if len(got) != 1 || got[0].StatusClass != "5xx" || got[0].Count != 1 {
 		t.Fatalf("unexpected samples: %+v", got)
+	}
+}
+
+func TestRequestMetricsLogSnapshot(t *testing.T) {
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&buf, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	m := newRequestMetrics()
+	m.record("GET", "api/ideas", 200, 10*time.Millisecond)
+	m.logSnapshot()
+	want := `"msg":"metrics http","method":"GET","route":"api/ideas","status":"2xx","count":1,"avg_ms":10`
+	if !strings.Contains(buf.String(), want) {
+		t.Fatalf("log missing %s:\n%s", want, buf.String())
+	}
+	if got := m.snapshotAndReset(); got != nil {
+		t.Fatalf("logSnapshot must reset, got %v", got)
 	}
 }

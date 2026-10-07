@@ -14,7 +14,7 @@ is not yet known. If a recent merge is the obvious cause, go straight to
      accessible and writable, so the pod is not serving traffic.
 4. Read the logs: `kubectl -n dibs logs deploy/dibs --since=30m`.
    - `readyz: store ping failed: ...` carries the filesystem error.
-   - `metrics: method=... route=... status=5xx count=... avg_ms=...` lines are
+   - `metrics http` JSON lines (`method`, `route`, `status`=5xx, `count`, `avg_ms`) are
      flushed periodically and show which route groups are failing or slow.
 
 ## 2. Decide
@@ -33,7 +33,7 @@ each action taken with its time. Update it whenever the state changes.
 
 ## 4. Close out
 
-- Verify `/healthz` and `/readyz` are `ok` and the 5xx `metrics:` lines have
+- Verify `/healthz` and `/readyz` are `ok` and the 5xx `metrics http` log lines have
   stopped.
 - If data was lost or corrupted, follow [data-recovery.md](data-recovery.md).
 - Open a postmortem from [postmortem-template.md](postmortem-template.md) for

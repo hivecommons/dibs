@@ -5,7 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -205,9 +205,9 @@ func TestRunOptionalIntegrationsLogged(t *testing.T) {
 	t.Setenv("REPOS_SEED_FILE", seed)
 
 	var logs bytes.Buffer
-	prev := log.Writer()
-	log.SetOutput(&logs)
-	t.Cleanup(func() { log.SetOutput(prev) })
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
 
 	var srv *http.Server
 	if err := run(nil, io.Discard, io.Discard, testServe(&srv, nil)); err != nil {
@@ -217,9 +217,9 @@ func TestRunOptionalIntegrationsLogged(t *testing.T) {
 		t.Fatal("server was not built")
 	}
 	for _, want := range []string{
-		"match engine: llm gateway http://127.0.0.1:1/v1 (model test-model)",
-		"settlement: DIBS_GITHUB_TOKEN set — LEGACY server-side issue creation enabled",
-		"seeded repo registry from " + seed,
+		`"msg":"match engine llm gateway","base_url":"http://127.0.0.1:1/v1","model":"test-model"`,
+		`"msg":"settlement legacy issue creation enabled","env":"DIBS_GITHUB_TOKEN"`,
+		`"msg":"seeded repo registry","path":"` + seed + `"`,
 	} {
 		if !strings.Contains(logs.String(), want) {
 			t.Errorf("startup log missing %q:\n%s", want, logs.String())

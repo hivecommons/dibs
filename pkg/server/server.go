@@ -12,7 +12,7 @@ import (
 	"bytes"
 	"embed"
 	"html/template"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -128,7 +128,7 @@ func New(cfg Config) http.Handler {
 			// The route is unauthenticated, so keep the body generic
 			// and log the detail (which includes filesystem paths)
 			// server-side instead.
-			log.Printf("readyz: store ping failed: %v", err)
+			slog.Error("readyz store ping failed", "route", "readyz", "err", err)
 			w.WriteHeader(http.StatusServiceUnavailable)
 			_, _ = w.Write([]byte(`{"status":"unavailable"}` + "\n"))
 			return
@@ -160,5 +160,6 @@ func New(cfg Config) http.Handler {
 	reqMetrics := newRequestMetrics()
 	go reqMetrics.logPeriodically(metricsLogInterval)
 	go match.LogLLMOutcomesPeriodically(metricsLogInterval)
+	go jobStats.logPeriodically(metricsLogInterval)
 	return reqMetrics.wrap(base, root)
 }

@@ -6,7 +6,7 @@ package api
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
 	"sort"
 
@@ -44,7 +44,7 @@ func (a *API) notifyAdd(user, kind, message, ideaID, repoID string) {
 		return
 	}
 	if err := a.Notify.Add(user, kind, message, ideaID, repoID); err != nil {
-		log.Printf("api: adding notification: %v", err)
+		slog.Warn("api adding notification failed", "err", err)
 	}
 }
 
@@ -60,7 +60,7 @@ func (n *MatchNotifier) NewMatch(ideaAuthor, repoOwner string, idea *store.Idea,
 	}
 	add := func(user, msg string) {
 		if err := n.Notify.Add(user, notify.KindMatch, msg, idea.ID, repo.RepoID); err != nil {
-			log.Printf("api: adding match notification: %v", err)
+			slog.Warn("api adding match notification failed", "err", err)
 		}
 	}
 	add(ideaAuthor, "Match: “"+idea.Title+"” fits "+repo.RepoID+".")
@@ -341,11 +341,11 @@ func (a *API) repoView(ctx context.Context, idea *store.Idea, rp *registry.RepoP
 		return v
 	}
 	if _, err := a.Engine.EnsureTLDR(ctx, idea); err != nil {
-		log.Printf("api: ensuring tldr for %s: %v", idea.ID, err)
+		slog.Warn("api ensuring tldr failed", "idea_id", idea.ID, "err", err)
 	}
 	m, err := a.Engine.ScoreForRepo(ctx, idea, rp)
 	if err != nil {
-		log.Printf("api: scoring %s×%s: %v", idea.ID, rp.RepoID, err)
+		slog.Warn("api scoring failed", "idea_id", idea.ID, "repo_id", rp.RepoID, "err", err)
 		return v
 	}
 	v.Score, v.Reason, v.ByLLM = m.Score, m.Reason, m.ByLLM
@@ -460,7 +460,7 @@ func (a *API) accept(w http.ResponseWriter, r *http.Request, idea *store.Idea, r
 	}
 	if a.Engine != nil {
 		if _, err := a.Engine.EnsureTLDR(r.Context(), updated); err != nil {
-			log.Printf("api: ensuring tldr after accept: %v", err)
+			slog.Warn("api ensuring tldr after accept failed", "err", err)
 		}
 	}
 
@@ -488,7 +488,7 @@ func (a *API) legacySettle(w http.ResponseWriter, r *http.Request, updated *stor
 	issueURL, err := a.Settler.Settle(r.Context(), updated, rp.RepoID)
 	if err != nil {
 		warning := "accepted, but opening the GitHub issue failed: " + err.Error()
-		log.Printf("api: legacy settlement for %s on %s: %v", updated.ID, rp.RepoID, err)
+		slog.Warn("api legacy settlement failed", "idea_id", updated.ID, "repo_id", rp.RepoID, "err", err)
 		writeJSON(w, http.StatusOK, map[string]any{"result": "accepted", "idea": ideaForViewer(updated, identity(r).Username), "warning": warning})
 		return
 	}

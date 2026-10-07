@@ -2,7 +2,7 @@ package match
 
 import (
 	"errors"
-	"log"
+	"log/slog"
 	"sort"
 	"sync"
 	"time"
@@ -76,7 +76,7 @@ func (c *llmOutcomes) snapshotAndReset() []llmSample {
 // logSnapshot flushes accumulated outcome counts to the log and resets them.
 func (c *llmOutcomes) logSnapshot() {
 	for _, s := range c.snapshotAndReset() {
-		log.Printf("metrics: match_llm op=%s outcome=%s count=%d", s.Op, s.Outcome, s.Count)
+		slog.Info("metrics match_llm", "op", s.Op, "outcome", s.Outcome, "count", s.Count)
 	}
 }
 

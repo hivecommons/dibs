@@ -42,7 +42,7 @@ running is consistent per file. Keep copies outside the cluster.
 ## Verify
 
 - `curl -fsS <base>/readyz` returns `ok` and the pod is Ready.
-- Spot-check restored ideas through the API and confirm `metrics:` lines show
+- Spot-check restored ideas through the API and confirm `metrics http` log lines show
   no sustained `status=5xx`.
 - Record what was lost (the window between the backup and the incident) in the
   postmortem ([postmortem-template.md](postmortem-template.md)).

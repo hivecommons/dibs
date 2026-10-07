@@ -9,7 +9,7 @@ package match
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"strings"
 	"unicode/utf8"
 
@@ -52,7 +52,7 @@ func (e *Engine) Refine(ctx context.Context, title, body string, repo *registry.
 	out, err := e.LLM.Chat(ctx, system, user)
 	if err != nil {
 		llmStats.record(opRefine, outcomeLLMError)
-		log.Printf("match: refine llm failed, skipping refinement: %v", err)
+		slog.Warn("match refine llm failed, skipping refinement", "op", opRefine, "err", err)
 		return nil
 	}
 	draft := parseRefined(out)
@@ -64,7 +64,7 @@ func (e *Engine) Refine(ctx context.Context, title, body string, repo *registry.
 		} else {
 			llmStats.record(opRefine, outcomeUnparsable)
 		}
-		log.Printf("match: refine llm reply unparsable, skipping refinement: %.80s", out)
+		slog.Warn("match refine llm reply unparsable, skipping refinement", "op", opRefine, "reply", truncate(out, 80))
 	}
 	return draft
 }

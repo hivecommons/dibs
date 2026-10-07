@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"regexp"
 	"sort"
 	"strings"
@@ -136,10 +136,10 @@ func (e *Engine) generateTLDR(ctx context.Context, idea *store.Idea) string {
 		}
 		if err != nil {
 			llmStats.record(opTLDR, outcomeLLMError)
-			log.Printf("match: tldr llm failed, using fallback: %v", err)
+			slog.Warn("match tldr llm failed, using fallback", "op", opTLDR, "err", err)
 		} else {
 			llmStats.record(opTLDR, outcomeLLMEmpty)
-			log.Printf("match: tldr llm returned empty reply, using fallback")
+			slog.Warn("match tldr llm empty reply, using fallback", "op", opTLDR)
 		}
 	}
 	return FallbackTLDR(idea)
@@ -258,7 +258,7 @@ func (e *Engine) score(ctx context.Context, idea *store.Idea, rp *registry.RepoP
 			return m
 		} else {
 			llmStats.record(opScore, outcomeForErr(err))
-			log.Printf("match: llm score failed for %s×%s, using fallback: %v", idea.ID, rp.RepoID, err)
+			slog.Warn("match llm score failed, using fallback", "op", opScore, "idea_id", idea.ID, "repo_id", rp.RepoID, "err", err)
 		}
 
 	}
@@ -314,7 +314,7 @@ func (e *Engine) cncfMatchesForIdea(ctx context.Context, idea *store.Idea, persi
 				m.Score, m.Reason, m.ByLLM = blendScores(m.Score, score), reason, true
 			} else {
 				llmStats.record(opCNCFScore, outcomeForErr(err))
-				log.Printf("match: cncf llm score failed for %s×%s, using BM25 fallback: %v", idea.ID, c.Project.RepoID, err)
+				slog.Warn("match cncf llm score failed, using BM25 fallback", "op", opCNCFScore, "idea_id", idea.ID, "repo_id", c.Project.RepoID, "err", err)
 			}
 		}
 		if progress != nil {
