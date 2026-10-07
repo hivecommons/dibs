@@ -63,3 +63,14 @@ spec:
           annotations:
             runbook_url: https://github.com/hivecommons/dibs/blob/main/runbooks/incident-response.md#5-background-job-alerts
             summary: Dibs background job {{ $labels.job }} has not succeeded for over an hour.
+        - alert: DibsMatchLLMErrorRatio
+          expr: |
+            sum by (op) (increase(dibs_match_llm_calls_total{outcome="llm_error"}[30m]))
+              / sum by (op) (increase(dibs_match_llm_calls_total[30m])) > 0.5
+            and sum by (op) (increase(dibs_match_llm_calls_total[30m])) >= 5
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            runbook_url: https://github.com/hivecommons/dibs/blob/main/runbooks/incident-response.md#2-decide
+            summary: More than half of Dibs match-engine LLM calls for op {{ $labels.op }} are failing.
