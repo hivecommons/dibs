@@ -25,6 +25,11 @@ spec:
       # Must stay above shutdownTimeout (20s, cmd/dibs/main.go) so SIGTERM
       # drains in-flight requests before the kubelet sends SIGKILL.
       terminationGracePeriodSeconds: 30
+      # Dibs never calls the Kubernetes API (hub, GitHub and the LLM gateway
+      # are all plain HTTP), so the pod has no use for a service-account
+      # token; leaving one mounted only hands it to anyone who finds a hole
+      # in the public HTTP surface.
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 65532
