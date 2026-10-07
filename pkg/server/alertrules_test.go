@@ -121,7 +121,7 @@ func scrapeAllFamilies(t *testing.T) exposition {
 	if err != nil {
 		t.Fatalf("store.New: %v", err)
 	}
-	idea := &store.Idea{Title: "Alert contract", Body: "First paragraph.\n\nSecond.", Author: "alice"}
+	idea := &store.Idea{Title: "Alert contract", Body: "First paragraph.\n\nSecond.", Author: "alice", Visibility: store.VisibilityPublic}
 	if err := st.Create(idea); err != nil {
 		t.Fatalf("store.Create: %v", err)
 	}
