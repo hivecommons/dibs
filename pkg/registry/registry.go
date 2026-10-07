@@ -256,7 +256,8 @@ func (r *Registry) Merge(incoming []RepoProfile) error {
 		if in.Topics == nil {
 			in.Topics = []string{}
 		}
-		if existing, ok := r.repos[in.RepoID]; ok {
+		if existing, ok := r.lookupLocked(in.RepoID); ok {
+			in.RepoID = existing.RepoID // keep the stored spelling
 			in.Symbol = existing.Symbol
 			if strings.TrimSpace(in.Description) == "" {
 				in.Description = existing.Description
@@ -301,7 +302,7 @@ func (r *Registry) LoadSeedFile(path string) error {
 		if in.Topics == nil {
 			in.Topics = []string{}
 		}
-		if _, ok := r.repos[in.RepoID]; ok {
+		if _, ok := r.lookupLocked(in.RepoID); ok {
 			continue // never clobber a known repo's local edits
 		}
 		r.repos[in.RepoID] = &in
