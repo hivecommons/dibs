@@ -31,6 +31,10 @@ type Deps struct {
 	// Settler opens credited GitHub issues on accept (nil-GitHub records
 	// accepts without opening issues).
 	Settler *settle.Settler
+	// Issues looks up the GitHub issue an ideator pastes back at
+	// confirm-issue, so settlement only credits issues they actually filed
+	// (nil skips the check — tests only; main always wires it).
+	Issues *settle.HTTPClient
 	// Notify is the in-app notification store (nil disables).
 	Notify *notify.Store
 }

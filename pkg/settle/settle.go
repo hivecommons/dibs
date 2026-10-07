@@ -95,7 +95,9 @@ func (c *HTTPClient) do(ctx context.Context, method, path string, payload, out a
 	if err != nil {
 		return 0, fmt.Errorf("settle: building request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+c.Token)
+	if c.Token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.Token)
+	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 	if payload != nil {
 		req.Header.Set("Content-Type", "application/json")

@@ -9,6 +9,8 @@
 package api
 
 import (
+	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/hivecommons/dibs/pkg/notify"
@@ -164,6 +166,14 @@ func (a *API) handleConfirmIssue(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	// The URL shape alone proves nothing: any existing issue on the target
+	// repo matches it. Settlement credits the ideator on the public wall and
+	// leaderboard, so the issue must really be theirs — fetched from GitHub
+	// and checked for author, age, and kind before the idea flips to
+	// settled.
+	if !a.verifyFiledIssue(w, r, idea, in.IssueURL) {
+		return
+	}
 	settled, err := a.Store.Mutate(idea.ID, true, func(i *store.Idea) error {
 		if err := i.TransitionTo(store.StatusSettled, "settle"); err != nil {
 			return err
@@ -183,4 +193,34 @@ func (a *API) handleConfirmIssue(w http.ResponseWriter, r *http.Request) {
 			settled.ID, rp.RepoID)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"result": "settled", "idea": ideaForViewer(settled, identity(r).Username)})
+}
+
+// verifyFiledIssue resolves issueURL on GitHub and checks it is an issue the
+// ideator filed for this idea (settle.VerifyFiledIssue). It writes the error
+// response itself and reports whether the caller may proceed. A nil Issues
+// lookup skips verification.
+func (a *API) verifyFiledIssue(w http.ResponseWriter, r *http.Request, idea *store.Idea, issueURL string) bool {
+	if a.Issues == nil {
+		return true
+	}
+	number, err := settle.IssueNumber(issueURL)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return false
+	}
+	issue, err := a.Issues.GetIssue(r.Context(), idea.TargetRepo, number)
+	switch {
+	case errors.Is(err, settle.ErrIssueNotFound):
+		writeError(w, http.StatusBadRequest, "that issue does not exist on "+idea.TargetRepo)
+		return false
+	case err != nil:
+		slog.Warn("api verifying confirmed issue failed", "idea_id", idea.ID, "repo_id", idea.TargetRepo, "err", err)
+		writeError(w, http.StatusBadGateway, "could not verify the issue with GitHub — try again shortly")
+		return false
+	}
+	if err := settle.VerifyFiledIssue(issue, idea); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return false
+	}
+	return true
 }

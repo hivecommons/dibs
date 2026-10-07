@@ -41,6 +41,9 @@ type API struct {
 	// Settler opens credited GitHub issues; a nil-GitHub settler records
 	// accepts without opening issues.
 	Settler IdeaSettler
+	// Issues verifies the issue URL an ideator pastes at confirm-issue
+	// against GitHub (nil skips verification; production always sets it).
+	Issues IssueLookup
 	// Notify is the in-app notification store (nil disables).
 	Notify Notifier
 
