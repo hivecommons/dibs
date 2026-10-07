@@ -51,6 +51,12 @@ var llmStats = &llmOutcomes{counts: map[llmKey]int64{}, totals: map[llmKey]int64
 func (c *llmOutcomes) record(op, outcome string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.counts == nil {
+		c.counts = map[llmKey]int64{}
+	}
+	if c.totals == nil {
+		c.totals = map[llmKey]int64{}
+	}
 	c.counts[llmKey{op, outcome}]++
 	c.totals[llmKey{op, outcome}]++
 }
