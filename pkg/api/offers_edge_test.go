@@ -217,6 +217,57 @@ func TestDecideValidationAndPartialDecline(t *testing.T) {
 		t.Fatalf("other offer = %+v", o)
 	}
 
+	// Accepting while another repo's offer is pending neutralizes the sibling:
+	// its record is untouched, but it leaves that repo's feed and can no
+	// longer be declined.
+	ns, err := notify.New(t.TempDir())
+	if err != nil {
+		t.Fatalf("notify.New: %v", err)
+	}
+	a.Notify = ns
+	race := mustCreate(t, a, "bob", "Accept race", store.VisibilityPublic, store.StatusOffered)
+	if _, err := a.Store.Mutate(race.ID, false, func(i *store.Idea) error {
+		i.Offers = []store.Offer{
+			{RepoID: "kubestellar/dibs", Status: store.OfferPending, CreatedAt: now},
+			{RepoID: "org/other", Status: store.OfferPending, CreatedAt: now},
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("seed offers: %v", err)
+	}
+	rec = do(t, mux, ident("alice"), "POST", "/api/repos/kubestellar/dibs/decide", `{"ideaID":"`+race.ID+`","decision":"accept"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("accept with sibling pending: status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	stored, err = a.Store.Get(race.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if stored.Status != store.StatusAccepted || stored.TargetRepo != "kubestellar/dibs" {
+		t.Fatalf("after accept: status=%s target=%s", stored.Status, stored.TargetRepo)
+	}
+	if o := stored.OfferTo("org/other"); o == nil || o.Status != store.OfferPending {
+		t.Fatalf("sibling offer mutated: %+v", o)
+	}
+	offered, err := a.Store.ListOfferedTo([]string{"org/other"})
+	if err != nil {
+		t.Fatalf("ListOfferedTo: %v", err)
+	}
+	for _, i := range offered {
+		if i.ID == race.ID {
+			t.Fatalf("accepted idea still in sibling's offers")
+		}
+	}
+	rec = do(t, mux, ident("charlie"), "POST", "/api/repos/org/other/decide", `{"ideaID":"`+race.ID+`","decision":"decline"}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("decline after accept: status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	for _, n := range ns.ListByUser("bob", false) {
+		if n.Kind == notify.KindDeclined {
+			t.Fatalf("unexpected declined notification: %+v", n)
+		}
+	}
+
 	// Accepting a settled idea: unavailable without an offer, and the state
 	// machine refuses even with one.
 	settled := mustCreate(t, a, "bob", "Already settled", store.VisibilityPublic, store.StatusSettled)

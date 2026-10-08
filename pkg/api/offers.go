@@ -389,13 +389,13 @@ func (a *API) handleDecide(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"result": "passed"})
 	case "decline":
-		if offer == nil || offer.Status != store.OfferPending {
+		if offer == nil || offer.Status != store.OfferPending || idea.Status != store.StatusOffered {
 			writeError(w, http.StatusBadRequest, "no pending offer from this idea")
 			return
 		}
 		updated, err := a.Store.Mutate(idea.ID, true, func(i *store.Idea) error {
 			o := i.OfferTo(rp.RepoID)
-			if o == nil || o.Status != store.OfferPending {
+			if o == nil || o.Status != store.OfferPending || i.Status != store.StatusOffered {
 				return &store.ValidationError{Msg: "no pending offer from this idea"}
 			}
 			now := timeNow()
@@ -450,6 +450,8 @@ func (a *API) accept(w http.ResponseWriter, r *http.Request, idea *store.Idea, r
 			o.Status = store.OfferAccepted
 			o.DecidedAt = &now
 		}
+		// Sibling pending offers are left as-is: once the idea leaves
+		// offered, ListOfferedTo and the decline arm ignore them.
 		i.TargetRepo = rp.RepoID
 		return nil
 	})

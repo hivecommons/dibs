@@ -587,7 +587,7 @@ func (s *Store) ListPublic() ([]*Idea, error) {
 }
 
 // ListOfferedTo returns every idea — INCLUDING private ones — that carries a
-// PENDING offer to one of repoIDs, newest first. This is the only path by
+// PENDING offer (while the idea is still offered) to one of repoIDs, newest first. This is the only path by
 // which a private idea reaches anyone but its author: the ideator's explicit
 // offer to that specific repo.
 func (s *Store) ListOfferedTo(repoIDs []string) ([]*Idea, error) {
@@ -601,6 +601,9 @@ func (s *Store) ListOfferedTo(repoIDs []string) ([]*Idea, error) {
 	}
 	out := []*Idea{}
 	for _, idea := range all {
+		if idea.Status != StatusOffered {
+			continue
+		}
 		for _, o := range idea.Offers {
 			if o.Status == OfferPending && want[o.RepoID] {
 				out = append(out, idea)
