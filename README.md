@@ -221,7 +221,7 @@ still call `prompts/get` directly.
 
 ## Operations and further reading
 
-- [Runbooks](runbooks/): [incident response](runbooks/incident-response.md), [release rollback](runbooks/release-rollback.md), [SLOs](runbooks/slo.md), and a [postmortem template](runbooks/postmortem-template.md).
+- [Runbooks](runbooks/): [incident response](runbooks/incident-response.md), [release rollback](runbooks/release-rollback.md), [data recovery](runbooks/data-recovery.md), [SLOs](runbooks/slo.md), and a [postmortem template](runbooks/postmortem-template.md).
 - [CONTRIBUTING.md](CONTRIBUTING.md): DCO sign-off, CI requirements, and code conventions.
 - [Idea intake trust and abuse controls](docs/idea-intake-trust.md): a proposed design, not yet implemented.
 
