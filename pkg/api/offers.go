@@ -445,18 +445,13 @@ func (a *API) accept(w http.ResponseWriter, r *http.Request, idea *store.Idea, r
 		if err := i.TransitionTo(store.StatusAccepted, "accept"); err != nil {
 			return err
 		}
-		now := timeNow()
 		if o := i.OfferTo(rp.RepoID); o != nil {
+			now := timeNow()
 			o.Status = store.OfferAccepted
 			o.DecidedAt = &now
 		}
-		// The idea has left offered: other repos' pending offers are moot.
-		for j := range i.Offers {
-			if o := &i.Offers[j]; o.Status == store.OfferPending {
-				o.Status = store.OfferDeclined
-				o.DecidedAt = &now
-			}
-		}
+		// Sibling pending offers are left as-is: once the idea leaves
+		// offered, ListOfferedTo and the decline arm ignore them.
 		i.TargetRepo = rp.RepoID
 		return nil
 	})

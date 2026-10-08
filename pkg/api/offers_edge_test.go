@@ -217,8 +217,9 @@ func TestDecideValidationAndPartialDecline(t *testing.T) {
 		t.Fatalf("other offer = %+v", o)
 	}
 
-	// Accepting while another repo's offer is pending resolves the sibling:
-	// it leaves that repo's feed and can no longer be declined.
+	// Accepting while another repo's offer is pending neutralizes the sibling:
+	// its record is untouched, but it leaves that repo's feed and can no
+	// longer be declined.
 	ns, err := notify.New(t.TempDir())
 	if err != nil {
 		t.Fatalf("notify.New: %v", err)
@@ -245,8 +246,8 @@ func TestDecideValidationAndPartialDecline(t *testing.T) {
 	if stored.Status != store.StatusAccepted || stored.TargetRepo != "kubestellar/dibs" {
 		t.Fatalf("after accept: status=%s target=%s", stored.Status, stored.TargetRepo)
 	}
-	if o := stored.OfferTo("org/other"); o == nil || o.Status == store.OfferPending || o.DecidedAt == nil {
-		t.Fatalf("sibling offer still actionable: %+v", o)
+	if o := stored.OfferTo("org/other"); o == nil || o.Status != store.OfferPending {
+		t.Fatalf("sibling offer mutated: %+v", o)
 	}
 	offered, err := a.Store.ListOfferedTo([]string{"org/other"})
 	if err != nil {
