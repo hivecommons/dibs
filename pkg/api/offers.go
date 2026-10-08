@@ -389,13 +389,13 @@ func (a *API) handleDecide(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"result": "passed"})
 	case "decline":
-		if offer == nil || offer.Status != store.OfferPending {
+		if offer == nil || offer.Status != store.OfferPending || idea.Status != store.StatusOffered {
 			writeError(w, http.StatusBadRequest, "no pending offer from this idea")
 			return
 		}
 		updated, err := a.Store.Mutate(idea.ID, true, func(i *store.Idea) error {
 			o := i.OfferTo(rp.RepoID)
-			if o == nil || o.Status != store.OfferPending {
+			if o == nil || o.Status != store.OfferPending || i.Status != store.StatusOffered {
 				return &store.ValidationError{Msg: "no pending offer from this idea"}
 			}
 			now := timeNow()
@@ -445,10 +445,17 @@ func (a *API) accept(w http.ResponseWriter, r *http.Request, idea *store.Idea, r
 		if err := i.TransitionTo(store.StatusAccepted, "accept"); err != nil {
 			return err
 		}
+		now := timeNow()
 		if o := i.OfferTo(rp.RepoID); o != nil {
-			now := timeNow()
 			o.Status = store.OfferAccepted
 			o.DecidedAt = &now
+		}
+		// The idea has left offered: other repos' pending offers are moot.
+		for j := range i.Offers {
+			if o := &i.Offers[j]; o.Status == store.OfferPending {
+				o.Status = store.OfferDeclined
+				o.DecidedAt = &now
+			}
 		}
 		i.TargetRepo = rp.RepoID
 		return nil
