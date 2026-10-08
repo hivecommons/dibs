@@ -49,6 +49,9 @@ func TestUpdateErrors(t *testing.T) {
 		s, _ := newTestStore(t)
 		idea := validIdea("alice")
 		idea.ID = "doesnotexist"
+		// Validate runs before the lookup, so the record must be valid
+		// (Create normally defaults Status) to reach the not-found path.
+		idea.Status = StatusDraft
 		if err := s.Update(idea); !errors.Is(err, ErrNotFound) {
 			t.Fatalf("err = %v, want ErrNotFound", err)
 		}
