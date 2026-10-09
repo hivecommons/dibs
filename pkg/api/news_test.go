@@ -53,6 +53,19 @@ func TestHandleRepoNews(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/repos/ORG/Repo/news", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("mixed-case status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	items = nil
+	if err := json.NewDecoder(rec.Body).Decode(&items); err != nil {
+		t.Fatalf("decode mixed-case: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("mixed-case items = %+v, want the registered repo's news", items)
+	}
+
+	rec = httptest.NewRecorder()
 	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/repos/org/missing/news", nil))
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("missing status = %d", rec.Code)

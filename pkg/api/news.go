@@ -11,7 +11,8 @@ import (
 func (a *API) HandleRepoNews(w http.ResponseWriter, r *http.Request) {
 	repoID := r.PathValue("org") + "/" + r.PathValue("repo")
 	if a.Registry != nil {
-		if _, err := a.Registry.Get(repoID); err != nil {
+		rp, err := a.Registry.Get(repoID)
+		if err != nil {
 			if err == registry.ErrNotFound {
 				writeError(w, http.StatusNotFound, "repo not found")
 				return
@@ -19,6 +20,8 @@ func (a *API) HandleRepoNews(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, "internal error")
 			return
 		}
+		// News is keyed by the registered spelling.
+		repoID = rp.RepoID
 	}
 	if a.News == nil {
 		writeJSON(w, http.StatusOK, []news.Item{})
