@@ -74,3 +74,13 @@ spec:
           annotations:
             runbook_url: https://github.com/hivecommons/dibs/blob/main/runbooks/incident-response.md#6-match-engine-llm-alert
             summary: More than half of Dibs match-engine LLM calls for op {{ $labels.op }} are failing.
+        - alert: DibsPodRestarting
+          # Needs kube-state-metrics. Catches OOM kills and crash loops that
+          # recover between scrapes, which DibsDown (absent up) does not see.
+          expr: increase(kube_pod_container_status_restarts_total{namespace="dibs",container="dibs"}[30m]) >= 3
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            runbook_url: https://github.com/hivecommons/dibs/blob/main/runbooks/incident-response.md#7-pod-restart-alert
+            summary: Dibs container has restarted 3 or more times in 30 minutes.

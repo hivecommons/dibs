@@ -71,3 +71,15 @@ quality degrades.
    credential or model name is wrong, fix the secret and restart with
    `kubectl -n dibs rollout restart deploy/dibs`.
 5. If errors began right after a rollout, follow [release-rollback.md](release-rollback.md).
+
+## 7. Pod restart alert
+
+For `DibsPodRestarting`. A container that restarts and recovers can leave
+`/readyz` green at scrape time while requests in flight are dropped.
+
+1. Find the last termination reason:
+   `kubectl -n dibs describe pod -l app=dibs` (`Last State`, `Reason`, `Exit Code`).
+2. `OOMKilled` means the 256Mi memory limit in `deploy/deployment.yaml` is too
+   low for the current load; raise the limit and roll out.
+3. Otherwise read the crash output: `kubectl -n dibs logs deploy/dibs --previous`.
+4. If restarts began right after a rollout, follow [release-rollback.md](release-rollback.md).
