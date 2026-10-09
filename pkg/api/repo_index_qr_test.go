@@ -75,6 +75,39 @@ func TestHandleRepoIndexChartPayload(t *testing.T) {
 	}
 }
 
+// TestHandleRepoIndexMixedCaseURL pins that a differently-cased path resolves
+// to the registered spelling, so the symbol and idea events still apply.
+func TestHandleRepoIndexMixedCaseURL(t *testing.T) {
+	now := time.Date(2026, 9, 25, 15, 0, 0, 0, time.UTC)
+	withFixedNow(t, now)
+	a, _ := newAPIFixture(t)
+
+	settled := mustCreate(t, a, "alice", "Shipped idea", store.VisibilityPublic, store.StatusSettled)
+	if _, err := a.Store.Mutate(settled.ID, false, func(i *store.Idea) error {
+		i.TargetRepo = "kubestellar/dibs"
+		i.UpdatedAt = now.Add(-2 * time.Hour)
+		return nil
+	}); err != nil {
+		t.Fatalf("seed settled idea: %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	a.HandleRepoIndex(rec, repoPathReq("/api/repos/KubeStellar/Dibs/index", "KubeStellar", "Dibs"))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	got := decodeBody[RepoIndex](t, rec)
+	if got.RepoID != "kubestellar/dibs" {
+		t.Errorf("RepoID=%q, want registered spelling", got.RepoID)
+	}
+	if got.Symbol == "" {
+		t.Errorf("Symbol is empty")
+	}
+	if got.Current != 102.7 {
+		t.Errorf("Current=%v, want 102.7", got.Current)
+	}
+}
+
 func TestHandleRepoQRUnknownRepo(t *testing.T) {
 	a, _ := newAPIFixture(t)
 	rec := httptest.NewRecorder()

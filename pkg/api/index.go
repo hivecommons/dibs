@@ -322,7 +322,8 @@ func (a *API) repoTickers() ([]RepoTicker, error) {
 // series for one listed repo. Public: aggregate numbers only.
 func (a *API) HandleRepoIndex(w http.ResponseWriter, r *http.Request) {
 	repoID := r.PathValue("org") + "/" + r.PathValue("repo")
-	if _, err := a.Registry.Get(repoID); err != nil {
+	rp, err := a.Registry.Get(repoID)
+	if err != nil {
 		if errors.Is(err, registry.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "repo not found")
 			return
@@ -330,6 +331,9 @@ func (a *API) HandleRepoIndex(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	// Registry lookup is case-insensitive; events and symbols are keyed by
+	// the registered spelling.
+	repoID = rp.RepoID
 	ideas, err := a.Store.ListAll()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error")
