@@ -435,7 +435,14 @@ func (a *API) accept(w http.ResponseWriter, r *http.Request, idea *store.Idea, r
 		writeError(w, http.StatusBadRequest, "idea is not available to accept")
 		return
 	}
+	if offer != nil && offer.Status != store.OfferPending {
+		writeError(w, http.StatusBadRequest, "no pending offer from this idea")
+		return
+	}
 	updated, err := a.Store.Mutate(idea.ID, true, func(i *store.Idea) error {
+		if o := i.OfferTo(rp.RepoID); o != nil && o.Status != store.OfferPending {
+			return &store.ValidationError{Msg: "no pending offer from this idea"}
+		}
 		// TransitionTo treats same-status as a no-op success, so guard
 		// explicitly: a second repo must not re-accept an already-accepted
 		// idea and overwrite TargetRepo.
