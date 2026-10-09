@@ -83,8 +83,10 @@ Example:
 
 An idea is eligible exactly when its stored `status` is `settled`, regardless of
 `visibility`. Entries are newest `updatedAt` first; ties have no defined order.
-`settledAt` currently comes from the idea's **last update time**, not a separate,
-immutable settlement timestamp. There is no idea ID in this response: do not
+`settledAt` is the idea's settlement time, stamped once when it settles; ideas
+settled before that field existed fall back to their last update time. A
+settled idea's title and body can no longer be edited. There is no idea ID in
+this response: do not
 assume title, symbol, or issue URL is a durable primary key.
 
 The wall intentionally exposes only attribution, title/TLDR, display symbol,
@@ -129,7 +131,7 @@ The settlement-relevant projection of `Idea` is:
   title: string, body: string, visibility: "public" | "private",
   status: "draft" | "offered" | "accepted" | "declined" |
           "issue_launched" | "settled",
-  createdAt: timestamp, updatedAt: timestamp,
+  createdAt: timestamp, updatedAt: timestamp, settledAt?: timestamp,
   targetRepo?: string, issueURL?: string, offers?: Offer[]
 }
 Offer = {
@@ -222,7 +224,10 @@ issue is then looked up on GitHub and must exist, be an issue (not a pull
 request), be no older than the idea, and be tied to the author: opened by the
 same login when they signed in with GitHub, or otherwise carrying the
 `<!-- dibs-idea: {id} -->` marker from the launch body; otherwise the request
-fails with 400 and the idea stays unsettled. A GitHub lookup failure returns 502
+fails with 400 and the idea stays unsettled. An issue URL already credited to
+another idea (compared case-insensitively, ignoring a `www.` host, trailing
+slash, query, or fragment) is also rejected with 400: one issue settles at
+most one idea. A GitHub lookup failure returns 502
 (retry later). Implementation or merge state is still not checked.
 A repeated confirmation after settlement returns 400; after an ambiguous
 network failure, read the idea before retrying. Do not replay all writes

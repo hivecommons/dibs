@@ -115,12 +115,13 @@ func repoEvents(ideas []*store.Idea, repoID string, coveredIdeas *ideaCoverage) 
 	var evs []repoEvent
 	for _, idea := range ideas {
 		if idea.TargetRepo == repoID && idea.Status == store.StatusSettled {
-			date := idea.UpdatedAt.UTC().Format("2006-01-02")
-			if coveredIdeas.covers(date, idea.UpdatedAt) {
+			settledAt := idea.SettledTime()
+			date := settledAt.UTC().Format("2006-01-02")
+			if coveredIdeas.covers(date, settledAt) {
 				continue
 			}
 			evs = append(evs, repoEvent{
-				at: idea.UpdatedAt, weight: indexformula.Contribution(indexformula.Counts{IdeasFiled: 1}),
+				at: settledAt, weight: indexformula.Contribution(indexformula.Counts{IdeasFiled: 1}),
 				issuesHuman: 1,
 			})
 		}

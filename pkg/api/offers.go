@@ -506,6 +506,9 @@ func (a *API) legacySettle(w http.ResponseWriter, r *http.Request, updated *stor
 			return err
 		}
 		i.IssueURL = issueURL
+		if i.SettledAt.IsZero() {
+			i.SettledAt = timeNow()
+		}
 		return nil
 	})
 	if err != nil {

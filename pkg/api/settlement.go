@@ -181,6 +181,9 @@ func (a *API) handleConfirmIssue(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		i.IssueURL = in.IssueURL
+		if i.SettledAt.IsZero() {
+			i.SettledAt = timeNow()
+		}
 		return nil
 	})
 	if err != nil {

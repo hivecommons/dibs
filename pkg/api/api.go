@@ -542,9 +542,19 @@ func (a *API) handleUpdateIdea(w http.ResponseWriter, r *http.Request) {
 	// Enforce the lifecycle state machine on the update path too: without
 	// this, a settled idea could be reverted to draft — dropping it from the
 	// public credit wall while keeping its accepted offers, launch target,
-	// and issue URL (see hivecommons/dibs#153).
+	// and issue URL (see hivecommons/dibs#153). This check runs against the
+	// copy loaded above; Store.Update re-checks the status against the
+	// stored record under its lock, so a concurrent accept or settle is not
+	// overwritten by this stale copy (hivecommons/dibs#345).
 	if in.Status != "" && in.Status != idea.Status && !store.CanTransition(idea.Status, in.Status) {
 		writeError(w, http.StatusBadRequest, "cannot change status "+idea.Status+" to "+in.Status)
+		return
+	}
+	// A settled idea's title and body are what the credit wall shows for the
+	// filed issue; they stay frozen (hivecommons/dibs#344). Store.Update
+	// enforces this under its lock too.
+	if idea.Status == store.StatusSettled && (in.Title != idea.Title || in.Body != idea.Body) {
+		writeError(w, http.StatusBadRequest, "a settled idea's title and body cannot be edited")
 		return
 	}
 	idea.Title = in.Title
