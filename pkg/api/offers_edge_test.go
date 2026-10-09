@@ -413,3 +413,33 @@ func TestOfferCaseFoldedRepoStaysHiveManaged(t *testing.T) {
 		t.Fatalf("case-folded offer must be a pending hive offer under the canonical RepoID, got %+v", offered)
 	}
 }
+
+func TestAcceptAfterDeclineRejected(t *testing.T) {
+	now := time.Date(2026, 9, 28, 10, 30, 0, 0, time.UTC)
+	withFixedNow(t, now)
+	a, mux := newAPIFixture(t)
+
+	for _, vis := range []string{store.VisibilityPublic, store.VisibilityPrivate} {
+		idea := mustCreate(t, a, "bob", "Declined then accept "+vis, vis, store.StatusOffered)
+		if _, err := a.Store.Mutate(idea.ID, false, func(i *store.Idea) error {
+			i.Offers = []store.Offer{
+				{RepoID: "kubestellar/dibs", Status: store.OfferDeclined, CreatedAt: now, DecidedAt: &now},
+				{RepoID: "org/other", Status: store.OfferPending, CreatedAt: now},
+			}
+			return nil
+		}); err != nil {
+			t.Fatalf("seed offers: %v", err)
+		}
+		rec := do(t, mux, ident("alice"), "POST", "/api/repos/kubestellar/dibs/decide", `{"ideaID":"`+idea.ID+`","decision":"accept"}`)
+		if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "no pending offer") {
+			t.Fatalf("%s: accept after decline: status=%d body=%s", vis, rec.Code, rec.Body.String())
+		}
+		stored, err := a.Store.Get(idea.ID)
+		if err != nil {
+			t.Fatalf("get: %v", err)
+		}
+		if o := stored.OfferTo("kubestellar/dibs"); stored.Status != store.StatusOffered || o == nil || o.Status != store.OfferDeclined {
+			t.Fatalf("%s: state changed: %+v", vis, stored)
+		}
+	}
+}
