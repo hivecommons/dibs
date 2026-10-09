@@ -48,7 +48,7 @@ func (a *API) HandleCredits(w http.ResponseWriter, r *http.Request) {
 			TLDR:          idea.TLDR,
 			RepoID:        idea.TargetRepo,
 			IssueURL:      idea.IssueURL,
-			SettledAt:     idea.UpdatedAt,
+			SettledAt:     idea.SettledTime(),
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"credits": entries})

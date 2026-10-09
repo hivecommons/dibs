@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -168,6 +169,51 @@ type Idea struct {
 	PassedRepos []string `json:"passedRepos,omitempty"`
 	TargetRepo  string   `json:"targetRepo,omitempty"`
 	IssueURL    string   `json:"issueURL,omitempty"`
+	// SettledAt is stamped once when the idea settles. The credit wall and
+	// repo index read it (via SettledTime) instead of UpdatedAt, which later
+	// edits keep bumping.
+	SettledAt time.Time `json:"settledAt,omitempty"`
+}
+
+// SettledTime is when the idea settled. Legacy settled records predate
+// SettledAt and fall back to UpdatedAt.
+func (i *Idea) SettledTime() time.Time {
+	if i.SettledAt.IsZero() {
+		return i.UpdatedAt
+	}
+	return i.SettledAt
+}
+
+// issueURLKey normalizes a GitHub issue URL for uniqueness checks: the
+// host, org/repo, and number compare case-insensitively, and a www. host,
+// trailing slash, query, or fragment does not make it a different issue.
+func issueURLKey(raw string) string {
+	raw = strings.TrimSpace(raw)
+	u, err := url.Parse(raw)
+	if err != nil {
+		return strings.ToLower(strings.TrimRight(raw, "/"))
+	}
+	host := strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.")
+	return host + "/" + strings.ToLower(strings.Trim(u.Path, "/"))
+}
+
+// checkIssueURLFreeLocked rejects issueURL when another idea already holds
+// it: one filed issue settles at most one idea. Caller holds s.mu.
+func (s *Store) checkIssueURLFreeLocked(id, issueURL string) error {
+	key := issueURLKey(issueURL)
+	for otherID := range s.index {
+		if otherID == id {
+			continue
+		}
+		other, err := s.readLocked(otherID)
+		if err != nil {
+			return err
+		}
+		if other.IssueURL != "" && issueURLKey(other.IssueURL) == key {
+			return &ValidationError{"that issue is already credited to another idea"}
+		}
+	}
+	return nil
 }
 
 // AuthorProvider infers the identity provider for legacy ideas. GitHub users
@@ -473,9 +519,14 @@ func (s *Store) readLocked(id string) (*Idea, error) {
 
 // Update validates and persists an existing idea, bumping UpdatedAt. The
 // caller is responsible for authorization; ID/Author/CreatedAt and the
-// server-managed fields (offers, passes, target, issue URL) are preserved
-// from the stored record. Editing the CONTENT (title/body) invalidates the
-// cached TLDR and matches so the match engine recomputes them.
+// server-managed fields (offers, passes, target, issue URL, settledAt) are
+// preserved from the stored record. The caller's Status is applied only
+// when it is a legal transition from the STORED status, checked under the
+// lock, so a stale copy cannot overwrite a concurrent accept or settle.
+// A settled idea's title and body are frozen: they are what the credit
+// wall shows for the filed issue. Editing the CONTENT (title/body)
+// invalidates the cached TLDR and matches so the match engine recomputes
+// them.
 func (s *Store) Update(idea *Idea) error {
 	if err := Validate(idea); err != nil {
 		return err
@@ -485,6 +536,12 @@ func (s *Store) Update(idea *Idea) error {
 	existing, err := s.readLocked(idea.ID)
 	if err != nil {
 		return err
+	}
+	if existing.Status == StatusSettled && (idea.Title != existing.Title || idea.Body != existing.Body) {
+		return &ValidationError{"a settled idea's title and body cannot be edited"}
+	}
+	if idea.Status != existing.Status && !CanTransition(existing.Status, idea.Status) {
+		idea.Status = existing.Status
 	}
 	idea.Author = existing.Author
 	idea.Tags = existing.Tags
@@ -500,6 +557,11 @@ func (s *Store) Update(idea *Idea) error {
 	idea.PassedRepos = existing.PassedRepos
 	idea.TargetRepo = existing.TargetRepo
 	idea.IssueURL = existing.IssueURL
+	idea.SettledAt = existing.SettledAt
+	if idea.Status == StatusSettled && idea.SettledAt.IsZero() {
+		// Legacy settled record: pin the settle time before UpdatedAt moves.
+		idea.SettledAt = existing.UpdatedAt
+	}
 	if idea.Title != existing.Title || idea.Body != existing.Body {
 		idea.TLDR = ""
 		idea.Matches = []Match{}
@@ -522,6 +584,7 @@ func (s *Store) Update(idea *Idea) error {
 
 // Mutate atomically read-modify-writes an idea under the store lock. fn may
 // change any field except identity/timestamps; the result is re-validated.
+// An IssueURL set by fn must not already be held by another idea.
 // touch controls whether UpdatedAt is bumped (cache refreshes shouldn't
 // reorder listings). Returns a copy of the persisted idea.
 func (s *Store) Mutate(id string, touch bool, fn func(*Idea) error) (*Idea, error) {
@@ -531,11 +594,17 @@ func (s *Store) Mutate(id string, touch bool, fn func(*Idea) error) (*Idea, erro
 	if err != nil {
 		return nil, err
 	}
+	prevIssueURL := idea.IssueURL
 	if err := fn(idea); err != nil {
 		return nil, err
 	}
 	if err := Validate(idea); err != nil {
 		return nil, err
+	}
+	if idea.IssueURL != "" && idea.IssueURL != prevIssueURL {
+		if err := s.checkIssueURLFreeLocked(idea.ID, idea.IssueURL); err != nil {
+			return nil, err
+		}
 	}
 	if touch {
 		idea.UpdatedAt = time.Now().UTC()
