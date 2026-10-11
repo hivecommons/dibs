@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -153,6 +154,39 @@ func TestHandleRepoQRServesPNG(t *testing.T) {
 	linkedQR := fetch("org", "linked")
 	if bytes.Equal(defaultQR.Body.Bytes(), linkedQR.Body.Bytes()) {
 		t.Errorf("QR for a repo with its own ContributeURL matches the default-URL QR")
+	}
+}
+
+// TestHandleRepoQROversizedContributeURL pins the qrcode.Encode failure arm.
+// ContributeURL is hub/seed-sourced and never length-checked on the way into
+// the registry, so a hive advertising a URL past QR version-40 capacity
+// (~2.3KB at Medium recovery) must get a generic JSON 500 from its qr.png
+// route — not an empty image/png body and not the encoder's error text.
+func TestHandleRepoQROversizedContributeURL(t *testing.T) {
+	a, _ := newAPIFixture(t)
+	huge := "https://example.test/hives/" + strings.Repeat("x", 4000)
+	if err := a.Registry.Merge([]registry.RepoProfile{
+		{RepoID: "org/huge", HiveID: "hive-h", Owner: "erin", ContributeURL: huge},
+	}); err != nil {
+		t.Fatalf("registry.Merge: %v", err)
+	}
+	rec := httptest.NewRecorder()
+	a.HandleRepoQR(rec, repoPathReq("/api/repos/org/huge/qr.png", "org", "huge"))
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status=%d body=%s, want 500", rec.Code, rec.Body.String())
+	}
+	if ct := rec.Header().Get("Content-Type"); strings.HasPrefix(ct, "image/") {
+		t.Fatalf("error response advertised Content-Type %q", ct)
+	}
+	if cc := rec.Header().Get("Cache-Control"); cc != "" {
+		t.Fatalf("error response carried Cache-Control %q; a cached 500 would pin the failure", cc)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `"error":"internal error"`) {
+		t.Fatalf("body=%s, want generic internal error", body)
+	}
+	if strings.Contains(body, "too long") {
+		t.Fatalf("leaked encoder error text: %s", body)
 	}
 }
 
