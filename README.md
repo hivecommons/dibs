@@ -251,6 +251,20 @@ curl -H 'Cookie: hive_hub_user=dev' http://127.0.0.1:8080/api/me
 To load richer repo profiles than fakehub's two entries, also set
 `REPOS_SEED_FILE=hack/seed-repos.example.json`.
 
+### Smoke-testing the container image
+
+`docker build` only proves the image compiles. [`hack/smoke.sh`](hack/smoke.sh)
+runs it the way [`deploy/deployment.yaml`](deploy/deployment.yaml) does
+(uid 65532, read-only root filesystem, only `/data` writable, all
+capabilities dropped) and checks `--version` is stamped, `/healthz` and
+`/readyz` answer 200, `/metrics` exposes the `dibs_*` series the alerts
+query, and SIGTERM drains to exit 0:
+
+```sh
+docker build --build-arg GIT_HASH="$(git rev-parse HEAD)" -t dibs:smoke .
+hack/smoke.sh dibs:smoke "$(git rev-parse HEAD)"
+```
+
 ## License
 
 Apache-2.0 — see [LICENSE](LICENSE).
