@@ -52,6 +52,22 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # Run the image the way deploy/deployment.yaml does before it becomes
+      # `latest`: build-check only smoke-tests the PR-head build, not the
+      # artifact we publish. load: true needs a single platform; the amd64
+      # layers are reused from the gha cache by the multi-arch push below.
+      - name: Load amd64 image for smoke test
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: .
+          load: true
+          platforms: linux/amd64
+          build-args: |
+            GIT_HASH=${{ github.event.workflow_run.head_sha }}
+          tags: dibs:smoke
+          cache-from: type=gha
+      - name: Smoke test image
+        run: hack/smoke.sh dibs:smoke "${{ github.event.workflow_run.head_sha }}"
       - name: Build and push
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
