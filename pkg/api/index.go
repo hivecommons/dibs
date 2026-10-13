@@ -18,6 +18,7 @@ import (
 	"errors"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/hivecommons/dibs/pkg/indexformula"
@@ -114,7 +115,7 @@ func repoEvents(ideas []*store.Idea, repoID string, coveredIdeas *ideaCoverage) 
 	coveredIdeas = coveredIdeas.clone()
 	var evs []repoEvent
 	for _, idea := range ideas {
-		if idea.TargetRepo == repoID && idea.Status == store.StatusSettled {
+		if strings.EqualFold(idea.TargetRepo, repoID) && idea.Status == store.StatusSettled {
 			settledAt := idea.SettledTime()
 			date := settledAt.UTC().Format("2006-01-02")
 			if coveredIdeas.covers(date, settledAt) {

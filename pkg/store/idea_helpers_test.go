@@ -36,6 +36,19 @@ func TestIdeaHasPassed(t *testing.T) {
 	}
 }
 
+func TestOfferToAndHasPassedCaseInsensitive(t *testing.T) {
+	idea := &Idea{
+		Offers:      []Offer{{RepoID: "org/repo", Status: OfferPending}},
+		PassedRepos: []string{"org/other"},
+	}
+	if idea.OfferTo("Org/Repo") == nil {
+		t.Fatal("OfferTo(Org/Repo) = nil, want offer recorded as org/repo")
+	}
+	if !idea.HasPassed("ORG/Other") {
+		t.Fatal("HasPassed(ORG/Other) = false, want true")
+	}
+}
+
 func TestValidationErrorMessage(t *testing.T) {
 	err := &ValidationError{"title is required"}
 	if got := err.Error(); got != "store: title is required" {

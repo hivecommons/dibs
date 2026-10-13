@@ -228,7 +228,7 @@ func AuthorProvider(author string) string {
 // OfferTo returns the idea's offer to repoID, or nil.
 func (i *Idea) OfferTo(repoID string) *Offer {
 	for k := range i.Offers {
-		if i.Offers[k].RepoID == repoID {
+		if strings.EqualFold(i.Offers[k].RepoID, repoID) {
 			return &i.Offers[k]
 		}
 	}
@@ -238,7 +238,7 @@ func (i *Idea) OfferTo(repoID string) *Offer {
 // HasPassed reports whether the ideator swiped repoID away.
 func (i *Idea) HasPassed(repoID string) bool {
 	for _, r := range i.PassedRepos {
-		if r == repoID {
+		if strings.EqualFold(r, repoID) {
 			return true
 		}
 	}

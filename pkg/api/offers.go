@@ -262,9 +262,13 @@ func (a *API) handleIdeatorPass(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "repoID must be in org/repo format")
 		return
 	}
+	repoID := in.RepoID
+	if rp, err := a.Registry.Get(repoID); err == nil {
+		repoID = rp.RepoID
+	}
 	updated, err := a.Store.Mutate(idea.ID, false, func(i *store.Idea) error {
-		if !i.HasPassed(in.RepoID) {
-			i.PassedRepos = append(i.PassedRepos, in.RepoID)
+		if !i.HasPassed(repoID) {
+			i.PassedRepos = append(i.PassedRepos, repoID)
 		}
 		return nil
 	})

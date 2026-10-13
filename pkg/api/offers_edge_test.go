@@ -46,7 +46,11 @@ func TestOfferRejectionsAndReOffer(t *testing.T) {
 		t.Fatalf("duplicate offer: status=%d body=%s", rec.Code, rec.Body.String())
 	}
 
-	// Re-offer after a decline reuses the existing offer entry.
+	// Re-offer after a decline reuses the existing offer entry.	rec = do(t, mux, ident("bob"), "POST", "/api/ideas/"+idea.ID+"/offer", `{"repoID":"Outside/Project"}`)
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "already offered") {
+		t.Fatalf("case-variant external offer: status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
 	decidedAt := now.Add(-time.Minute)
 	if _, err := a.Store.Mutate(idea.ID, false, func(i *store.Idea) error {
 		i.Status = store.StatusDeclined
