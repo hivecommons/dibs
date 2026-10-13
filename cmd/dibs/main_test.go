@@ -6,12 +6,17 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/hivecommons/dibs/pkg/registry"
+	"github.com/hivecommons/dibs/pkg/server"
 )
 
 func TestEnvOr(t *testing.T) {
@@ -274,5 +279,98 @@ func TestRunStartsMetricsListener(t *testing.T) {
 	t.Setenv("DIBS_METRICS_ADDR", "127.0.0.1:0")
 	if err := run(nil, io.Discard, io.Discard, testServe(nil, nil)); err != nil {
 		t.Fatalf("run: %v", err)
+	}
+}
+
+// TestServeUntilShutdownDeadline pins the drain-timeout arm: a request still
+// in flight when the context is cancelled must surface Shutdown's deadline
+// error rather than hang past the Kubernetes termination grace period.
+func TestServeUntilShutdownDeadline(t *testing.T) {
+	release := make(chan struct{})
+	entered := make(chan struct{}, 1)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/hold", func(w http.ResponseWriter, r *http.Request) {
+		entered <- struct{}{}
+		<-release
+		w.WriteHeader(http.StatusNoContent)
+	})
+	addrCh := make(chan net.Addr, 1)
+	srv := &http.Server{
+		Addr:    "127.0.0.1:0",
+		Handler: mux,
+		BaseContext: func(l net.Listener) context.Context {
+			addrCh <- l.Addr()
+			return context.Background()
+		},
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- serveUntil(ctx, srv, 20*time.Millisecond) }()
+
+	var addr net.Addr
+	select {
+	case addr = <-addrCh:
+	case <-time.After(5 * time.Second):
+		t.Fatal("server never started listening")
+	}
+	client := &http.Client{Timeout: 10 * time.Second}
+	reqDone := make(chan struct{})
+	go func() {
+		defer close(reqDone)
+		resp, err := client.Get("http://" + addr.String() + "/hold")
+		if err == nil {
+			resp.Body.Close()
+		}
+	}()
+	select {
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("handler never received the in-flight request")
+	}
+
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("serveUntil = %v, want context.DeadlineExceeded from Shutdown", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("serveUntil did not return after the drain timeout")
+	}
+	close(release)
+	<-reqDone
+}
+
+// TestRunRegistrySyncSuccess pins the success branch of the background hub
+// sync: a reachable hub records a registry_sync last-success sample on
+// /metrics (the failure branch is what every other run test exercises via
+// the unreachable HUB_URL in setupEnv).
+func TestRunRegistrySyncSuccess(t *testing.T) {
+	hub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != registry.ReposPath {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte("[]"))
+	}))
+	defer hub.Close()
+	setupEnv(t, t.TempDir())
+	t.Setenv("HUB_URL", hub.URL)
+	if err := run(nil, io.Discard, io.Discard, testServe(nil, nil)); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	const want = `dibs_background_job_last_success_timestamp_seconds{job="registry_sync"}`
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		rec := httptest.NewRecorder()
+		server.MetricsHandler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+		if strings.Contains(rec.Body.String(), want) {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("registry_sync never recorded a success; /metrics:\n%s", rec.Body.String())
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
