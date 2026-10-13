@@ -65,7 +65,7 @@ func (n *MatchNotifier) NewMatch(ideaAuthor, repoOwner string, idea *store.Idea,
 		}
 	}
 	add(ideaAuthor, "Match: “"+idea.Title+"” fits "+repo.RepoID+".")
-	if idea.Visibility == store.VisibilityPublic && repoOwner != ideaAuthor {
+	if idea.Visibility == store.VisibilityPublic && !strings.EqualFold(repoOwner, ideaAuthor) {
 		add(repoOwner, "Match: “"+idea.Title+"” fits "+repo.RepoID+".")
 	}
 }
