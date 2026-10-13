@@ -144,6 +144,24 @@ func TestBrowserGETServesInstructions(t *testing.T) {
 	}
 }
 
+func TestInstructionsHomeLinkHonorsBasePath(t *testing.T) {
+	cases := []struct{ basePath, want string }{
+		{"", `<a href="/">`},
+		{"/tools/dibs", `<a href="/tools/dibs/">`},
+		{"/tools/dibs/", `<a href="/tools/dibs/">`},
+	}
+	for _, tc := range cases {
+		h := NewHandler(Config{BasePath: tc.basePath})
+		req := httptest.NewRequest(http.MethodGet, "https://dibs.hivecommons.dev/mcp", nil)
+		req.Header.Set("Accept", "text/html")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if !strings.Contains(rec.Body.String(), tc.want) {
+			t.Fatalf("BasePath %q: page missing %s:\n%s", tc.basePath, tc.want, rec.Body.String())
+		}
+	}
+}
+
 func TestMCPClientGETNotHijacked(t *testing.T) {
 	h := NewHandler(Config{})
 	req := httptest.NewRequest(http.MethodGet, "https://dibs.hivecommons.dev/mcp", nil)
