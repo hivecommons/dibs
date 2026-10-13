@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -513,7 +514,7 @@ func (a *API) loadAuthorized(w http.ResponseWriter, r *http.Request, mustOwn boo
 // owned by username.
 func (a *API) offeredToCallerRepo(idea *store.Idea, username string) bool {
 	for _, o := range idea.Offers {
-		if rp, err := a.Registry.Get(o.RepoID); err == nil && rp.Owner == username {
+		if rp, err := a.Registry.Get(o.RepoID); err == nil && strings.EqualFold(rp.Owner, username) {
 			return true
 		}
 	}

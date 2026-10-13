@@ -414,3 +414,17 @@ func TestSeedFileDropsNonHTTPContributeURL(t *testing.T) {
 		t.Fatalf("non-http contributeURL accepted from seed file: %q", rp.ContributeURL)
 	}
 }
+
+func TestOwnerMatchIsCaseInsensitive(t *testing.T) {
+	r, _ := newTestRegistry(t)
+	if err := r.Merge(sampleRepos()); err != nil {
+		t.Fatalf("Merge: %v", err)
+	}
+	if got := r.ListByOwner("ALICE"); len(got) != 1 || got[0].RepoID != "kubestellar/kubestellar" {
+		t.Fatalf("ListByOwner(ALICE) = %+v", got)
+	}
+	on := true
+	if _, err := r.ApplyOwnerUpdate("kubestellar/dibs", "Bob", OwnerUpdate{AcceptingIdeas: &on}); err != nil {
+		t.Fatalf("ApplyOwnerUpdate mixed-case actor: %v", err)
+	}
+}

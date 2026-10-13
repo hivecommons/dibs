@@ -192,7 +192,7 @@ func (a *API) handleConfirmIssue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Tell the accepting repo's owner the credited issue landed.
-	if rp, err := a.Registry.Get(settled.TargetRepo); err == nil && rp.Owner != settled.Author {
+	if rp, err := a.Registry.Get(settled.TargetRepo); err == nil && !strings.EqualFold(rp.Owner, settled.Author) {
 		a.notifyAdd(rp.Owner, notify.KindIssue,
 			settled.AuthorDisplay+" filed the idea “"+settled.Title+"” as an issue on "+rp.RepoID+": "+in.IssueURL,
 			settled.ID, rp.RepoID)
