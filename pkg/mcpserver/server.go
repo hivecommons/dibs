@@ -56,7 +56,7 @@ func NewHandler(cfg Config) http.Handler {
 	})
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && wantsHTML(r) {
-			serveInstructions(w, r)
+			serveInstructions(w, r, cfg.BasePath)
 			return
 		}
 		mcp.ServeHTTP(w, r)
@@ -77,7 +77,7 @@ func wantsHTML(r *http.Request) bool {
 	return r.Header.Get("Mcp-Session-Id") == "" && r.Header.Get("MCP-Protocol-Version") == ""
 }
 
-func serveInstructions(w http.ResponseWriter, r *http.Request) {
+func serveInstructions(w http.ResponseWriter, r *http.Request, basePath string) {
 	// The endpoint URL is assembled from request headers (X-Forwarded-Proto,
 	// Host) and interpolated into HTML that is served with a public cache
 	// lifetime, so it must be constrained and escaped: a forged header must
@@ -87,9 +87,10 @@ func serveInstructions(w http.ResponseWriter, r *http.Request) {
 		scheme = p
 	}
 	endpoint := html.EscapeString(scheme + "://" + r.Host + r.URL.Path)
+	home := html.EscapeString(strings.TrimRight(basePath, "/") + "/")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=300")
-	fmt.Fprintf(w, instructionsHTML, endpoint, endpoint, endpoint)
+	fmt.Fprintf(w, instructionsHTML, endpoint, endpoint, home, endpoint)
 }
 
 const instructionsHTML = `<!DOCTYPE html>
@@ -146,7 +147,7 @@ where the connector UI allows one.</p>
 </table>
 <p>Takes optional <code>scope</code> and <code>limit</code> arguments. Clients
 that surface prompts show it as a slash command.</p>
-<p style="margin-top:24px"><a href="/">dibs.hivecommons.dev</a> &middot; endpoint: <code>%s</code></p>
+<p style="margin-top:24px"><a href="%s">dibs.hivecommons.dev</a> &middot; endpoint: <code>%s</code></p>
 </main></body></html>
 `
 
