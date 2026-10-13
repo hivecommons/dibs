@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -253,6 +254,7 @@ func (r *Registry) Merge(incoming []RepoProfile) error {
 	for i := range incoming {
 		in := incoming[i]
 		in.Symbol = "" // symbols are assigned locally, never accepted from hub input
+		in.ContributeURL = sanitizeContributeURL(in.ContributeURL)
 		if in.Topics == nil {
 			in.Topics = []string{}
 		}
@@ -271,6 +273,26 @@ func (r *Registry) Merge(incoming []RepoProfile) error {
 	}
 	r.ensureRepoSymbolsLocked()
 	return r.persistLocked()
+}
+
+// sanitizeContributeURL keeps only absolute http(s) URLs. ContributeURL is
+// rendered verbatim as a link target and encoded into the public QR code,
+// so anything else (javascript:, data:, relative paths, garbage) is dropped
+// and the callers fall back to the hive directory.
+func sanitizeContributeURL(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return ""
+	}
+	switch strings.ToLower(u.Scheme) {
+	case "http", "https":
+		return raw
+	}
+	return ""
 }
 
 // Sync pulls the hub's repo list and merges it.
@@ -299,6 +321,7 @@ func (r *Registry) LoadSeedFile(path string) error {
 	for i := range repos {
 		in := repos[i]
 		in.Symbol = "" // seed files cannot reserve or override ticker symbols
+		in.ContributeURL = sanitizeContributeURL(in.ContributeURL)
 		if in.Topics == nil {
 			in.Topics = []string{}
 		}
