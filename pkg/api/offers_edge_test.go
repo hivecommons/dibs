@@ -447,3 +447,14 @@ func TestAcceptAfterDeclineRejected(t *testing.T) {
 		}
 	}
 }
+
+func TestOfferedToCallerRepoIsCaseInsensitive(t *testing.T) {
+	a, _ := newAPIFixture(t)
+	idea := &store.Idea{Offers: []store.Offer{{RepoID: "kubestellar/dibs", Status: store.OfferPending}}}
+	if !a.offeredToCallerRepo(idea, "ALICE") {
+		t.Fatal("mixed-case owner should see the offered idea")
+	}
+	if a.offeredToCallerRepo(idea, "mallory") {
+		t.Fatal("non-owner should not see the offered idea")
+	}
+}

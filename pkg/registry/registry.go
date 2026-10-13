@@ -384,7 +384,7 @@ func (r *Registry) ListByOwner(owner string) []RepoProfile {
 	defer r.mu.RUnlock()
 	out := []RepoProfile{}
 	for _, rp := range r.repos {
-		if rp.Owner == owner {
+		if strings.EqualFold(rp.Owner, owner) {
 			out = append(out, *rp)
 		}
 	}
@@ -409,7 +409,7 @@ func (r *Registry) ApplyOwnerUpdate(repoID, actor string, upd OwnerUpdate) (*Rep
 	if !ok {
 		return nil, ErrNotFound
 	}
-	if rp.Owner != actor {
+	if !strings.EqualFold(rp.Owner, actor) {
 		return nil, ErrForbidden
 	}
 	if upd.Topics != nil {
@@ -453,7 +453,7 @@ func (r *Registry) AddPassedIdea(repoID, actor, ideaID string) error {
 	if !ok {
 		return ErrNotFound
 	}
-	if rp.Owner != actor {
+	if !strings.EqualFold(rp.Owner, actor) {
 		return ErrForbidden
 	}
 	if rp.HasPassed(ideaID) {

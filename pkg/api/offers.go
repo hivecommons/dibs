@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"sort"
+	"strings"
 
 	"github.com/hivecommons/dibs/pkg/notify"
 	"github.com/hivecommons/dibs/pkg/registry"
@@ -289,7 +290,7 @@ func (a *API) ownedRepo(w http.ResponseWriter, r *http.Request) *registry.RepoPr
 		writeError(w, http.StatusNotFound, "repo not found")
 		return nil
 	}
-	if rp.Owner != identity(r).Username {
+	if !strings.EqualFold(rp.Owner, identity(r).Username) {
 		writeError(w, http.StatusForbidden, "only the repo owner can do this")
 		return nil
 	}
