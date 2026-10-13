@@ -348,3 +348,69 @@ func TestSeedFileRecasedEntryDoesNotClobberOrDuplicate(t *testing.T) {
 		t.Fatal("re-cased seed entry clobbered a local edit")
 	}
 }
+
+func TestSanitizeContributeURL(t *testing.T) {
+	cases := map[string]string{
+		"":                                    "",
+		"   ":                                 "",
+		"https://hive.example.org/contribute": "https://hive.example.org/contribute",
+		"HTTP://hive.example.org/":            "HTTP://hive.example.org/",
+		" https://hive.example.org ":          "https://hive.example.org",
+		"javascript:alert(1)":                 "",
+		"data:text/html,<script>1</script>":   "",
+		"vbscript:msgbox":                     "",
+		"file:///etc/passwd":                  "",
+		"ftp://hive.example.org/":             "",
+		"/contribute":                         "",
+		"contribute":                          "",
+		"https://":                            "",
+		"http://[::1":                         "",
+	}
+	for in, want := range cases {
+		if got := sanitizeContributeURL(in); got != want {
+			t.Errorf("sanitizeContributeURL(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestMergeDropsNonHTTPContributeURL(t *testing.T) {
+	r, _ := newTestRegistry(t)
+	err := r.Merge([]RepoProfile{
+		{RepoID: "demo/good", HiveID: "h", Owner: "alice", ContributeURL: "https://hive.example.org/contribute"},
+		{RepoID: "demo/bad", HiveID: "h", Owner: "alice", ContributeURL: "javascript:alert(document.cookie)"},
+	})
+	if err != nil {
+		t.Fatalf("Merge: %v", err)
+	}
+	if rp, _ := r.Get("demo/good"); rp.ContributeURL != "https://hive.example.org/contribute" {
+		t.Fatalf("https contributeURL not preserved: %q", rp.ContributeURL)
+	}
+	if rp, _ := r.Get("demo/bad"); rp.ContributeURL != "" {
+		t.Fatalf("non-http contributeURL accepted from hub input: %q", rp.ContributeURL)
+	}
+
+	// A later sync that advertises a bad URL must blank the stored one, not keep it.
+	if err := r.Merge([]RepoProfile{{RepoID: "demo/good", HiveID: "h", Owner: "alice", ContributeURL: "data:text/html,x"}}); err != nil {
+		t.Fatalf("re-Merge: %v", err)
+	}
+	if rp, _ := r.Get("demo/good"); rp.ContributeURL != "" {
+		t.Fatalf("re-sync kept a non-http contributeURL: %q", rp.ContributeURL)
+	}
+}
+
+func TestSeedFileDropsNonHTTPContributeURL(t *testing.T) {
+	r, dir := newTestRegistry(t)
+	seed := filepath.Join(dir, "seed.json")
+	raw, _ := json.Marshal([]RepoProfile{
+		{RepoID: "demo/repo", HiveID: "h", Owner: "alice", ContributeURL: "javascript:alert(1)"},
+	})
+	if err := os.WriteFile(seed, raw, 0o644); err != nil {
+		t.Fatalf("writing seed: %v", err)
+	}
+	if err := r.LoadSeedFile(seed); err != nil {
+		t.Fatalf("LoadSeedFile: %v", err)
+	}
+	if rp, _ := r.Get("demo/repo"); rp.ContributeURL != "" {
+		t.Fatalf("non-http contributeURL accepted from seed file: %q", rp.ContributeURL)
+	}
+}
