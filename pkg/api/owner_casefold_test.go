@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/hivecommons/dibs/pkg/notify"
+	"github.com/hivecommons/dibs/pkg/registry"
 	"github.com/hivecommons/dibs/pkg/store"
 )
 
@@ -57,5 +58,41 @@ func TestConfirmIssueSelfNotifyIsCaseInsensitive(t *testing.T) {
 		if got := ns.ListByUser(user, true); len(got) != 0 {
 			t.Fatalf("owner==author (case-folded) must not self-notify %q, got %+v", user, got)
 		}
+	}
+}
+
+// TestMatchNotifierSelfMatchIsCaseInsensitive: when the idea author (auth
+// login) and the repo owner (hub) are the same person under different
+// casing, NewMatch writes one notification; genuinely different users still
+// get one each.
+func TestMatchNotifierSelfMatchIsCaseInsensitive(t *testing.T) {
+	repo := &registry.RepoProfile{RepoID: "org/repo"}
+	idea := &store.Idea{ID: "i1", Title: "T", Visibility: store.VisibilityPublic}
+	count := func(ns *notify.Store, users ...string) int {
+		total := 0
+		for _, u := range users {
+			total += len(ns.ListByUser(u, false))
+		}
+		return total
+	}
+	newNotifier := func(t *testing.T) (*MatchNotifier, *notify.Store) {
+		t.Helper()
+		ns, err := notify.New(t.TempDir())
+		if err != nil {
+			t.Fatalf("notify.New: %v", err)
+		}
+		return &MatchNotifier{Notify: ns}, ns
+	}
+
+	n, ns := newNotifier(t)
+	n.NewMatch("Alice", "alice", idea, repo, 0.9)
+	if got := count(ns, "Alice", "alice"); got != 1 {
+		t.Fatalf("case-differing self-match wrote %d notifications, want 1", got)
+	}
+
+	n, ns = newNotifier(t)
+	n.NewMatch("bob", "alice", idea, repo, 0.9)
+	if got := count(ns, "bob", "alice"); got != 2 {
+		t.Fatalf("distinct users wrote %d notifications, want 2", got)
 	}
 }
