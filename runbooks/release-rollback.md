@@ -11,8 +11,8 @@ runbook covers getting back to a known-good build.
 - `kubectl -n dibs rollout status deploy/dibs` hangs, or the new pod never
   becomes Ready: `/readyz` returns 503 when the store's data directory is not
   accessible and writable (see `pkg/server/server.go`).
-- `kubectl -n dibs logs deploy/dibs` shows `readyz: store ping failed: ...`
-  with the underlying filesystem error.
+- `kubectl -n dibs logs deploy/dibs` shows `readyz store ping failed` lines
+  with the underlying filesystem error in `err`.
 - `/healthz` reports the running `version` (the commit hash); compare it with
   the commit you expect.
 - Users report broken pages or API errors after a merge to `main`.
