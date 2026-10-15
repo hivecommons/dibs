@@ -179,11 +179,11 @@ func (s *Store) Refresh(ctx context.Context) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.projects = projects
-	s.scorer = NewBM25(projects)
 	if err := fsutil.AtomicWriteJSON(s.path, projects); err != nil {
 		return fmt.Errorf("catalog: %w", err)
 	}
+	s.projects = projects
+	s.scorer = NewBM25(projects)
 	return nil
 }
 
