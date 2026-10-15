@@ -250,3 +250,15 @@ func TestMatchesForIdeaCappedAtMaxMatches(t *testing.T) {
 		t.Fatalf("persisted %d matches, want the capped %d", len(kept.Matches), MaxMatches)
 	}
 }
+
+// TestChatUnbuildableRequestURL pins Chat's request-construction arm: a
+// BaseURL that net/url refuses (a control character) fails before any
+// network traffic with the "building chat request" message, so a bad
+// DIBS_LLM_BASE_URL surfaces as a clear error rather than a transport one.
+func TestChatUnbuildableRequestURL(t *testing.T) {
+	l := &LLM{BaseURL: "http://llm\x7f.invalid/v1", Model: "test"}
+	_, err := l.Chat(context.Background(), "sys", "user")
+	if err == nil || !strings.Contains(err.Error(), "match: building chat request") {
+		t.Fatalf("err = %v, want building chat request error", err)
+	}
+}

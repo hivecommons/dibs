@@ -142,3 +142,25 @@ func TestConfirmIssueStoreFailure(t *testing.T) {
 		t.Fatalf("idea after failed confirm = status %q issueURL %q, want issue_launched and empty", stored.Status, stored.IssueURL)
 	}
 }
+
+// TestUpdateIdeaMalformedBodyIs400 pins handleUpdateIdea's decodeInput
+// arm: once the caller is authorized as the author, a body that is not
+// JSON is a 400 carrying decodeInput's message, and the stored idea is
+// left untouched.
+func TestUpdateIdeaMalformedBodyIs400(t *testing.T) {
+	a, mux := newAPIFixture(t)
+	idea := mustCreate(t, a, "alice", "Original", store.VisibilityPublic, store.StatusDraft)
+
+	rec := do(t, mux, ident("alice"), "PUT", "/api/ideas/"+idea.ID, `{"title":`)
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "invalid JSON") {
+		t.Fatalf("malformed body: status=%d body=%s, want 400 invalid JSON", rec.Code, rec.Body.String())
+	}
+
+	got, err := a.Store.Get(idea.ID)
+	if err != nil {
+		t.Fatalf("Store.Get: %v", err)
+	}
+	if got.Title != "Original" || got.Status != store.StatusDraft {
+		t.Fatalf("rejected update leaked into idea: %+v", got)
+	}
+}
