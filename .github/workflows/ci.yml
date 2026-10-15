@@ -76,8 +76,8 @@ jobs:
             go tool cover -func=coverage.out | sort -k3 -n | head -25
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-          # Floor: main measured 98.1–98.3% with -coverpkg=./... over runs 37761179154..37940916954; keep ~2 points below and ratchet up.
-          awk -v t="$total" 'BEGIN { if (t+0 < 96) { print "coverage " t "% is below floor 96%"; exit 1 } }'
+          # Floor: main measured 98.4–98.6% with -coverpkg=./... over runs 38396714441..38722506418; keep ~1.5–2 points below and ratchet up.
+          awk -v t="$total" 'BEGIN { if (t+0 < 97) { print "coverage " t "% is below floor 97%"; exit 1 } }'
       - name: Upload coverage profile
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
