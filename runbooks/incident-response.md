@@ -13,7 +13,7 @@ is not yet known. If a recent merge is the obvious cause, go straight to
    - `curl -fsS <base>/readyz`: 503 means the store's data directory is not
      accessible and writable, so the pod is not serving traffic.
 4. Read the logs: `kubectl -n dibs logs deploy/dibs --since=30m`.
-   - `readyz: store ping failed: ...` carries the filesystem error.
+   - `readyz store ping failed` lines carry the filesystem error in `err`.
    - `metrics http` JSON lines (`method`, `route`, `status`=5xx, `count`, `avg_ms`) are
      flushed periodically and show which route groups are failing or slow.
 
