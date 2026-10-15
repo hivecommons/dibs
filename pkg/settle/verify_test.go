@@ -17,7 +17,7 @@ func TestIssueNumber(t *testing.T) {
 	if n, err := IssueNumber("https://github.com/org/repo/issues/42"); err != nil || n != 42 {
 		t.Fatalf("got %d, %v; want 42", n, err)
 	}
-	for _, bad := range []string{"://nope", "https://github.com/org/repo", "https://github.com/org/repo/issues/x", "https://github.com/org/repo/issues/0"} {
+	for _, bad := range []string{"://nope", "https://github.com/org/repo", "https://github.com/org/repo/issues/x", "https://github.com/org/repo/issues/0", "https://github.com/org/repo/issues/+5", "https://github.com/org/repo/issues/05"} {
 		if _, err := IssueNumber(bad); err == nil {
 			t.Errorf("IssueNumber(%q) should fail", bad)
 		}

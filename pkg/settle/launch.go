@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
-	"strconv"
 	"strings"
 )
 
@@ -163,8 +162,8 @@ func ValidateIssueURL(raw, repoID string) error {
 	if !strings.EqualFold(parts[0]+"/"+parts[1], repoID) {
 		return fmt.Errorf("settle: issue URL is not on the accepting repo %s", repoID)
 	}
-	if n, err := strconv.Atoi(parts[3]); err != nil || n <= 0 {
-		return fmt.Errorf("settle: %q is not an issue number", parts[3])
+	if _, err := parseIssueNumber(parts[3]); err != nil {
+		return err
 	}
 	return nil
 }

@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -194,7 +195,14 @@ func issueURLKey(raw string) string {
 		return strings.ToLower(strings.TrimRight(raw, "/"))
 	}
 	host := strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.")
-	return host + "/" + strings.ToLower(strings.Trim(u.Path, "/"))
+	path := strings.ToLower(strings.Trim(u.Path, "/"))
+	// "+5" and "05" name the same issue as "5"; compare by numeric value.
+	if i := strings.LastIndex(path, "/"); i >= 0 {
+		if n, err := strconv.Atoi(path[i+1:]); err == nil && n > 0 {
+			path = path[:i+1] + strconv.Itoa(n)
+		}
+	}
+	return host + "/" + path
 }
 
 // checkIssueURLFreeLocked rejects issueURL when another idea already holds
