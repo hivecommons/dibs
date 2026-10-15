@@ -1,60 +1,71 @@
-# Runbook: rolling back a bad Dibs release
+# Runbook: rolling back a Dibs release
 
-`docker.yml` publishes `ghcr.io/hivecommons/dibs` on every push to `main`
-whose CI run is green, tagged both `:latest` and `:<full-commit-sha>`. The
-Deployment in `deploy/deployment.yaml` runs `:latest`, so a bad merge can
-reach the cluster as soon as the pod is restarted or rescheduled. This
-runbook covers getting back to a known-good build.
+Use this when errors, restarts, or a failing `/readyz` began right after a
+rollout. Roll back first, diagnose afterwards.
 
-## Detect
+## How releases reach the cluster
 
-- `kubectl -n dibs rollout status deploy/dibs` hangs, or the new pod never
-  becomes Ready: `/readyz` returns 503 when the store's data directory is not
-  accessible and writable (see `pkg/server/server.go`).
-- `kubectl -n dibs logs deploy/dibs` shows `readyz store ping failed` lines
-  with the underlying filesystem error in `err`.
-- `/healthz` reports the running `version` (the commit hash); compare it with
-  the commit you expect.
-- Users report broken pages or API errors after a merge to `main`.
+The `docker.yml` workflow publishes `ghcr.io/hivecommons/dibs` to `latest` plus
+the full commit sha after CI is green on `main`. `deploy/deployment.yaml`
+uses a `RollingUpdate` with `maxSurge: 1` and `maxUnavailable: 0`, so the old
+pod keeps serving until the new one is Ready. A release that never becomes
+Ready therefore stalls instead of taking Dibs down; a release that becomes
+Ready and then misbehaves needs the rollback below.
 
-Because the rollout uses `maxUnavailable: 0`, a pod that never becomes Ready
-leaves the previous pod serving traffic. Confirm which pods are serving before
-acting: `kubectl -n dibs get pods -l app=dibs`.
+## 1. Confirm the rollout is the cause
 
-## Contain
+```sh
+kubectl -n dibs rollout status deploy/dibs --timeout=60s
+kubectl -n dibs rollout history deploy/dibs
+kubectl -n dibs get deploy/dibs -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}'
+curl -fsS <base>/healthz   # reports the running `version`
+```
 
-1. Find the last good commit SHA (the one whose image was serving correctly):
-   `git log --oneline origin/main`, or `/healthz` on the old pod.
-2. Pin the Deployment to that immutable tag instead of `:latest`:
-   ```sh
-   kubectl -n dibs set image deploy/dibs dibs=ghcr.io/hivecommons/dibs:<good-sha>
-   kubectl -n dibs rollout status deploy/dibs
-   ```
-   Do not use `kubectl rollout undo` on its own: the previous revision is
-   also `:latest`, which resolves to the bad image on the next pull.
-3. Verify: `curl -fsS <base>/readyz` returns `{"status":"ok","version":"<good-sha>"}`.
+Compare the start of the errors with the rollout time. If they do not line up,
+return to [incident-response.md](incident-response.md).
 
-## Data safety
+## 2. Check for data changes first
 
-The store is a single JSON file tree on the `dibs-data-rwx` volume, shared by
-the old and new pod during a rollout. A bad release may have written data the
-older build cannot read. Before rolling back across a store-format change,
-snapshot the volume contents (for example
-`kubectl -n dibs exec deploy/dibs -- tar -C /data -cf - . > dibs-data.tar`),
-and do not delete the PVC.
+If the release touched the store format (`ideas/`, `index.json`, notifications,
+repo profiles), take a backup before rolling back, per
+[data-recovery.md](data-recovery.md). Older code may not read newer files.
 
-## Fix forward
+## 3. Roll back
 
-1. Branch from `main`, fix or revert the offending commit, and add a
-   regression test per `CONTRIBUTING.md`.
-2. Land it through the normal PR process; `docker.yml` publishes the new
-   `:latest` and `:<sha>` after CI is green.
-3. Re-point the Deployment at the fixed SHA (or back to `:latest`) and confirm
-   rollout.
+Preferred: return to the previous ReplicaSet.
 
-## After
+```sh
+kubectl -n dibs rollout undo deploy/dibs
+kubectl -n dibs rollout status deploy/dibs --timeout=120s
+```
 
-- `/healthz` and `/readyz` report the expected version and `ok`.
-- Note the incident and the SHA that was pinned in the tracking issue/PR so
-  the next reader can see what was actually done.
-- Consider keeping the Deployment pinned to a SHA until the fix is verified.
+If the manifest uses `:latest`, `rollout undo` reverts only the pod template
+and may pull the same moving tag again. Pin the last known-good commit sha
+instead (find it from the previous `version` in `/healthz`, the release
+history, or the green `main` commits):
+
+```sh
+kubectl -n dibs set image deploy/dibs dibs=ghcr.io/hivecommons/dibs:<good-sha>
+kubectl -n dibs rollout status deploy/dibs --timeout=120s
+```
+
+Then make the pin durable: change `image:` in `deploy/deployment.yaml` to the
+same sha in a PR, so the next `kubectl apply -f deploy/` does not undo it.
+
+## 4. Verify recovery
+
+- `kubectl -n dibs get pods -l app=dibs` shows one Ready pod with a stable
+  restart count.
+- `curl -fsS <base>/readyz` returns `ok`; `/healthz` reports the good version.
+- The alerts that fired (see [incident-response.md](incident-response.md))
+  resolve, and `metrics http` log lines show no sustained `status=5xx`.
+
+## 5. Follow up
+
+1. Open or update the tracking issue with the bad and good versions and times.
+2. Hold further releases until a fix lands and passes CI; per
+   [slo.md](slo.md), an exhausted error budget means release only fixes.
+3. If data was written by the bad release, continue with
+   [data-recovery.md](data-recovery.md).
+4. Write a postmortem from [postmortem-template.md](postmortem-template.md)
+   for any budget-consuming incident.
