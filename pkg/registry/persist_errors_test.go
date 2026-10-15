@@ -32,5 +32,22 @@ func TestPersistLockedErrors(t *testing.T) {
 		if err := r.persistLocked(); err == nil || !strings.Contains(err.Error(), "renaming temp file") {
 			t.Fatalf("err = %v, want renaming temp file error", err)
 		}
+		// The failed rename must not replace the destination or leave the
+		// temp file behind: /data is the only writable mount on the pod.
+		if info, err := os.Stat(r.path); err != nil || !info.IsDir() {
+			t.Fatalf("destination changed after failed persist: info = %v, err = %v", info, err)
+		}
+		assertNoTempFiles(t, dir)
 	})
+}
+
+func assertNoTempFiles(t *testing.T, dir string) {
+	t.Helper()
+	matches, err := filepath.Glob(filepath.Join(dir, ".tmp-*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(matches) != 0 {
+		t.Fatalf("leftover temporary files after failed persist: %v", matches)
+	}
 }
