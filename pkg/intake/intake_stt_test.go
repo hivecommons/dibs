@@ -230,3 +230,20 @@ func zipWithEntries(t *testing.T, entries map[string]string) []byte {
 	}
 	return buf.Bytes()
 }
+
+// TestTranscribeUnbuildableRequestURLIsUntypedError pins the
+// http.NewRequestWithContext error arm: a DIBS_STT_URL that net/url
+// refuses (a control character survives TrimSpace) fails before any
+// network traffic, and the error is untyped so HandleUpload maps it to a
+// generic 500 rather than echoing the URL back to the uploader.
+func TestTranscribeUnbuildableRequestURLIsUntypedError(t *testing.T) {
+	t.Setenv("DIBS_STT_URL", "http://stt\x7f.invalid")
+	_, err := TranscribeWithContext(context.Background(), "idea.wav", "audio/wav", []byte(wavHeader))
+	if err == nil || !strings.Contains(err.Error(), "invalid control character") {
+		t.Fatalf("err = %v, want net/url control-character parse error", err)
+	}
+	var ie *Error
+	if errors.As(err, &ie) {
+		t.Fatalf("err = %#v, want untyped request-build error", err)
+	}
+}
