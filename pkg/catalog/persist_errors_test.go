@@ -23,4 +23,10 @@ func TestRefreshPersistError(t *testing.T) {
 	if err == nil || !strings.HasPrefix(err.Error(), "catalog: creating temp file:") || !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("err = %v, want wrapped catalog persistence error", err)
 	}
+	if n := len(s.List()); n != 0 {
+		t.Fatalf("len(List()) = %d after failed persist, want 0", n)
+	}
+	if !s.needsRefresh() {
+		t.Fatal("needsRefresh() = false after failed persist, want true")
+	}
 }
