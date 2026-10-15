@@ -76,3 +76,22 @@ func TestMutateIssueURLCheckReadError(t *testing.T) {
 		t.Fatalf("unrelated Mutate blocked by corrupt sibling: %v", err)
 	}
 }
+
+// TestIssueURLKeyCanonicalNumber: every spelling of one issue number maps
+// to the same key, so "+5" or "05" cannot bypass the one-issue-one-idea check.
+func TestIssueURLKeyCanonicalNumber(t *testing.T) {
+	const want = "github.com/org/repo/issues/5"
+	for _, raw := range []string{
+		"https://github.com/org/repo/issues/5",
+		"https://github.com/org/repo/issues/05",
+		"https://github.com/org/repo/issues/005",
+		"https://github.com/org/repo/issues/+5",
+		"https://github.com/org/repo/issues/5/",
+		"https://github.com/org/repo/issues/5?x=1#c",
+		"https://www.GitHub.com/Org/Repo/issues/5",
+	} {
+		if got := issueURLKey(raw); got != want {
+			t.Errorf("issueURLKey(%q) = %q, want %q", raw, got, want)
+		}
+	}
+}

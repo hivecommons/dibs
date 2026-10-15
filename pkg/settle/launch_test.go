@@ -119,6 +119,9 @@ func TestValidateIssueURL(t *testing.T) {
 		"https://github.com/kubestellar/dibs/pull/42",         // a PR, not an issue
 		"https://github.com/kubestellar/dibs/issues/new",      // the form, not a filed issue
 		"https://github.com/kubestellar/dibs/issues/0",        // not a positive number
+		"https://github.com/kubestellar/dibs/issues/+5",       // sign: non-canonical
+		"https://github.com/kubestellar/dibs/issues/05",       // leading zero: non-canonical
+		"https://github.com/kubestellar/dibs/issues/-5",       // negative
 		"https://github.com/kubestellar/dibs/issues/42/extra", // trailing junk
 		"https://github.com/kubestellar/dibs/issues",          // no number
 		"https://evil.com/https://github.com/kubestellar/dibs/issues/42",

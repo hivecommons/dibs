@@ -46,9 +46,16 @@ func IssueNumber(raw string) (int, error) {
 	if len(parts) != 4 {
 		return 0, fmt.Errorf("settle: not an issue URL")
 	}
-	n, err := strconv.Atoi(parts[3])
-	if err != nil || n <= 0 {
-		return 0, fmt.Errorf("settle: %q is not an issue number", parts[3])
+	return parseIssueNumber(parts[3])
+}
+
+// parseIssueNumber accepts only the canonical spelling of a positive issue
+// number: plain digits, no sign and no leading zeros. strconv.Atoi alone
+// would also accept "+5" and "05", letting one issue wear several URLs.
+func parseIssueNumber(seg string) (int, error) {
+	n, err := strconv.Atoi(seg)
+	if err != nil || n <= 0 || seg != strconv.Itoa(n) {
+		return 0, fmt.Errorf("settle: %q is not an issue number", seg)
 	}
 	return n, nil
 }
