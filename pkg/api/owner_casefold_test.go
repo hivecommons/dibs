@@ -68,12 +68,16 @@ func TestConfirmIssueSelfNotifyIsCaseInsensitive(t *testing.T) {
 func TestMatchNotifierSelfMatchIsCaseInsensitive(t *testing.T) {
 	repo := &registry.RepoProfile{RepoID: "org/repo"}
 	idea := &store.Idea{ID: "i1", Title: "T", Visibility: store.VisibilityPublic}
+	// ListByUser matches recipients case-insensitively, so count distinct
+	// notification IDs rather than summing per-user feeds.
 	count := func(ns *notify.Store, users ...string) int {
-		total := 0
+		seen := map[string]bool{}
 		for _, u := range users {
-			total += len(ns.ListByUser(u, false))
+			for _, n := range ns.ListByUser(u, false) {
+				seen[n.ID] = true
+			}
 		}
-		return total
+		return len(seen)
 	}
 	newNotifier := func(t *testing.T) (*MatchNotifier, *notify.Store) {
 		t.Helper()
