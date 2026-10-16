@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -131,7 +132,7 @@ func (s *Store) Add(user, kind, message, ideaID, repoID string) error {
 	// Trim this user's overflow, oldest first.
 	var mine []*Notification
 	for _, n := range s.byID {
-		if n.User == user {
+		if strings.EqualFold(n.User, user) {
 			mine = append(mine, n)
 		}
 	}
@@ -151,7 +152,7 @@ func (s *Store) ListByUser(user string, unreadOnly bool) []Notification {
 	defer s.mu.RUnlock()
 	out := []Notification{}
 	for _, n := range s.byID {
-		if n.User != user || (unreadOnly && n.Read) {
+		if !strings.EqualFold(n.User, user) || (unreadOnly && n.Read) {
 			continue
 		}
 		out = append(out, *n)
@@ -169,14 +170,14 @@ func (s *Store) MarkRead(user string, ids []string, all bool) error {
 	changed := false
 	if all {
 		for _, n := range s.byID {
-			if n.User == user && !n.Read {
+			if strings.EqualFold(n.User, user) && !n.Read {
 				n.Read = true
 				changed = true
 			}
 		}
 	}
 	for _, id := range ids {
-		if n, ok := s.byID[id]; ok && n.User == user && !n.Read {
+		if n, ok := s.byID[id]; ok && strings.EqualFold(n.User, user) && !n.Read {
 			n.Read = true
 			changed = true
 		}
