@@ -80,3 +80,21 @@ func TestPerUserCap(t *testing.T) {
 		t.Fatalf("bob's feed affected by alice's trim: %+v", got)
 	}
 }
+
+func TestUserMatchIsCaseInsensitive(t *testing.T) {
+	s, err := New(t.TempDir())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	mustAdd(t, s, "Alice", KindOffer, "offer!")
+	got := s.ListByUser("alice", true)
+	if len(got) != 1 {
+		t.Fatalf("alice feed: %+v", got)
+	}
+	if err := s.MarkRead("ALICE", []string{got[0].ID}, false); err != nil {
+		t.Fatalf("MarkRead: %v", err)
+	}
+	if n := len(s.ListByUser("Alice", true)); n != 0 {
+		t.Fatalf("unread after MarkRead = %d", n)
+	}
+}
