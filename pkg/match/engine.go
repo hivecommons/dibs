@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -101,7 +102,7 @@ type CNCFMatch = store.CNCFMatch
 // hash invalidates every cached match against that repo.
 func RepoHash(rp *registry.RepoProfile) string {
 	h := sha256.New()
-	h.Write([]byte(rp.RepoID + "\x00" + rp.Description + "\x00" + strings.Join(rp.Topics, ",") + "\x00" + rp.Appetite))
+	h.Write([]byte(rp.RepoID + "\x00" + rp.Description + "\x00" + strings.Join(rp.Topics, ",") + "\x00" + rp.Appetite + "\x00" + strconv.FormatBool(rp.AcceptingIdeas)))
 	return hex.EncodeToString(h.Sum(nil))[:16]
 }
 
