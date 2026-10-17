@@ -386,7 +386,45 @@ func New(dir string) (*Store, error) {
 			s.index[e.ID] = e
 		}
 	}
+	if err := s.reconcileLocked(); err != nil {
+		return nil, err
+	}
 	return s, nil
+}
+
+// reconcileLocked adopts idea files that are missing from the index (e.g.
+// left behind by a crash or failed index write) and rewrites the index.
+// Unreadable or corrupt files are skipped, not adopted.
+func (s *Store) reconcileLocked() error {
+	files, err := os.ReadDir(s.dir)
+	if err != nil {
+		return fmt.Errorf("store: scanning ideas dir: %w", err)
+	}
+	added := false
+	for _, f := range files {
+		name := f.Name()
+		id, ok := strings.CutSuffix(name, ".json")
+		if !ok || id == "index" || f.IsDir() || strings.HasPrefix(name, ".") {
+			continue
+		}
+		if _, ok := s.index[id]; ok {
+			continue
+		}
+		raw, err := os.ReadFile(s.ideaPath(id))
+		if err != nil {
+			continue
+		}
+		var idea Idea
+		if err := json.Unmarshal(raw, &idea); err != nil || idea.ID != id {
+			continue
+		}
+		s.index[id] = indexEntry{ID: id, Author: idea.Author, Visibility: idea.Visibility, Symbol: idea.Symbol, UpdatedAt: idea.UpdatedAt}
+		added = true
+	}
+	if added {
+		return s.writeIndexLocked()
+	}
+	return nil
 }
 
 func (s *Store) indexPath() string         { return filepath.Join(s.dir, "index.json") }
@@ -451,12 +489,29 @@ func newID() (string, error) {
 }
 
 // persistLocked writes the idea file and index. Caller holds s.mu.
+// If the index write fails, the idea file and in-memory index are rolled
+// back to their previous state so memory and disk stay consistent.
 func (s *Store) persistLocked(idea *Idea) error {
+	prevRaw, readErr := os.ReadFile(s.ideaPath(idea.ID))
+	prevEntry, hadEntry := s.index[idea.ID]
 	if err := fsutil.AtomicWriteJSON(s.ideaPath(idea.ID), idea); err != nil {
 		return fmt.Errorf("store: %w", err)
 	}
 	s.index[idea.ID] = indexEntry{ID: idea.ID, Author: idea.Author, Visibility: idea.Visibility, Symbol: idea.Symbol, UpdatedAt: idea.UpdatedAt}
-	return s.writeIndexLocked()
+	if err := s.writeIndexLocked(); err != nil {
+		if hadEntry {
+			s.index[idea.ID] = prevEntry
+		} else {
+			delete(s.index, idea.ID)
+		}
+		if readErr == nil {
+			_ = fsutil.AtomicWriteFile(s.ideaPath(idea.ID), prevRaw)
+		} else {
+			_ = os.Remove(s.ideaPath(idea.ID))
+		}
+		return err
+	}
+	return nil
 }
 
 func (s *Store) writeIndexLocked() error {
