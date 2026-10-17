@@ -357,20 +357,62 @@ func TestRunRegistrySyncSuccess(t *testing.T) {
 	defer hub.Close()
 	setupEnv(t, t.TempDir())
 	t.Setenv("HUB_URL", hub.URL)
-	if err := run(nil, io.Discard, io.Discard, testServe(nil, nil)); err != nil {
-		t.Fatalf("run: %v", err)
-	}
 	const want = `dibs_background_job_last_success_timestamp_seconds{job="registry_sync"}`
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		rec := httptest.NewRecorder()
-		server.MetricsHandler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", nil))
-		if strings.Contains(rec.Body.String(), want) {
+	// serve blocks until the sync is recorded: run cancels the sync loop on
+	// return, which would otherwise abort the in-flight first sync.
+	var last string
+	serve := func(*http.Server) error {
+		deadline := time.Now().Add(5 * time.Second)
+		for time.Now().Before(deadline) {
+			rec := httptest.NewRecorder()
+			server.MetricsHandler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+			last = rec.Body.String()
+			if strings.Contains(last, want) {
+				return nil
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		return errors.New("registry_sync never recorded a success")
+	}
+	if err := run(nil, io.Discard, io.Discard, serve); err != nil {
+		t.Fatalf("%v; /metrics:\n%s", err, last)
+	}
+}
+
+// TestRunCancelsRegistrySyncOnReturn pins that the background sync is tied to
+// run's lifetime: an in-flight hub request is cancelled once run returns.
+func TestRunCancelsRegistrySyncOnReturn(t *testing.T) {
+	started := make(chan struct{}, 1)
+	cancelled := make(chan struct{})
+	hub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != registry.ReposPath {
+			http.NotFound(w, r)
 			return
 		}
-		if time.Now().After(deadline) {
-			t.Fatalf("registry_sync never recorded a success; /metrics:\n%s", rec.Body.String())
+		select {
+		case started <- struct{}{}:
+		default:
 		}
-		time.Sleep(10 * time.Millisecond)
+		<-r.Context().Done()
+		close(cancelled)
+	}))
+	defer hub.Close()
+	setupEnv(t, t.TempDir())
+	t.Setenv("HUB_URL", hub.URL)
+	serve := func(*http.Server) error {
+		select {
+		case <-started:
+			return nil
+		case <-time.After(5 * time.Second):
+			return errors.New("hub never called")
+		}
+	}
+	if err := run(nil, io.Discard, io.Discard, serve); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	select {
+	case <-cancelled:
+	case <-time.After(5 * time.Second):
+		t.Fatal("hub request not cancelled after run returned")
 	}
 }
