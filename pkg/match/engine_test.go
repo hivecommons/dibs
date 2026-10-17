@@ -203,6 +203,35 @@ func TestEngineLLMScoringAndCache(t *testing.T) {
 	}
 }
 
+// TestEngineAcceptingToggleInvalidatesCache: flipping AcceptingIdeas changes
+// RepoHash, so the cached match is rescored with/without AcceptingBoost.
+func TestEngineAcceptingToggleInvalidatesCache(t *testing.T) {
+	st, reg := newFixtures(t)
+	if err := reg.Merge([]registry.RepoProfile{{RepoID: "org/a", Owner: "bob"}}); err != nil {
+		t.Fatalf("Merge: %v", err)
+	}
+	if _, err := reg.ApplyOwnerUpdate("org/a", "bob", registry.OwnerUpdate{AcceptingIdeas: boolPtr(true)}); err != nil {
+		t.Fatalf("ApplyOwnerUpdate: %v", err)
+	}
+	srv, _ := fakeGateway(t, func(string) string { return `{"score": 50, "reason": "ok"}` })
+	e := &Engine{Store: st, Registry: reg, LLM: &LLM{BaseURL: srv.URL + "/v1", Model: "test"}}
+
+	idea := createIdea(t, st, "T", "B body content")
+	ms, err := e.MatchesForIdea(context.Background(), idea)
+	if err != nil || len(ms) != 1 || ms[0].Score != 50+AcceptingBoost {
+		t.Fatalf("boosted match: %+v, err %v", ms, err)
+	}
+
+	if _, err := reg.ApplyOwnerUpdate("org/a", "bob", registry.OwnerUpdate{AcceptingIdeas: boolPtr(false)}); err != nil {
+		t.Fatalf("ApplyOwnerUpdate: %v", err)
+	}
+	idea, _ = st.Get(idea.ID)
+	ms, err = e.MatchesForIdea(context.Background(), idea)
+	if err != nil || len(ms) != 1 || ms[0].Score != 50 {
+		t.Fatalf("toggle must drop the boost: %+v, err %v", ms, err)
+	}
+}
+
 // TestEngineFallbackWhenGatewayDown: a dead gateway degrades to the
 // deterministic scorer, never an error.
 func TestEngineFallbackWhenGatewayDown(t *testing.T) {
