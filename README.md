@@ -169,6 +169,37 @@ claude mcp add --transport http dibs https://dibs.hivecommons.dev/mcp \
   --header "Authorization: Bearer <your-token-or-hive_hub_user-cookie-value>"
 ```
 
+### GitHub Copilot CLI and VS Code
+
+```sh
+copilot mcp add --transport http \
+  --header "Authorization: Bearer <your-token-or-hive_hub_user-cookie-value>" \
+  dibs https://dibs.hivecommons.dev/mcp
+```
+
+This writes the server to `~/.copilot/mcp-config.json`. VS Code reads the
+same file, as well as a workspace `.mcp.json`. Either file takes the
+[generic MCP JSON](#generic-mcp-json) below unchanged.
+
+### Cursor
+
+Put the following in `~/.cursor/mcp.json` (all projects) or `.cursor/mcp.json`
+(one project). Cursor expands `${env:DIBS_TOKEN}` from your environment, so
+the token stays out of the file:
+
+```json
+{
+  "mcpServers": {
+    "dibs": {
+      "url": "https://dibs.hivecommons.dev/mcp",
+      "headers": {
+        "Authorization": "Bearer ${env:DIBS_TOKEN}"
+      }
+    }
+  }
+}
+```
+
 ### Claude Desktop and ChatGPT connectors
 
 Both accept a remote MCP server over Streamable HTTP, so the same endpoint
