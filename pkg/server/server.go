@@ -161,5 +161,8 @@ func New(cfg Config) http.Handler {
 	go reqMetrics.logPeriodically(metricsLogInterval)
 	go match.LogLLMOutcomesPeriodically(metricsLogInterval)
 	go jobStats.logPeriodically(metricsLogInterval)
-	return reqMetrics.wrap(base, root)
+	// securityHeaders sits inside the metrics wrapper and outside every
+	// route, so public, authenticated, rejected, MCP and probe responses
+	// all carry the same browser hardening headers (headers.go).
+	return reqMetrics.wrap(base, securityHeaders(root))
 }
