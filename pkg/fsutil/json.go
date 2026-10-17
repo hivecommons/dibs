@@ -18,6 +18,12 @@ func AtomicWriteJSON(path string, v any) error {
 	if err != nil {
 		return fmt.Errorf("marshaling: %w", err)
 	}
+	return AtomicWriteFile(path, data)
+}
+
+// AtomicWriteFile writes data to path via a temporary file and a rename.
+// The resulting file has mode 0600.
+func AtomicWriteFile(path string, data []byte) error {
 	tmp, err := os.CreateTemp(filepath.Dir(path), ".tmp-*")
 	if err != nil {
 		return fmt.Errorf("creating temp file: %w", err)

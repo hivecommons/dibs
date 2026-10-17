@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/hivecommons/dibs/pkg/fsutil"
 )
 
 func TestGetReadErrors(t *testing.T) {
@@ -81,5 +83,136 @@ func TestCreatePersistError(t *testing.T) {
 	}
 	if err := s.Create(validIdea("alice")); err == nil || !strings.HasPrefix(err.Error(), "store: creating temp file:") {
 		t.Fatalf("err = %v, want creating temp file error", err)
+	}
+}
+
+// blockIndex replaces index.json with a non-empty directory so the index
+// write (rename) fails while idea-file writes still succeed.
+func blockIndex(t *testing.T, s *Store) {
+	t.Helper()
+	if err := os.Remove(s.indexPath()); err != nil && !errors.Is(err, os.ErrNotExist) {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(s.indexPath(), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(s.indexPath(), "blocker"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCreateIndexWriteFailureRollsBack(t *testing.T) {
+	s, _ := newTestStore(t)
+	blockIndex(t, s)
+	idea := validIdea("alice")
+	if err := s.Create(idea); err == nil {
+		t.Fatal("Create succeeded, want index write error")
+	}
+	if _, err := s.Get(idea.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("Get err = %v, want ErrNotFound", err)
+	}
+	if pub, err := s.ListPublic(); err != nil || len(pub) != 0 {
+		t.Fatalf("ListPublic = %v, %v; want empty", pub, err)
+	}
+	if _, err := os.Stat(s.ideaPath(idea.ID)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("idea file stat err = %v, want not exist", err)
+	}
+}
+
+func TestMutateIndexWriteFailureRollsBack(t *testing.T) {
+	s, _ := newTestStore(t)
+	idea := validIdea("alice")
+	if err := s.Create(idea); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(s.indexPath()); err != nil {
+		t.Fatal(err)
+	}
+	blockIndex(t, s)
+	if _, err := s.Mutate(idea.ID, true, func(i *Idea) error {
+		i.Title = "Changed title"
+		return nil
+	}); err == nil {
+		t.Fatal("Mutate succeeded, want index write error")
+	}
+	got, err := s.Get(idea.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Title != "Test idea" {
+		t.Fatalf("Title = %q, want old data after failed write", got.Title)
+	}
+}
+
+func TestNewAdoptsOrphanedIdeaFiles(t *testing.T) {
+	s, dir := newTestStore(t)
+	idea := validIdea("alice")
+	if err := s.Create(idea); err != nil {
+		t.Fatal(err)
+	}
+	orphan := validIdea("bob")
+	orphan.ID = "orphan0001"
+	orphan.Matches = []Match{}
+	if err := fsutil.AtomicWriteJSON(s.ideaPath(orphan.ID), orphan); err != nil {
+		t.Fatal(err)
+	}
+	// Corrupt and mismatched-ID files must be skipped.
+	if err := os.WriteFile(s.ideaPath("corrupt001"), []byte("{not json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	other := validIdea("carol")
+	other.ID = "someoneelse"
+	if err := fsutil.AtomicWriteJSON(s.ideaPath("mismatch01"), other); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(s.ideaPath("dir0000001"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	s2, err := New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s2.Get(orphan.ID); err != nil {
+		t.Fatalf("Get orphan: %v", err)
+	}
+	if _, err := s2.Get("corrupt001"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("corrupt err = %v, want ErrNotFound", err)
+	}
+	if _, err := s2.Get("mismatch01"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("mismatch err = %v, want ErrNotFound", err)
+	}
+	pub, err := s2.ListPublic()
+	if err != nil || len(pub) != 2 {
+		t.Fatalf("ListPublic = %d, %v; want 2", len(pub), err)
+	}
+	// The index was rewritten, so a further reopen sees the orphan too.
+	s3, err := New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s3.Get(orphan.ID); err != nil {
+		t.Fatalf("Get after reopen: %v", err)
+	}
+}
+
+func TestNewReconcileKeepsPrivateOrphansOutOfPublicList(t *testing.T) {
+	s, dir := newTestStore(t)
+	orphan := validIdea("bob")
+	orphan.ID = "private001"
+	orphan.Visibility = VisibilityPrivate
+	orphan.Matches = []Match{}
+	if err := fsutil.AtomicWriteJSON(s.ideaPath(orphan.ID), orphan); err != nil {
+		t.Fatal(err)
+	}
+	s2, err := New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pub, err := s2.ListPublic(); err != nil || len(pub) != 0 {
+		t.Fatalf("ListPublic = %d, %v; want 0", len(pub), err)
+	}
+	if mine, err := s2.ListByAuthor("bob"); err != nil || len(mine) != 1 {
+		t.Fatalf("ListByAuthor = %d, %v; want 1", len(mine), err)
 	}
 }
