@@ -197,7 +197,7 @@ func (a *API) handleConfirmIssue(w http.ResponseWriter, r *http.Request) {
 			settled.AuthorDisplay+" filed the idea “"+settled.Title+"” as an issue on "+rp.RepoID+": "+in.IssueURL,
 			settled.ID, rp.RepoID)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"result": "settled", "idea": ideaForViewer(settled, identity(r).Username)})
+	writeJSON(w, http.StatusOK, map[string]any{"result": "settled", "idea": a.publicIdeaView(settled, identity(r).Username)})
 }
 
 // verifyFiledIssue resolves issueURL on GitHub and checks it is an issue the
