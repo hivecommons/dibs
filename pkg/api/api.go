@@ -440,7 +440,7 @@ func (a *API) handleListIdeas(w http.ResponseWriter, r *http.Request) {
 		}
 		out := make([]*store.Idea, 0, len(ideas))
 		for _, idea := range ideas {
-			out = append(out, ideaForViewer(idea, id.Username))
+			out = append(out, a.publicIdeaView(idea, id.Username))
 		}
 		writeJSON(w, http.StatusOK, out)
 	default:
@@ -523,8 +523,31 @@ func (a *API) offeredToCallerRepo(idea *store.Idea, username string) bool {
 
 func (a *API) handleGetIdea(w http.ResponseWriter, r *http.Request) {
 	if idea := a.loadAuthorized(w, r, false); idea != nil {
-		writeJSON(w, http.StatusOK, ideaForViewer(idea, identity(r).Username))
+		writeJSON(w, http.StatusOK, a.publicIdeaView(idea, identity(r).Username))
 	}
+}
+
+// publicIdeaView scopes an idea to a viewer who may not be its author: the
+// author-only match state is dropped and pending offers are kept only for
+// repos the viewer owns.
+func (a *API) publicIdeaView(idea *store.Idea, viewer string) *store.Idea {
+	cp := ideaForViewer(idea, viewer)
+	if cp.Author == viewer {
+		return cp
+	}
+	cp.Matches = nil
+	cp.CNCFMatches = nil
+	cp.PassedRepos = nil
+	var offers []store.Offer
+	for _, o := range cp.Offers {
+		if o.Status != store.OfferPending {
+			offers = append(offers, o)
+		} else if rp, err := a.Registry.Get(o.RepoID); err == nil && strings.EqualFold(rp.Owner, viewer) {
+			offers = append(offers, o)
+		}
+	}
+	cp.Offers = offers
+	return cp
 }
 
 func (a *API) handleUpdateIdea(w http.ResponseWriter, r *http.Request) {

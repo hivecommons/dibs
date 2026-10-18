@@ -506,6 +506,40 @@ func TestGetIdeaAccessControl(t *testing.T) {
 	}
 }
 
+func TestGetIdeaScopesAuthorOnlyState(t *testing.T) {
+	a, mux := newAPIFixture(t)
+	idea := mustCreate(t, a, "bob", "Offered plan", store.VisibilityPublic, store.StatusOffered)
+	if _, err := a.Store.Mutate(idea.ID, false, func(i *store.Idea) error {
+		i.Matches = []store.Match{{RepoID: "match/repo", Score: 3}}
+		i.CNCFMatches = []store.CNCFMatch{{Name: "cncfproj"}}
+		i.PassedRepos = []string{"passed/repo"}
+		i.Offers = append(i.Offers,
+			store.Offer{RepoID: "kubestellar/dibs", Status: store.OfferPending, CreatedAt: time.Now().UTC()},
+			store.Offer{RepoID: "done/repo", Status: store.OfferAccepted, CreatedAt: time.Now().UTC()})
+		return nil
+	}); err != nil {
+		t.Fatalf("mutate: %v", err)
+	}
+	for _, path := range []string{"/api/ideas/" + idea.ID, "/api/ideas?scope=public"} {
+		body := do(t, mux, ident("charlie"), "GET", path, "").Body.String()
+		for _, leak := range []string{"kubestellar/dibs", "match/repo", "cncfproj", "passed/repo"} {
+			if strings.Contains(body, leak) {
+				t.Fatalf("%s leaked %q to a non-author: %s", path, leak, body)
+			}
+		}
+		if !strings.Contains(body, "done/repo") {
+			t.Fatalf("%s dropped the accepted offer: %s", path, body)
+		}
+	}
+	// The author and the owner of the offered repo keep their view.
+	if body := do(t, mux, ident("bob"), "GET", "/api/ideas/"+idea.ID, "").Body.String(); !strings.Contains(body, "match/repo") || !strings.Contains(body, "kubestellar/dibs") {
+		t.Fatalf("author view lost state: %s", body)
+	}
+	if body := do(t, mux, ident("alice"), "GET", "/api/ideas/"+idea.ID, "").Body.String(); !strings.Contains(body, "kubestellar/dibs") || strings.Contains(body, "match/repo") {
+		t.Fatalf("repo owner view wrong: %s", body)
+	}
+}
+
 func TestUpdateIdea(t *testing.T) {
 	a, mux := newAPIFixture(t)
 	idea := mustCreate(t, a, "alice", "Original", store.VisibilityPublic, store.StatusDraft)
