@@ -1,0 +1,25 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "dev.hivecommons/dibs",
+  "title": "Dibs (Hive Commons)",
+  "description": "Submit ideas to hive-managed open source repos and get credited when agents ship them.",
+  "repository": {
+    "url": "https://github.com/hivecommons/dibs",
+    "source": "github"
+  },
+  "version": "0.1.0",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://dibs.hivecommons.dev/mcp",
+      "headers": [
+        {
+          "name": "Authorization",
+          "description": "Bearer <token> verified by the Hive Hub; required to submit or list your ideas and read your private ideas. See the repository README's Token section.",
+          "isRequired": false,
+          "isSecret": true
+        }
+      ]
+    }
+  ]
+}
