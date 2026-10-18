@@ -44,14 +44,18 @@ func TestGetIdeaScopesMatchesAndPendingOffersToViewer(t *testing.T) {
 		t.Fatalf("Store.Create: %v", err)
 	}
 	decided := time.Now()
-	idea.Matches = []store.Match{{RepoID: "org/owned-by-bob", Score: 0.9, Reason: "fit"}}
-	idea.Offers = []store.Offer{
-		{RepoID: "org/owned-by-bob", Status: store.OfferPending, CreatedAt: decided},
-		{RepoID: "org/owned-by-dave", Status: store.OfferPending, CreatedAt: decided},
-		{RepoID: "org/declined", Status: store.OfferDeclined, CreatedAt: decided, DecidedAt: &decided},
-	}
-	if err := st.Update(idea); err != nil {
-		t.Fatalf("Store.Update: %v", err)
+	// Store.Update preserves Offers from the existing record, so seed them
+	// through Mutate, which is how the offer handlers write them.
+	if _, err := st.Mutate(idea.ID, true, func(i *store.Idea) error {
+		i.Matches = []store.Match{{RepoID: "org/owned-by-bob", Score: 0.9, Reason: "fit"}}
+		i.Offers = []store.Offer{
+			{RepoID: "org/owned-by-bob", Status: store.OfferPending, CreatedAt: decided},
+			{RepoID: "org/owned-by-dave", Status: store.OfferPending, CreatedAt: decided},
+			{RepoID: "org/declined", Status: store.OfferDeclined, CreatedAt: decided, DecidedAt: &decided},
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("Store.Mutate: %v", err)
 	}
 
 	cases := []struct {
