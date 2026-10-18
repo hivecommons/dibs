@@ -459,6 +459,34 @@ func TestOfferedToCallerRepoIsCaseInsensitive(t *testing.T) {
 	}
 }
 
+// TestDeclinedOfferDoesNotGrantPrivateRead pins that only standing offers let
+// a repo owner read a private idea via GET /api/ideas/{id}.
+func TestDeclinedOfferDoesNotGrantPrivateRead(t *testing.T) {
+	now := time.Date(2026, 9, 28, 10, 0, 0, 0, time.UTC)
+	withFixedNow(t, now)
+	a, mux := newAPIFixture(t)
+	for _, tc := range []struct {
+		status string
+		want   int
+	}{
+		{store.OfferDeclined, http.StatusNotFound},
+		{store.OfferPending, http.StatusOK},
+		{store.OfferAccepted, http.StatusOK},
+	} {
+		idea := mustCreate(t, a, "bob", "Private "+tc.status, store.VisibilityPrivate, store.StatusOffered)
+		if _, err := a.Store.Mutate(idea.ID, false, func(i *store.Idea) error {
+			i.Offers = []store.Offer{{RepoID: "kubestellar/dibs", Status: tc.status, CreatedAt: now}}
+			return nil
+		}); err != nil {
+			t.Fatalf("seed offers: %v", err)
+		}
+		rec := do(t, mux, ident("alice"), "GET", "/api/ideas/"+idea.ID, "")
+		if rec.Code != tc.want {
+			t.Fatalf("%s offer: status=%d, want %d", tc.status, rec.Code, tc.want)
+		}
+	}
+}
+
 // TestDecidePassRejectsPendingOffer pins that pass cannot silently succeed on
 // a pending offer, which the repo feed would keep resurfacing.
 func TestDecidePassRejectsPendingOffer(t *testing.T) {

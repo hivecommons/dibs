@@ -510,10 +510,14 @@ func (a *API) loadAuthorized(w http.ResponseWriter, r *http.Request, mustOwn boo
 	return nil
 }
 
-// offeredToCallerRepo reports whether the idea carries an offer to a repo
-// owned by username.
+// offeredToCallerRepo reports whether the idea carries a standing (pending
+// or accepted) offer to a repo owned by username. A declined offer no longer
+// grants access.
 func (a *API) offeredToCallerRepo(idea *store.Idea, username string) bool {
 	for _, o := range idea.Offers {
+		if o.Status == store.OfferDeclined {
+			continue
+		}
 		if rp, err := a.Registry.Get(o.RepoID); err == nil && strings.EqualFold(rp.Owner, username) {
 			return true
 		}
