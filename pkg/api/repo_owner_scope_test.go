@@ -74,3 +74,21 @@ func TestDecideResponseScopesIdeaToRepoOwner(t *testing.T) {
 		t.Fatalf("decline response lost the decided offer: %s", rec.Body.String())
 	}
 }
+
+func TestAcceptResponseScopesIdeaToRepoOwner(t *testing.T) {
+	a, mux := newAPIFixture(t)
+	now := time.Now().UTC()
+	idea := mustCreate(t, a, "bob", "Accept plan", store.VisibilityPublic, store.StatusOffered)
+	seedForeignState(t, a, idea.ID,
+		store.Offer{RepoID: "kubestellar/dibs", Status: store.OfferPending, CreatedAt: now},
+		store.Offer{RepoID: "org/other", Status: store.OfferPending, CreatedAt: now})
+
+	rec := do(t, mux, ident("alice"), "POST", "/api/repos/kubestellar/dibs/decide", `{"ideaID":"`+idea.ID+`","decision":"accept"}`)
+	if rec.Code != 200 {
+		t.Fatalf("accept: status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	assertNoForeignState(t, "accept response", rec.Body.String())
+	if !strings.Contains(rec.Body.String(), "kubestellar/dibs") {
+		t.Fatalf("accept response lost the accepted offer: %s", rec.Body.String())
+	}
+}

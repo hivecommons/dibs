@@ -493,7 +493,7 @@ func (a *API) accept(w http.ResponseWriter, r *http.Request, idea *store.Idea, r
 		updated.ID, rp.RepoID)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"result": "accepted",
-		"idea":   updated,
+		"idea":   a.publicIdeaView(updated, identity(r).Username),
 		"next":   "the ideator files the prefilled GitHub issue themselves and confirms its URL",
 	})
 }
