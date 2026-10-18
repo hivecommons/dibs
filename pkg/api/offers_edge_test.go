@@ -458,3 +458,26 @@ func TestOfferedToCallerRepoIsCaseInsensitive(t *testing.T) {
 		t.Fatal("non-owner should not see the offered idea")
 	}
 }
+
+// TestDecidePassRejectsPendingOffer pins that pass cannot silently succeed on
+// a pending offer, which the repo feed would keep resurfacing.
+func TestDecidePassRejectsPendingOffer(t *testing.T) {
+	now := time.Date(2026, 9, 28, 10, 0, 0, 0, time.UTC)
+	withFixedNow(t, now)
+	a, mux := newAPIFixture(t)
+	idea := mustCreate(t, a, "bob", "Offered pass", store.VisibilityPublic, store.StatusOffered)
+	if _, err := a.Store.Mutate(idea.ID, false, func(i *store.Idea) error {
+		i.Offers = []store.Offer{{RepoID: "kubestellar/dibs", Status: store.OfferPending, CreatedAt: now}}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	rec := do(t, mux, ident("alice"), "POST", "/api/repos/kubestellar/dibs/decide", `{"ideaID":"`+idea.ID+`","decision":"pass"}`)
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "decline") {
+		t.Fatalf("pass on pending offer: status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	rec = do(t, mux, ident("alice"), "POST", "/api/repos/kubestellar/dibs/decide", `{"ideaID":"`+idea.ID+`","decision":"decline"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("decline: status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
