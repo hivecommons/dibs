@@ -388,6 +388,10 @@ func (a *API) handleDecide(w http.ResponseWriter, r *http.Request) {
 	}
 	switch in.Decision {
 	case "pass":
+		if offer != nil && offer.Status == store.OfferPending && idea.Status == store.StatusOffered {
+			writeError(w, http.StatusBadRequest, `pending offers must be declined, use decision "decline"`)
+			return
+		}
 		if err := a.Registry.AddPassedIdea(rp.RepoID, identity(r).Username, idea.ID); err != nil {
 			writeError(w, http.StatusInternalServerError, "internal error")
 			return

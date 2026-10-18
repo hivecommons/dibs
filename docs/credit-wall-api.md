@@ -174,7 +174,10 @@ existence. Duplicate non-declined offers and illegal transitions return 400.
 Request: `{ "ideaID": "idea-id", "decision": "accept" }`, where `decision`
 is `accept`, `decline`, or `pass`. Only the registered repo's owner may decide.
 Private ideas require an offer to that repository; decline requires a pending
-offer. Accept sets `targetRepo` and moves an available idea to `accepted`.
+offer. Pass applies only to non-offered public candidates: when the idea has a
+pending offer to this repository, `pass` returns 400 and the offer must be
+declined instead. Accept sets `targetRepo` and moves an available idea to
+`accepted`.
 
 Response shapes:
 
