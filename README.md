@@ -182,6 +182,39 @@ one, and `submit_idea` needs it.
 ChatGPT: Settings -> Connectors -> Add custom connector (available on plans
 where custom MCP connectors are enabled), using the same URL and header.
 
+### GitHub Copilot CLI and VS Code
+
+**Copilot CLI** has a one-line command to add a remote MCP server:
+
+```sh
+copilot mcp add --transport http \
+  --header "Authorization: Bearer <your-token-or-hive_hub_user-cookie-value>" \
+  dibs https://dibs.hivecommons.dev/mcp
+```
+
+This writes to `~/.copilot/mcp-config.json` using the same `mcpServers` / `type: "http"` shape as the Generic MCP JSON block below.
+
+**VS Code** reads `~/.copilot/mcp-config.json` (shared with Copilot CLI) and workspace `.mcp.json` files. Both use the same `mcpServers` format. For more details, see the [Copilot CLI documentation](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers) and [VS Code MCP server documentation](https://code.visualstudio.com/docs/agent-customization/mcp-servers).
+
+### Cursor
+
+Cursor reads MCP configuration from `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (project-level). Use the `mcpServers` format with `url` and `headers`:
+
+```json
+{
+  "mcpServers": {
+    "dibs": {
+      "url": "https://dibs.hivecommons.dev/mcp",
+      "headers": {
+        "Authorization": "Bearer ${env:DIBS_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+Cursor supports `${env:NAME}` interpolation in headers, so you can set `DIBS_TOKEN` as an environment variable rather than storing it in the file. For details, see the [Cursor MCP documentation](https://cursor.com/docs/mcp).
+
 ## Recall ideas you never acted on
 
 Dibs ships an MCP prompt, `recall_ideas`, for the ideas that never made it to
