@@ -290,12 +290,40 @@ func (t *tools) getIdea(ctx context.Context, req *mcpsdk.CallToolRequest, in get
 			return nil, getIdeaOutput{}, store.ErrNotFound
 		}
 	}
+	viewer := ""
+	if authErr == nil && id != nil {
+		viewer = id.Username
+	}
+	matches, offers := idea.Matches, idea.Offers
+	if idea.Author != viewer {
+		matches, offers = nil, t.offersForViewer(idea.Offers, viewer)
+	}
 	return nil, getIdeaOutput{
 		ID: idea.ID, Title: idea.Title, Description: idea.Body, Author: idea.Author,
 		Visibility: idea.Visibility, Status: idea.Status, Phase: idea.Status, Tags: idea.Tags,
-		Matches: idea.Matches, Offers: idea.Offers, TargetRepo: idea.TargetRepo, IssueURL: idea.IssueURL,
+		Matches: matches, Offers: offers, TargetRepo: idea.TargetRepo, IssueURL: idea.IssueURL,
 		URL: ideaURL(req, t.cfg.BasePath, idea.ID),
 	}, nil
+}
+
+// offersForViewer applies the same rule as the HTTP idea detail to a
+// non-author: decided offers are public record, pending offers are visible
+// only to the owner of the offered repo. An anonymous viewer owns nothing.
+func (t *tools) offersForViewer(all []store.Offer, viewer string) []store.Offer {
+	var out []store.Offer
+	for _, o := range all {
+		if o.Status != store.OfferPending {
+			out = append(out, o)
+			continue
+		}
+		if viewer == "" {
+			continue
+		}
+		if rp, err := t.cfg.Registry.Get(o.RepoID); err == nil && strings.EqualFold(rp.Owner, viewer) {
+			out = append(out, o)
+		}
+	}
+	return out
 }
 
 func (t *tools) listRepos(ctx context.Context, _ *mcpsdk.CallToolRequest, _ listReposInput) (*mcpsdk.CallToolResult, listReposOutput, error) {
