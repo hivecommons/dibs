@@ -120,8 +120,9 @@ keys. Do not republish the caller's email.
 The list returns `Idea[]` (the default scope is also `mine`); the
 detail route returns an `Idea` directly, not an envelope. Detail reads require
 a session even for public ideas. A private idea is readable only by its author
-or an owner of a repository to which it was explicitly offered; everyone else
-gets 404. Writes below remain author-only even when a repo owner can read.
+or an owner of a repository that holds a standing (pending or accepted) offer
+for it; a declined offer no longer grants access, and everyone else gets 404.
+Writes below remain author-only even when a repo owner can read.
 
 The settlement-relevant projection of `Idea` is:
 
@@ -164,7 +165,8 @@ acceptance nor launch alone qualifies an idea for the public wall.
 
 Request: `{ "repoID": "org/repo" }`. Response: the updated `Idea`.
 A registered repo must be accepting ideas; the offer becomes `pending`. For a
-private idea this explicitly reveals it to that repo's owner. An unregistered
+private idea this explicitly reveals it to that repo's owner for as long as the
+offer is pending or accepted; declining ends the reveal. An unregistered
 GitHub-shaped target records `external: true` and sets `targetRepo` immediately,
 without repo-owner acceptance. This validates the target's syntax, not its
 existence. Duplicate non-declined offers and illegal transitions return 400.
