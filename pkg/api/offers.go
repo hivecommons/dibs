@@ -341,7 +341,7 @@ func (a *API) handleRepoFeed(w http.ResponseWriter, r *http.Request) {
 // repoView scores one idea for one repo (cached both directions) and
 // ensures the TLDR exists for display.
 func (a *API) repoView(ctx context.Context, idea *store.Idea, rp *registry.RepoProfile) matchView {
-	v := matchView{Idea: ideaForViewer(idea, rp.Owner)}
+	v := matchView{Idea: a.publicIdeaView(idea, rp.Owner)}
 	if a.Engine == nil {
 		return v
 	}
@@ -425,7 +425,7 @@ func (a *API) handleDecide(w http.ResponseWriter, r *http.Request) {
 		}
 		a.notifyAdd(updated.Author, notify.KindDeclined,
 			rp.RepoID+" declined your idea “"+updated.Title+"”.", updated.ID, rp.RepoID)
-		writeJSON(w, http.StatusOK, map[string]any{"result": "declined", "idea": ideaForViewer(updated, identity(r).Username)})
+		writeJSON(w, http.StatusOK, map[string]any{"result": "declined", "idea": a.publicIdeaView(updated, identity(r).Username)})
 	case "accept":
 		a.accept(w, r, idea, rp, offer)
 	default:
@@ -493,7 +493,7 @@ func (a *API) accept(w http.ResponseWriter, r *http.Request, idea *store.Idea, r
 		updated.ID, rp.RepoID)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"result": "accepted",
-		"idea":   updated,
+		"idea":   a.publicIdeaView(updated, identity(r).Username),
 		"next":   "the ideator files the prefilled GitHub issue themselves and confirms its URL",
 	})
 }
@@ -507,7 +507,7 @@ func (a *API) legacySettle(w http.ResponseWriter, r *http.Request, updated *stor
 	if err != nil {
 		warning := "accepted, but opening the GitHub issue failed: " + err.Error()
 		slog.Warn("api legacy settlement failed", "idea_id", updated.ID, "repo_id", rp.RepoID, "err", err)
-		writeJSON(w, http.StatusOK, map[string]any{"result": "accepted", "idea": ideaForViewer(updated, identity(r).Username), "warning": warning})
+		writeJSON(w, http.StatusOK, map[string]any{"result": "accepted", "idea": a.publicIdeaView(updated, identity(r).Username), "warning": warning})
 		return
 	}
 	settled, err := a.Store.Mutate(updated.ID, true, func(i *store.Idea) error {
@@ -527,7 +527,7 @@ func (a *API) legacySettle(w http.ResponseWriter, r *http.Request, updated *stor
 	}
 	a.notifyAdd(settled.Author, notify.KindIssue,
 		"“"+settled.Title+"” is now a GitHub issue on "+rp.RepoID+": "+issueURL, settled.ID, rp.RepoID)
-	writeJSON(w, http.StatusOK, map[string]any{"result": "settled", "idea": ideaForViewer(settled, identity(r).Username), "issueURL": issueURL})
+	writeJSON(w, http.StatusOK, map[string]any{"result": "settled", "idea": a.publicIdeaView(settled, identity(r).Username), "issueURL": issueURL})
 }
 
 // handleListNotifications returns the caller's feed (?unread=1 filters) and
