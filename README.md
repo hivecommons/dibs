@@ -187,7 +187,9 @@ where custom MCP connectors are enabled), using the same URL and header.
 **Copilot CLI** has a one-line command to add a remote MCP server:
 
 ```sh
-copilot mcp add --transport http --header "Authorization: ******" dibs https://dibs.hivecommons.dev/mcp
+copilot mcp add --transport http \
+  --header "Authorization: Bearer <your-token-or-hive_hub_user-cookie-value>" \
+  dibs https://dibs.hivecommons.dev/mcp
 ```
 
 This writes to `~/.copilot/mcp-config.json` using the same `mcpServers` / `type: "http"` shape as the Generic MCP JSON block below.
