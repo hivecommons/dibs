@@ -223,7 +223,7 @@ func registerTools(server *mcpsdk.Server, t *tools) {
 	mcpsdk.AddTool(server, &mcpsdk.Tool{
 		Name:        "get_idea",
 		Title:       "Get idea",
-		Description: "Fetch an idea, including match and settlement state. Public ideas are readable without authentication; private ideas require ownership.",
+		Description: "Fetch an idea, including match and settlement state. Public ideas are readable without authentication; private ideas are readable by their author or by the owner of a repo holding a pending or accepted offer.",
 	}, t.getIdea)
 	mcpsdk.AddTool(server, &mcpsdk.Tool{
 		Name:        "list_repos",
