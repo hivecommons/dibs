@@ -150,6 +150,35 @@ func TestDeleteRemoveError(t *testing.T) {
 	}
 }
 
+func TestDeleteIndexWriteErrorRollsBack(t *testing.T) {
+	s, _ := newTestStore(t)
+	idea := validIdea("alice")
+	if err := s.Create(idea); err != nil {
+		t.Fatal(err)
+	}
+	want, err := os.ReadFile(s.ideaPath(idea.ID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	breakIndexFile(t, s)
+	if err := s.Delete(idea.ID); err == nil {
+		t.Fatal("Delete succeeded despite unwritable index")
+	}
+	got, err := os.ReadFile(s.ideaPath(idea.ID))
+	if err != nil {
+		t.Fatalf("idea file missing after failed Delete: %v", err)
+	}
+	if string(got) != string(want) {
+		t.Fatalf("idea file changed after failed Delete:\n%s\nwant:\n%s", got, want)
+	}
+	s.mu.RLock()
+	entry, ok := s.index[idea.ID]
+	s.mu.RUnlock()
+	if !ok || entry.ID != idea.ID {
+		t.Fatalf("index entry not restored after failed Delete: %+v ok=%v", entry, ok)
+	}
+}
+
 func TestListFilteredReadErrors(t *testing.T) {
 	s, _ := newTestStore(t)
 	idea := validIdea("alice")
