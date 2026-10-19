@@ -287,3 +287,29 @@ func TestNonHiveCNCFFiltersRegistryRepos(t *testing.T) {
 		t.Fatalf("nil registry must keep everything: %+v", out)
 	}
 }
+
+// TestScoreForRepoAppliesAcceptingBoost: the repo-side score carries the same
+// AcceptingBoost MatchesForIdea applies, so the shared cache is order-independent.
+func TestScoreForRepoAppliesAcceptingBoost(t *testing.T) {
+	st, reg := newFixtures(t)
+	if err := reg.Merge([]registry.RepoProfile{{RepoID: "org/a", Owner: "bob"}}); err != nil {
+		t.Fatalf("Merge: %v", err)
+	}
+	if _, err := reg.ApplyOwnerUpdate("org/a", "bob", registry.OwnerUpdate{AcceptingIdeas: boolPtr(true)}); err != nil {
+		t.Fatalf("ApplyOwnerUpdate: %v", err)
+	}
+	srv, _ := fakeGateway(t, func(string) string { return `{"score": 50, "reason": "ok"}` })
+	e := &Engine{Store: st, Registry: reg, LLM: &LLM{BaseURL: srv.URL + "/v1", Model: "test"}}
+	idea := createIdea(t, st, "T", "B body")
+	rp, _ := reg.Get("org/a")
+
+	m, err := e.ScoreForRepo(context.Background(), idea, rp)
+	if err != nil || m.Score != 50+AcceptingBoost {
+		t.Fatalf("ScoreForRepo: %+v, err %v", m, err)
+	}
+	idea, _ = st.Get(idea.ID)
+	ms, err := e.MatchesForIdea(context.Background(), idea)
+	if err != nil || len(ms) != 1 || ms[0].Score != 50+AcceptingBoost {
+		t.Fatalf("MatchesForIdea after feed scoring: %+v, err %v", ms, err)
+	}
+}

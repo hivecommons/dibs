@@ -226,6 +226,7 @@ func (e *Engine) ScoreForRepo(ctx context.Context, idea *store.Idea, rp *registr
 		}
 	}
 	m := e.score(ctx, idea, rp, hash)
+	boostAccepting(&m, rp)
 	if _, err := e.Store.Mutate(idea.ID, false, func(i *store.Idea) error {
 		kept := m
 		replaced := false
