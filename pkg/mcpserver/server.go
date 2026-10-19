@@ -286,7 +286,7 @@ func (t *tools) getIdea(ctx context.Context, req *mcpsdk.CallToolRequest, in get
 	}
 	id, authErr := t.identity(ctx, req)
 	if idea.Visibility != store.VisibilityPublic {
-		if authErr != nil || id == nil || idea.Author != id.Username {
+		if authErr != nil || id == nil || (idea.Author != id.Username && !t.offeredToViewerRepo(idea.Offers, id.Username)) {
 			return nil, getIdeaOutput{}, store.ErrNotFound
 		}
 	}
@@ -304,6 +304,21 @@ func (t *tools) getIdea(ctx context.Context, req *mcpsdk.CallToolRequest, in get
 		Matches: matches, Offers: offers, TargetRepo: idea.TargetRepo, IssueURL: idea.IssueURL,
 		URL: ideaURL(req, t.cfg.BasePath, idea.ID),
 	}, nil
+}
+
+// offeredToViewerRepo reports whether a standing (pending or accepted) offer
+// targets a repo owned by viewer; a declined offer no longer reveals a private
+// idea. It mirrors the HTTP API's offeredToCallerRepo.
+func (t *tools) offeredToViewerRepo(all []store.Offer, viewer string) bool {
+	for _, o := range all {
+		if o.Status == store.OfferDeclined {
+			continue
+		}
+		if rp, err := t.cfg.Registry.Get(o.RepoID); err == nil && strings.EqualFold(rp.Owner, viewer) {
+			return true
+		}
+	}
+	return false
 }
 
 // offersForViewer applies the same rule as the HTTP idea detail to a
