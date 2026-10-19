@@ -279,7 +279,13 @@ func StripRTF(s string) string {
 	for i := 0; i < len(s); {
 		c := s[i]
 		switch c {
-		case '{', '}':
+		case '{':
+			if rtfSkippedDestination(s, i+1) {
+				i = skipRTFGroup(s, i)
+				continue
+			}
+			i++
+		case '}':
 			i++
 		case '\\':
 			i++
@@ -298,9 +304,11 @@ func StripRTF(s string) string {
 				i += 3
 				continue
 			}
+			wordStart := i
 			for i < len(s) && ((s[i] >= 'a' && s[i] <= 'z') || (s[i] >= 'A' && s[i] <= 'Z')) {
 				i++
 			}
+			word := s[wordStart:i]
 			if i < len(s) && (s[i] == '-' || (s[i] >= '0' && s[i] <= '9')) {
 				i++
 				for i < len(s) && s[i] >= '0' && s[i] <= '9' {
@@ -310,7 +318,12 @@ func StripRTF(s string) string {
 			if i < len(s) && s[i] == ' ' {
 				i++
 			}
-			b.WriteByte(' ')
+			switch word {
+			case "par", "line", "sect", "page":
+				b.WriteByte('\n')
+			default:
+				b.WriteByte(' ')
+			}
 		default:
 			r, size := utf8.DecodeRuneInString(s[i:])
 			b.WriteRune(r)
@@ -318,6 +331,54 @@ func StripRTF(s string) string {
 		}
 	}
 	return b.String()
+}
+
+var rtfSkippedDestinations = map[string]bool{
+	"fonttbl": true, "colortbl": true, "stylesheet": true, "listtable": true,
+	"listoverridetable": true, "info": true, "pict": true, "object": true,
+	"header": true, "headerl": true, "headerr": true, "headerf": true,
+	"footer": true, "footerl": true, "footerr": true, "footerf": true,
+	"fldinst": true, "datastore": true, "themedata": true,
+	"colorschememapping": true, "latentstyles": true, "xmlnstbl": true,
+	"rsidtbl": true, "generator": true,
+}
+
+// rtfSkippedDestination reports whether the group whose first byte after the
+// opening brace is at i is a destination that holds no document text.
+func rtfSkippedDestination(s string, i int) bool {
+	if i+1 >= len(s) || s[i] != '\\' {
+		return false
+	}
+	if s[i+1] == '*' {
+		return true
+	}
+	j := i + 1
+	for j < len(s) && ((s[j] >= 'a' && s[j] <= 'z') || (s[j] >= 'A' && s[j] <= 'Z')) {
+		j++
+	}
+	return rtfSkippedDestinations[s[i+1:j]]
+}
+
+// skipRTFGroup returns the index just past the group opened at s[i],
+// honouring escaped braces and nested groups.
+func skipRTFGroup(s string, i int) int {
+	depth := 0
+	for i < len(s) {
+		switch s[i] {
+		case '\\':
+			i += 2
+			continue
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return i + 1
+			}
+		}
+		i++
+	}
+	return len(s)
 }
 
 func TranscribeWithContext(ctx context.Context, filename, contentType string, data []byte) (string, error) {
