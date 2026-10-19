@@ -125,10 +125,11 @@ func (s *Store) Add(user, kind, message, ideaID, repoID string) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.byID[id] = &Notification{
+	added := &Notification{
 		ID: id, User: user, Kind: kind, Message: message,
 		IdeaID: ideaID, RepoID: repoID, CreatedAt: time.Now().UTC(),
 	}
+	s.byID[id] = added
 	// Trim this user's overflow, oldest first.
 	var mine []*Notification
 	for _, n := range s.byID {
@@ -136,13 +137,22 @@ func (s *Store) Add(user, kind, message, ideaID, repoID string) error {
 			mine = append(mine, n)
 		}
 	}
+	var trimmed []*Notification
 	if len(mine) > MaxPerUser {
 		sort.Slice(mine, func(i, j int) bool { return mine[i].CreatedAt.Before(mine[j].CreatedAt) })
-		for _, n := range mine[:len(mine)-MaxPerUser] {
+		trimmed = mine[:len(mine)-MaxPerUser]
+		for _, n := range trimmed {
 			delete(s.byID, n.ID)
 		}
 	}
-	return s.persistLocked()
+	if err := s.persistLocked(); err != nil {
+		delete(s.byID, id)
+		for _, n := range trimmed {
+			s.byID[n.ID] = n
+		}
+		return err
+	}
+	return nil
 }
 
 // ListByUser returns user's notifications, newest first. unreadOnly filters
@@ -167,23 +177,29 @@ func (s *Store) ListByUser(user string, unreadOnly bool) []Notification {
 func (s *Store) MarkRead(user string, ids []string, all bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	changed := false
+	var flipped []*Notification
 	if all {
 		for _, n := range s.byID {
 			if strings.EqualFold(n.User, user) && !n.Read {
 				n.Read = true
-				changed = true
+				flipped = append(flipped, n)
 			}
 		}
 	}
 	for _, id := range ids {
 		if n, ok := s.byID[id]; ok && strings.EqualFold(n.User, user) && !n.Read {
 			n.Read = true
-			changed = true
+			flipped = append(flipped, n)
 		}
 	}
-	if !changed {
+	if len(flipped) == 0 {
 		return nil
 	}
-	return s.persistLocked()
+	if err := s.persistLocked(); err != nil {
+		for _, n := range flipped {
+			n.Read = false
+		}
+		return err
+	}
+	return nil
 }

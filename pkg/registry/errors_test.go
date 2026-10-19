@@ -229,12 +229,20 @@ func TestOwnerMutationsSurfacePersistErrors(t *testing.T) {
 	r.path = filepath.Join(dir, "missing", "repos.json")
 
 	on := true
-	rp, err := r.ApplyOwnerUpdate("kubestellar/dibs", "bob", OwnerUpdate{AcceptingIdeas: &on})
+	topics := []string{"go"}
+	appetite := "small"
+	rp, err := r.ApplyOwnerUpdate("kubestellar/dibs", "bob", OwnerUpdate{AcceptingIdeas: &on, Topics: &topics, Appetite: &appetite})
 	if rp != nil || err == nil || !strings.Contains(err.Error(), "creating temp file") {
 		t.Fatalf("ApplyOwnerUpdate = %+v, %v; want persist error", rp, err)
 	}
+	if got, _ := r.Get("kubestellar/dibs"); got.AcceptingIdeas || len(got.Topics) != 0 || got.Appetite != "" {
+		t.Fatalf("failed owner update leaked into memory: %+v", got)
+	}
 	if err := r.AddPassedIdea("kubestellar/dibs", "bob", "idea-1"); err == nil || !strings.Contains(err.Error(), "creating temp file") {
 		t.Fatalf("AddPassedIdea = %v; want persist error", err)
+	}
+	if got, _ := r.Get("kubestellar/dibs"); got.HasPassed("idea-1") {
+		t.Fatalf("failed pass leaked into memory: %+v", got.PassedIdeas)
 	}
 	if !errors.Is(r.AddPassedIdea("kubestellar/dibs", "mallory", "idea-1"), ErrForbidden) {
 		t.Fatal("non-owner pass must still be forbidden before any persist attempt")

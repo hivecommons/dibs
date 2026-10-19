@@ -86,3 +86,29 @@ func TestMutationsSurfacePersistErrors(t *testing.T) {
 		t.Fatalf("MarkRead err = %v, want creating temp file error", err)
 	}
 }
+
+// TestFailedPersistRollsBackMemory: a failed Add or MarkRead leaves the
+// in-memory feed exactly as it was before the call.
+func TestFailedPersistRollsBackMemory(t *testing.T) {
+	dir := t.TempDir()
+	s, err := New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustAdd(t, s, "alice", "match", "hello")
+	id := s.ListByUser("alice", false)[0].ID
+
+	s.path = filepath.Join(dir, "missing", "notifications.json")
+	if err := s.Add("alice", "match", "again", "idea1", "org/repo"); err == nil {
+		t.Fatal("Add: want persist error")
+	}
+	if got := s.ListByUser("alice", false); len(got) != 1 || got[0].Message != "hello" {
+		t.Fatalf("feed after failed Add = %+v, want only 'hello'", got)
+	}
+	if err := s.MarkRead("alice", []string{id}, false); err == nil {
+		t.Fatal("MarkRead: want persist error")
+	}
+	if got := s.ListByUser("alice", true); len(got) != 1 {
+		t.Fatalf("unread after failed MarkRead = %d, want 1", len(got))
+	}
+}
