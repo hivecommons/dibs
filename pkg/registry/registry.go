@@ -428,6 +428,7 @@ func (r *Registry) ApplyOwnerUpdate(repoID, actor string, upd OwnerUpdate) (*Rep
 	if upd.Appetite != nil && len(*upd.Appetite) > MaxAppetiteLen {
 		return nil, fmt.Errorf("registry: appetite exceeds %d characters", MaxAppetiteLen)
 	}
+	prevAccepting, prevTopics, prevAppetite := rp.AcceptingIdeas, rp.Topics, rp.Appetite
 	if upd.AcceptingIdeas != nil {
 		rp.AcceptingIdeas = *upd.AcceptingIdeas
 	}
@@ -438,6 +439,7 @@ func (r *Registry) ApplyOwnerUpdate(repoID, actor string, upd OwnerUpdate) (*Rep
 		rp.Appetite = *upd.Appetite
 	}
 	if err := r.persistLocked(); err != nil {
+		rp.AcceptingIdeas, rp.Topics, rp.Appetite = prevAccepting, prevTopics, prevAppetite
 		return nil, err
 	}
 	cp := *rp
@@ -459,6 +461,11 @@ func (r *Registry) AddPassedIdea(repoID, actor, ideaID string) error {
 	if rp.HasPassed(ideaID) {
 		return nil
 	}
-	rp.PassedIdeas = append(rp.PassedIdeas, ideaID)
-	return r.persistLocked()
+	prev := rp.PassedIdeas
+	rp.PassedIdeas = append(prev[:len(prev):len(prev)], ideaID)
+	if err := r.persistLocked(); err != nil {
+		rp.PassedIdeas = prev
+		return err
+	}
+	return nil
 }

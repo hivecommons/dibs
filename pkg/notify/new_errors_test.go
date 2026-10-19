@@ -1,6 +1,7 @@
 package notify
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -84,5 +85,69 @@ func TestMutationsSurfacePersistErrors(t *testing.T) {
 	}
 	if err := s.MarkRead("alice", []string{id}, false); err == nil || !strings.Contains(err.Error(), "creating temp file") {
 		t.Fatalf("MarkRead err = %v, want creating temp file error", err)
+	}
+}
+
+// TestFailedPersistRollsBackMemory: a failed Add or MarkRead leaves the
+// in-memory feed exactly as it was before the call.
+func TestFailedPersistRollsBackMemory(t *testing.T) {
+	dir := t.TempDir()
+	s, err := New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustAdd(t, s, "alice", "match", "hello")
+	id := s.ListByUser("alice", false)[0].ID
+
+	s.path = filepath.Join(dir, "missing", "notifications.json")
+	if err := s.Add("alice", "match", "again", "idea1", "org/repo"); err == nil {
+		t.Fatal("Add: want persist error")
+	}
+	if got := s.ListByUser("alice", false); len(got) != 1 || got[0].Message != "hello" {
+		t.Fatalf("feed after failed Add = %+v, want only 'hello'", got)
+	}
+	if err := s.MarkRead("alice", []string{id}, false); err == nil {
+		t.Fatal("MarkRead: want persist error")
+	}
+	if got := s.ListByUser("alice", true); len(got) != 1 {
+		t.Fatalf("unread after failed MarkRead = %d, want 1", len(got))
+	}
+	if err := s.MarkRead("alice", nil, true); err == nil {
+		t.Fatal("MarkRead(all): want persist error")
+	}
+	if got := s.ListByUser("alice", true); len(got) != 1 {
+		t.Fatalf("unread after failed MarkRead(all) = %d, want 1", len(got))
+	}
+}
+
+// TestFailedPersistRestoresTrimmedNotification: when Add trims the oldest
+// notification to stay at MaxPerUser and persist then fails, the trimmed one
+// is restored and the new one is not kept.
+func TestFailedPersistRestoresTrimmedNotification(t *testing.T) {
+	dir := t.TempDir()
+	s, err := New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < MaxPerUser; i++ {
+		mustAdd(t, s, "alice", "match", fmt.Sprintf("n%d", i))
+	}
+	before := s.ListByUser("alice", false)
+	if len(before) != MaxPerUser {
+		t.Fatalf("seeded feed = %d, want %d", len(before), MaxPerUser)
+	}
+
+	s.path = filepath.Join(dir, "missing", "notifications.json")
+	if err := s.Add("alice", "match", "overflow", "idea1", "org/repo"); err == nil {
+		t.Fatal("Add: want persist error")
+	}
+	after := s.ListByUser("alice", false)
+	if len(after) != len(before) {
+		t.Fatalf("feed after failed Add = %d notifications, want %d", len(after), len(before))
+	}
+	for i := range before {
+		if after[i].ID != before[i].ID {
+			t.Fatalf("feed[%d] after failed Add = %q, want %q", i, after[i].ID, before[i].ID)
+		}
 	}
 }
