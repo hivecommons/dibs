@@ -17,7 +17,22 @@ ideas require authentication.
 
 ## Operator checklist
 
-1. Install the official `mcp-publisher` CLI using the
+1. Confirm production runs current `main`. The listing sends clients straight
+   to the endpoint, and the published image only reaches it after a rollout
+   (see [`deploy/README.md`](../deploy/README.md)). From an up-to-date
+   checkout, the version `/healthz` and `/readyz` report must match `main`,
+   and `/readyz` must answer 200:
+
+   ```sh
+   git fetch origin main
+   test "$(curl --fail --silent --show-error https://dibs.hivecommons.dev/readyz | jq -r .version)" \
+     = "$(git rev-parse origin/main)" && echo "production is current"
+   ```
+
+   If the request fails or the versions differ, roll out the current image
+   first and repeat this check. Do not publish against an older build.
+
+2. Install the official `mcp-publisher` CLI using the
    [registry quickstart](https://github.com/modelcontextprotocol/registry/blob/main/docs/modelcontextprotocol-io/quickstart.mdx#step-3-install-mcp-publisher).
    From the repository root, validate the committed manifest:
 
@@ -25,7 +40,7 @@ ideas require authentication.
    mcp-publisher validate server.json
    ```
 
-2. Follow the registry's
+3. Follow the registry's
    [DNS authentication instructions](https://github.com/modelcontextprotocol/registry/blob/main/docs/modelcontextprotocol-io/authentication.mdx#dns-authentication)
    for **hivecommons.dev**. The operator generates and retains the signing
    key, adds the public-key TXT record at the domain apex, and waits for DNS
@@ -36,13 +51,13 @@ ideas require authentication.
    mcp-publisher login dns --domain hivecommons.dev --private-key "$MCP_REGISTRY_PRIVATE_KEY"
    ```
 
-3. From the repository root, publish the reviewed manifest:
+4. From the repository root, publish the reviewed manifest:
 
    ```sh
    mcp-publisher publish server.json
    ```
 
-4. Verify the published name, version, and remote URL through the registry:
+5. Verify the published name, version, and remote URL through the registry:
 
    ```sh
    curl --fail --silent --show-error \
@@ -54,8 +69,8 @@ ideas require authentication.
    ```
 
    Record the successful verification in #375 before closing it. When the
-   listing changes, update its version and this verification command before
-   publishing again.
+   listing changes, update its version and this verification command, and
+   repeat step 1, before publishing again.
 
 See also the registry's
 [remote server guidance](https://github.com/modelcontextprotocol/registry/blob/main/docs/modelcontextprotocol-io/remote-servers.mdx).
