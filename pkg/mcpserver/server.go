@@ -223,7 +223,7 @@ func registerTools(server *mcpsdk.Server, t *tools) {
 	mcpsdk.AddTool(server, &mcpsdk.Tool{
 		Name:        "get_idea",
 		Title:       "Get idea",
-		Description: "Fetch an idea, including match and settlement state. Public ideas are readable without authentication; private ideas require ownership.",
+		Description: "Fetch an idea, including match and settlement state. Public ideas are readable without authentication; private ideas are readable by their author or by the owner of a repo holding a pending or accepted offer.",
 	}, t.getIdea)
 	mcpsdk.AddTool(server, &mcpsdk.Tool{
 		Name:        "list_repos",
@@ -286,7 +286,7 @@ func (t *tools) getIdea(ctx context.Context, req *mcpsdk.CallToolRequest, in get
 	}
 	id, authErr := t.identity(ctx, req)
 	if idea.Visibility != store.VisibilityPublic {
-		if authErr != nil || id == nil || idea.Author != id.Username {
+		if authErr != nil || id == nil || (idea.Author != id.Username && !t.offeredToViewerRepo(idea.Offers, id.Username)) {
 			return nil, getIdeaOutput{}, store.ErrNotFound
 		}
 	}
@@ -306,6 +306,28 @@ func (t *tools) getIdea(ctx context.Context, req *mcpsdk.CallToolRequest, in get
 	}, nil
 }
 
+// offeredToViewerRepo reports whether a standing (pending or accepted) offer
+// targets a repo owned by viewer; a declined offer no longer reveals a private
+// idea. It mirrors the HTTP API's offeredToCallerRepo.
+func (t *tools) offeredToViewerRepo(all []store.Offer, viewer string) bool {
+	for _, o := range all {
+		if o.Status == store.OfferDeclined {
+			continue
+		}
+		if t.viewerOwnsRepo(o.RepoID, viewer) {
+			return true
+		}
+	}
+	return false
+}
+
+// viewerOwnsRepo reports whether viewer owns the registered repo, matching
+// the registry's case-insensitive owner comparison.
+func (t *tools) viewerOwnsRepo(repoID, viewer string) bool {
+	rp, err := t.cfg.Registry.Get(repoID)
+	return err == nil && strings.EqualFold(rp.Owner, viewer)
+}
+
 // offersForViewer applies the same rule as the HTTP idea detail to a
 // non-author: decided offers are public record, pending offers are visible
 // only to the owner of the offered repo. An anonymous viewer owns nothing.
@@ -319,7 +341,7 @@ func (t *tools) offersForViewer(all []store.Offer, viewer string) []store.Offer 
 		if viewer == "" {
 			continue
 		}
-		if rp, err := t.cfg.Registry.Get(o.RepoID); err == nil && strings.EqualFold(rp.Owner, viewer) {
+		if t.viewerOwnsRepo(o.RepoID, viewer) {
 			out = append(out, o)
 		}
 	}

@@ -146,7 +146,7 @@ Available tools:
 |---|---|---|
 | `submit_idea(title, description, tags?)` | Required | Creates a private draft idea owned by you and returns its id and API URL |
 | `list_my_ideas()` | Required | Lists your ideas with lifecycle phase/status |
-| `get_idea(id)` | Optional for public ideas; required for your private ideas | Shows detail, matches, offers, and settlement state |
+| `get_idea(id)` | Optional for public ideas; required for private ideas (author, or owner of a repo holding a pending or accepted offer) | Shows detail, matches, offers, and settlement state |
 | `list_repos()` | Not required | Lists registered repo venues |
 
 ### Token
