@@ -1,0 +1,98 @@
+name: MCP Registry
+
+# Publishes the root server.json (dev.hivecommons/dibs) to the official MCP
+# Registry. Runs only on a published release or a manual dispatch — merging
+# changes to this file or to server.json does NOT publish anything.
+#
+# Authentication is DNS-based (issue #375, decision 1): the apex TXT record on
+# hivecommons.dev carries the Ed25519 public key, and MCP_REGISTRY_PRIVATE_KEY
+# holds the matching private key (hex). Rotating the key means replacing both.
+# See docs/mcp-registry.md.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+env:
+  MCP_PUBLISHER_VERSION: 1.8.1
+  # sha256 of mcp-publisher_linux_amd64.tar.gz for the version above.
+  MCP_PUBLISHER_SHA256: a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Require production to run current main
+        # docs/mcp-registry.md step 1: never publish a listing that points
+        # clients at a build older than the code the listing describes.
+        run: |
+          set -euo pipefail
+          main="$(git rev-parse HEAD)"
+          live="$(curl --fail --silent --show-error https://dibs.hivecommons.dev/readyz | jq -r .version)"
+          echo "main=$main live=$live"
+          if [ "$live" != "$main" ]; then
+            echo "::error::dibs.hivecommons.dev serves $live but this ref is $main; roll out first (deploy/README.md)" >&2
+            exit 1
+          fi
+
+      - name: Install mcp-publisher
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location \
+            -o mcp-publisher.tar.gz \
+            "https://github.com/modelcontextprotocol/registry/releases/download/v${MCP_PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz"
+          echo "${MCP_PUBLISHER_SHA256}  mcp-publisher.tar.gz" | sha256sum --check
+          tar -xzf mcp-publisher.tar.gz mcp-publisher
+          install -m 0755 mcp-publisher /usr/local/bin/mcp-publisher
+          mcp-publisher --version
+
+      - name: Validate server.json
+        run: mcp-publisher validate server.json
+
+      - name: Log in (DNS auth, hivecommons.dev)
+        env:
+          MCP_REGISTRY_PRIVATE_KEY: ${{ secrets.MCP_REGISTRY_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${MCP_REGISTRY_PRIVATE_KEY}" ]; then
+            echo "::error::MCP_REGISTRY_PRIVATE_KEY secret is not set" >&2
+            exit 1
+          fi
+          mcp-publisher login dns --domain hivecommons.dev --private-key "${MCP_REGISTRY_PRIVATE_KEY}"
+
+      - name: Publish
+        run: mcp-publisher publish server.json
+
+      - name: Verify listing
+        # The listing is already published at this point; a slow registry
+        # read must not turn the run red. Direct lookup by name/version is
+        # indexed, unlike ?search=, which has been observed to time out.
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          name="$(jq -r .name server.json)"
+          version="$(jq -r .version server.json)"
+          url="$(jq -r '.remotes[0].url' server.json)"
+          enc="$(jq -rn --arg n "$name" '$n|@uri')"
+          for i in 1 2 3 4 5 6; do
+            if curl --fail --silent --show-error --max-time 60 \
+                "https://registry.modelcontextprotocol.io/v0.1/servers/${enc}/versions/${version}" \
+              | jq -e --arg n "$name" --arg v "$version" --arg u "$url" \
+                  'select(.server.name == $n and .server.version == $v)
+                   | select(any(.server.remotes[]; .type == "streamable-http" and .url == $u))' >/dev/null; then
+              echo "listed: $name@$version -> $url"; exit 0
+            fi
+            sleep 10
+          done
+          echo "::warning::$name@$version not readable back from the registry yet; check docs/mcp-registry.md step 5 manually" >&2
+          exit 1

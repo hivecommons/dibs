@@ -3,8 +3,8 @@
 The root [`server.json`](../server.json) prepares the remote-only listing
 `dev.hivecommons/dibs`, using the namespace approved in
 [issue #375](https://github.com/hivecommons/dibs/issues/375#issuecomment-6215095421).
-Committing this file does not publish it. Keep #375 open until the operator
-has published and verified the entry.
+Committing this file does not publish it; publication happens through the
+`MCP Registry` workflow described below.
 
 The listing is titled **Dibs (Hive Commons)** to distinguish it from the
 unrelated 1stDibs marketplace. Version `0.1.0` corresponds to the MCP
@@ -15,7 +15,43 @@ in the [README](../README.md#token). Public ideas and repo venues can be read
 without it; submitting ideas, listing your ideas, and reading your private
 ideas require authentication.
 
-## Operator checklist
+## Publishing (automated)
+
+The [`MCP Registry` workflow](../.github/workflows/mcp-registry-publish.yml)
+publishes `server.json` on every **published GitHub release** and on manual
+`workflow_dispatch`. Merging to `main` never publishes. The workflow:
+
+1. Refuses to run unless `https://dibs.hivecommons.dev/readyz` reports the
+   same sha as the checked-out ref (so a listing never points clients at a
+   stale build — see [`deploy/README.md`](../deploy/README.md) to roll out).
+2. Installs a pinned, checksum-verified `mcp-publisher`, runs
+   `mcp-publisher validate server.json`, then
+   `mcp-publisher login dns --domain hivecommons.dev` using the
+   `MCP_REGISTRY_PRIVATE_KEY` repository secret, and `mcp-publisher publish`.
+3. Reads the entry back by name and version (best effort; a slow registry
+   does not fail the run).
+
+To publish a new listing version: bump `version` in `server.json` (and the
+MCP `serverVersion` in `pkg/mcpserver/server.go` if it changed), merge, roll
+out, then publish a GitHub release or dispatch the workflow:
+
+```sh
+gh workflow run mcp-registry-publish.yml --repo hivecommons/dibs
+```
+
+### DNS authentication key
+
+Authentication is DNS-based: the apex TXT record on `hivecommons.dev`
+(`v=MCPv1; k=ed25519; p=<public key>`) must match the Ed25519 private key
+(64 hex chars, as produced by the registry's
+[DNS authentication instructions](https://github.com/modelcontextprotocol/registry/blob/main/docs/modelcontextprotocol-io/authentication.mdx#dns-authentication))
+stored in the `MCP_REGISTRY_PRIVATE_KEY` secret. To rotate, generate a new
+key pair, replace the TXT record (remove the old one — a stale record is tried
+first and breaks verification), then update the secret.
+
+## Operator checklist (manual fallback)
+
+Use this only if the workflow is unavailable.
 
 1. Confirm production runs current `main`. The listing sends clients straight
    to the endpoint, and the published image only reaches it after a rollout
