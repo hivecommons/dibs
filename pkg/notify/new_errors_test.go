@@ -112,6 +112,12 @@ func TestFailedPersistRollsBackMemory(t *testing.T) {
 	if got := s.ListByUser("alice", true); len(got) != 1 {
 		t.Fatalf("unread after failed MarkRead = %d, want 1", len(got))
 	}
+	if err := s.MarkRead("alice", nil, true); err == nil {
+		t.Fatal("MarkRead(all): want persist error")
+	}
+	if got := s.ListByUser("alice", true); len(got) != 1 {
+		t.Fatalf("unread after failed MarkRead(all) = %d, want 1", len(got))
+	}
 }
 
 // TestFailedPersistRestoresTrimmedNotification: when Add trims the oldest
