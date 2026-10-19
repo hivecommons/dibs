@@ -698,11 +698,20 @@ func (s *Store) Delete(id string) error {
 	if _, ok := s.index[id]; !ok {
 		return ErrNotFound
 	}
+	prevEntry := s.index[id]
+	prevRaw, readErr := os.ReadFile(s.ideaPath(id))
 	if err := os.Remove(s.ideaPath(id)); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("store: deleting idea: %w", err)
 	}
 	delete(s.index, id)
-	return s.writeIndexLocked()
+	if err := s.writeIndexLocked(); err != nil {
+		s.index[id] = prevEntry
+		if readErr == nil {
+			_ = fsutil.AtomicWriteFile(s.ideaPath(id), prevRaw)
+		}
+		return err
+	}
+	return nil
 }
 
 // ListByAuthor returns every idea (any visibility) owned by author, newest
