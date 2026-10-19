@@ -314,11 +314,18 @@ func (t *tools) offeredToViewerRepo(all []store.Offer, viewer string) bool {
 		if o.Status == store.OfferDeclined {
 			continue
 		}
-		if rp, err := t.cfg.Registry.Get(o.RepoID); err == nil && strings.EqualFold(rp.Owner, viewer) {
+		if t.viewerOwnsRepo(o.RepoID, viewer) {
 			return true
 		}
 	}
 	return false
+}
+
+// viewerOwnsRepo reports whether viewer owns the registered repo, matching
+// the registry's case-insensitive owner comparison.
+func (t *tools) viewerOwnsRepo(repoID, viewer string) bool {
+	rp, err := t.cfg.Registry.Get(repoID)
+	return err == nil && strings.EqualFold(rp.Owner, viewer)
 }
 
 // offersForViewer applies the same rule as the HTTP idea detail to a
@@ -334,7 +341,7 @@ func (t *tools) offersForViewer(all []store.Offer, viewer string) []store.Offer 
 		if viewer == "" {
 			continue
 		}
-		if rp, err := t.cfg.Registry.Get(o.RepoID); err == nil && strings.EqualFold(rp.Owner, viewer) {
+		if t.viewerOwnsRepo(o.RepoID, viewer) {
 			out = append(out, o)
 		}
 	}

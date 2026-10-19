@@ -12,11 +12,11 @@ import (
 	"github.com/hivecommons/dibs/pkg/store"
 )
 
-// TestGetIdeaScopesMatchesAndPendingOffersToViewer pins the MCP get_idea
-// tool to the same viewer rule as GET /api/ideas/{id}: only the author sees
-// match state; pending offers surface only to the owner of the offered repo;
-// decided offers are public record.
-func TestGetIdeaScopesMatchesAndPendingOffersToViewer(t *testing.T) {
+// newViewerFixture builds a store, a registry with repos owned by Bob
+// (mixed case) and dave, and MCP tools whose hub knows alice, bob, carol and
+// dave bearer tokens.
+func newViewerFixture(t *testing.T) (*store.Store, *tools) {
+	t.Helper()
 	st, err := store.New(t.TempDir())
 	if err != nil {
 		t.Fatalf("store.New: %v", err)
@@ -36,9 +36,19 @@ func TestGetIdeaScopesMatchesAndPendingOffersToViewer(t *testing.T) {
 			"alice-token": {Username: "alice"},
 			"bob-token":   {Username: "bob"},
 			"carol-token": {Username: "carol"},
+			"dave-token":  {Username: "dave"},
 		}},
 		Deps: deps.Deps{Store: st, Registry: reg},
 	}}
+	return st, tls
+}
+
+// TestGetIdeaScopesMatchesAndPendingOffersToViewer pins the MCP get_idea
+// tool to the same viewer rule as GET /api/ideas/{id}: only the author sees
+// match state; pending offers surface only to the owner of the offered repo;
+// decided offers are public record.
+func TestGetIdeaScopesMatchesAndPendingOffersToViewer(t *testing.T) {
+	st, tls := newViewerFixture(t)
 
 	idea := &store.Idea{Author: "alice", AuthorDisplay: "Alice", Title: "Public", Body: "detail", Visibility: store.VisibilityPublic, Status: store.StatusOffered}
 	if err := st.Create(idea); err != nil {
@@ -96,29 +106,13 @@ func TestGetIdeaScopesMatchesAndPendingOffersToViewer(t *testing.T) {
 // the owner of a repo holding a pending or accepted offer, never by the owner
 // of a declined offer or an unrelated user.
 func TestGetIdeaPrivateRevealedToStandingOfferOwner(t *testing.T) {
-	st, err := store.New(t.TempDir())
-	if err != nil {
-		t.Fatalf("store.New: %v", err)
+	for name, status := range map[string]string{"pending": store.OfferPending, "accepted": store.OfferAccepted} {
+		t.Run(name, func(t *testing.T) { testGetIdeaPrivateRevealedToStandingOfferOwner(t, status) })
 	}
-	reg, err := registry.New(t.TempDir())
-	if err != nil {
-		t.Fatalf("registry.New: %v", err)
-	}
-	if err := reg.Merge([]registry.RepoProfile{
-		{RepoID: "org/owned-by-bob", HiveID: "h1", Owner: "Bob", AcceptingIdeas: true},
-		{RepoID: "org/owned-by-dave", HiveID: "h2", Owner: "dave", AcceptingIdeas: true},
-	}); err != nil {
-		t.Fatalf("registry.Merge: %v", err)
-	}
-	tls := &tools{cfg: Config{
-		Hub: &auth.FakeHub{BearerTokens: map[string]auth.Identity{
-			"alice-token": {Username: "alice"},
-			"bob-token":   {Username: "bob"},
-			"dave-token":  {Username: "dave"},
-			"carol-token": {Username: "carol"},
-		}},
-		Deps: deps.Deps{Store: st, Registry: reg},
-	}}
+}
+
+func testGetIdeaPrivateRevealedToStandingOfferOwner(t *testing.T, bobStatus string) {
+	st, tls := newViewerFixture(t)
 
 	idea := &store.Idea{Author: "alice", AuthorDisplay: "Alice", Title: "Secret", Body: "detail", Visibility: store.VisibilityPrivate, Status: store.StatusOffered}
 	if err := st.Create(idea); err != nil {
@@ -128,7 +122,7 @@ func TestGetIdeaPrivateRevealedToStandingOfferOwner(t *testing.T) {
 	if _, err := st.Mutate(idea.ID, true, func(i *store.Idea) error {
 		i.Matches = []store.Match{{RepoID: "org/owned-by-bob", Score: 0.9, Reason: "fit"}}
 		i.Offers = []store.Offer{
-			{RepoID: "org/owned-by-bob", Status: store.OfferPending, CreatedAt: now},
+			{RepoID: "org/owned-by-bob", Status: bobStatus, CreatedAt: now},
 			{RepoID: "org/owned-by-dave", Status: store.OfferDeclined, CreatedAt: now, DecidedAt: &now},
 		}
 		return nil
@@ -146,7 +140,7 @@ func TestGetIdeaPrivateRevealedToStandingOfferOwner(t *testing.T) {
 		{name: "anonymous", token: ""},
 		{name: "unrelated user", token: "carol-token"},
 		{name: "declined offer owner", token: "dave-token", wantFound: false},
-		{name: "pending offer owner casefold", token: "bob-token", wantFound: true, wantOffers: []string{"org/owned-by-bob", "org/owned-by-dave"}},
+		{name: "standing offer owner casefold", token: "bob-token", wantFound: true, wantOffers: []string{"org/owned-by-bob", "org/owned-by-dave"}},
 		{name: "author", token: "alice-token", wantFound: true, wantMatches: 1, wantOffers: []string{"org/owned-by-bob", "org/owned-by-dave"}},
 	}
 	for _, tc := range cases {
