@@ -415,9 +415,11 @@ func ensurePeriod(s string) string {
 	switch s[len(s)-1] {
 	case '.', '?':
 		return s
-	default:
-		return s + "."
 	}
+	if strings.HasSuffix(s, "…") {
+		return s
+	}
+	return s + "."
 }
 
 // logWarn is the default Logf: a constant message with the detail as an attr.

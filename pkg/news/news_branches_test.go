@@ -248,3 +248,24 @@ func TestEnsurePeriodBlank(t *testing.T) {
 		t.Fatalf("ensurePeriod(question) = %q", got)
 	}
 }
+
+func TestEnsurePeriod(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "no punctuation adds period", in: "hello", want: "hello."},
+		{name: "existing period preserved", in: "hello.", want: "hello."},
+		{name: "question mark preserved", in: "hello?", want: "hello?"},
+		{name: "ellipsis not followed by period", in: "abc…", want: "abc…"},
+		{name: "ellipsis in middle unchanged", in: "a…b", want: "a…b."},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ensurePeriod(tt.in); got != tt.want {
+				t.Fatalf("ensurePeriod(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}

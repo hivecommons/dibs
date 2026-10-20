@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/hivecommons/dibs/pkg/history"
 	"github.com/hivecommons/dibs/pkg/match"
@@ -53,6 +54,28 @@ func TestFallbackTLDRFormatting(t *testing.T) {
 	}
 	if strings.Contains(got, "\n") {
 		t.Fatalf("fallback must be one line: %q", got)
+	}
+}
+
+func TestFallbackTLDRTruncationWithinCap(t *testing.T) {
+	// Four 90-rune titles joined with "; " and prefixed with "Merged " exceeds 280 runes.
+	// When truncated, result must stay within 280 runes and not end with "….".
+	longTitle := strings.Repeat("a", 90)
+	got := FallbackTLDR([]history.MergedPullRequest{
+		{Title: longTitle},
+		{Title: longTitle},
+		{Title: longTitle},
+		{Title: longTitle},
+	})
+	runeCount := utf8.RuneCountInString(got)
+	if runeCount > 280 {
+		t.Fatalf("truncated TLDR is %d runes, exceeds 280-rune cap", runeCount)
+	}
+	if strings.HasSuffix(got, "….") {
+		t.Fatalf("truncated TLDR ends with '….' (ellipsis + period): %q", got)
+	}
+	if runeCount != 280 {
+		t.Fatalf("truncated TLDR is %d runes, expected exactly 280", runeCount)
 	}
 }
 
