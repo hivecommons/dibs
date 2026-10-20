@@ -207,14 +207,32 @@ func TestHandleUploadUnsupportedType(t *testing.T) {
 	}
 }
 
-// TestHandleUploadTooLarge covers the oversize-payload branch via a tiny
-// DIBS_INTAKE_MAX_MB so no large buffer is allocated.
+// TestHandleUploadTooLarge covers the post-parse file-size check: the upload
+// exceeds the file limit but stays below the reader's extra 1 MiB allowance.
 func TestHandleUploadTooLarge(t *testing.T) {
 	t.Setenv("DIBS_INTAKE_MAX_MB", "1")
 	rec := httptest.NewRecorder()
 	HandleUpload(rec, uploadRequest(t, "idea.txt", bytes.Repeat([]byte("a"), 1024*1024+10)))
 	if rec.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestHandleUploadMaxBytesReaderTooLarge exceeds the file limit plus the
+// reader's 1 MiB allowance, so multipart parsing itself must return a 413.
+func TestHandleUploadMaxBytesReaderTooLarge(t *testing.T) {
+	t.Setenv("DIBS_INTAKE_MAX_MB", "1")
+	req := uploadRequest(t, "idea.txt", bytes.Repeat([]byte("a"), 2*1024*1024+10))
+	rec := httptest.NewRecorder()
+	HandleUpload(rec, req)
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	if got := strings.TrimSpace(rec.Body.String()); got != `{"error":"intake upload is too large"}` {
+		t.Fatalf("body = %s", got)
+	}
+	if req.MultipartForm != nil {
+		t.Fatal("multipart parsing succeeded; expected rejection at the reader limit")
 	}
 }
 
