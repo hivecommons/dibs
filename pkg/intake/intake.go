@@ -74,7 +74,12 @@ func HandleUpload(w http.ResponseWriter, r *http.Request) {
 	limit := MaxUploadBytes()
 	r.Body = http.MaxBytesReader(w, r.Body, limit+1024*1024)
 	if err := r.ParseMultipartForm(limit); err != nil {
-		writeError(w, http.StatusRequestEntityTooLarge, "intake upload is too large")
+		var mbe *http.MaxBytesError
+		if errors.As(err, &mbe) {
+			writeError(w, http.StatusRequestEntityTooLarge, "intake upload is too large")
+		} else {
+			writeError(w, http.StatusBadRequest, "malformed multipart request")
+		}
 		return
 	}
 	file, header, err := r.FormFile("file")

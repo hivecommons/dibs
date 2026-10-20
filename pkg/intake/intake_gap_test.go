@@ -224,7 +224,17 @@ func TestHandleUploadNotMultipart(t *testing.T) {
 	req.Header.Set("Content-Type", "text/plain")
 	rec := httptest.NewRecorder()
 	HandleUpload(rec, req)
-	if rec.Code != http.StatusRequestEntityTooLarge {
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleUploadBadBoundary(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/intake", strings.NewReader("not multipart"))
+	req.Header.Set("Content-Type", "multipart/form-data; boundary=bad")
+	rec := httptest.NewRecorder()
+	HandleUpload(rec, req)
+	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
 	}
 }
