@@ -15,6 +15,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/hivecommons/dibs/pkg/fsutil"
 )
 
 // Kind values.
@@ -91,27 +93,8 @@ func (s *Store) persistLocked() error {
 		all = append(all, *n)
 	}
 	sort.Slice(all, func(i, j int) bool { return all[i].ID < all[j].ID })
-	data, err := json.MarshalIndent(all, "", "  ")
-	if err != nil {
-		return fmt.Errorf("notify: marshaling: %w", err)
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(s.path), ".tmp-notify-*")
-	if err != nil {
-		return fmt.Errorf("notify: creating temp file: %w", err)
-	}
-	tmpName := tmp.Name()
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		os.Remove(tmpName)
-		return fmt.Errorf("notify: writing temp file: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		os.Remove(tmpName)
-		return fmt.Errorf("notify: closing temp file: %w", err)
-	}
-	if err := os.Rename(tmpName, s.path); err != nil {
-		os.Remove(tmpName)
-		return fmt.Errorf("notify: renaming temp file: %w", err)
+	if err := fsutil.AtomicWriteJSON(s.path, all); err != nil {
+		return fmt.Errorf("notify: %w", err)
 	}
 	return nil
 }

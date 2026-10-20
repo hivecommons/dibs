@@ -31,6 +31,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/hivecommons/dibs/pkg/fsutil"
 )
 
 // MaxAppetiteLen caps the free-text appetite note.
@@ -221,27 +223,8 @@ func (r *Registry) persistLocked() error {
 		repos = append(repos, *rp)
 	}
 	sort.Slice(repos, func(i, j int) bool { return repos[i].RepoID < repos[j].RepoID })
-	data, err := json.MarshalIndent(repos, "", "  ")
-	if err != nil {
-		return fmt.Errorf("registry: marshaling: %w", err)
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(r.path), ".tmp-repos-*")
-	if err != nil {
-		return fmt.Errorf("registry: creating temp file: %w", err)
-	}
-	tmpName := tmp.Name()
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		os.Remove(tmpName)
-		return fmt.Errorf("registry: writing temp file: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		os.Remove(tmpName)
-		return fmt.Errorf("registry: closing temp file: %w", err)
-	}
-	if err := os.Rename(tmpName, r.path); err != nil {
-		os.Remove(tmpName)
-		return fmt.Errorf("registry: renaming temp file: %w", err)
+	if err := fsutil.AtomicWriteJSON(r.path, repos); err != nil {
+		return fmt.Errorf("registry: %w", err)
 	}
 	return nil
 }
