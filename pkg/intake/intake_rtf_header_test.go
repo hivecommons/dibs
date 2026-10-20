@@ -33,4 +33,33 @@ func TestStripRTFSkipsHeaderDestinations(t *testing.T) {
 			t.Fatalf("StripRTF = %q, want %q", got, want)
 		}
 	})
+	// Groups that do not open with a control word are not destinations, so
+	// their text must survive; a stray brace at the end of input must not
+	// read past the string.
+	t.Run("plain groups and trailing brace keep text", func(t *testing.T) {
+		t.Parallel()
+		for _, tc := range []struct{ in, want string }{
+			{`{Hello} world`, "Hello world"},
+			{`{{nested} text}`, "nested text"},
+			{`kept{`, "kept"},
+			{`kept{\`, "kept"},
+		} {
+			if got := StripRTF(tc.in); got != tc.want {
+				t.Fatalf("StripRTF(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		}
+	})
+	// A skipped destination that is never closed swallows the rest of the
+	// input instead of panicking or leaking header text.
+	t.Run("unterminated skipped group", func(t *testing.T) {
+		t.Parallel()
+		for _, tc := range []struct{ in, want string }{
+			{`shown{\fonttbl{\f0 Calibri;}`, "shown"},
+			{`shown{\*\generator Riched20 \}`, "shown"},
+		} {
+			if got := StripRTF(tc.in); got != tc.want {
+				t.Fatalf("StripRTF(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		}
+	})
 }
