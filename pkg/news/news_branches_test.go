@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/hivecommons/dibs/pkg/history"
 	"github.com/hivecommons/dibs/pkg/match"
@@ -265,6 +266,54 @@ func TestEnsurePeriod(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := ensurePeriod(tt.in); got != tt.want {
 				t.Fatalf("ensurePeriod(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCleanTLDR(t *testing.T) {
+	long := strings.Repeat("x", 300)
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "empty stays empty", in: "", want: ""},
+		{name: "whitespace only stays empty", in: " \n\t ", want: ""},
+		{name: "surrounding quotes stripped", in: `"Auth fixes shipped."`, want: "Auth fixes shipped."},
+		{name: "surrounding single quotes stripped", in: `'Auth fixes shipped.'`, want: "Auth fixes shipped."},
+		{name: "exclamation marks become periods", in: "Big release! Cadence rising!", want: "Big release. Cadence rising."},
+		{name: "newlines and runs of spaces collapse", in: "Auth fixes\n\nshipped;   cadence   steady", want: "Auth fixes shipped; cadence steady."},
+		{name: "question mark preserved", in: "Did cadence rise?", want: "Did cadence rise?"},
+		{name: "overlong output truncated with ellipsis", in: long, want: strings.Repeat("x", maxTLDRLen-1) + "…"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := cleanTLDR(tt.in)
+			if got != tt.want {
+				t.Fatalf("cleanTLDR(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+			if n := utf8.RuneCountInString(got); n > maxTLDRLen {
+				t.Fatalf("cleanTLDR(%q) is %d runes, exceeds %d", tt.in, n, maxTLDRLen)
+			}
+		})
+	}
+}
+
+func TestDigestFallsBackWhenLLMReturnsBlank(t *testing.T) {
+	for _, content := range []string{"", "   ", `""`} {
+		t.Run(fmt.Sprintf("%q", content), func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"choices": []map[string]any{{"message": map[string]string{"content": content}}},
+				})
+			}))
+			defer srv.Close()
+			g := &Generator{LLM: &match.LLM{BaseURL: srv.URL, Model: "test", Client: srv.Client()}}
+			prs := []history.MergedPullRequest{pr("fix auth refresh", "2026-08-19T10:00:00Z", "alice")}
+			item := g.digest(context.Background(), "org/repo", "2026-08-19", prs, map[string]int{"alice": 1})
+			if item.Source != "digest" || item.TLDR != FallbackTLDR(prs) || item.PRCount != 1 {
+				t.Fatalf("item = %+v, want digest fallback", item)
 			}
 		})
 	}
