@@ -126,18 +126,18 @@ func TestDeleteRemoveError(t *testing.T) {
 	if err := s.Create(idea); err != nil {
 		t.Fatal(err)
 	}
-	// Replace the idea file with a non-empty directory: os.Remove fails with
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses directory permissions")
+	}
+	// Make the ideas directory read-only: the idea file stays readable (so
+	// the pre-delete rollback read succeeds) but os.Remove fails with
 	// something other than ErrNotExist, so Delete must surface it and keep
 	// the index entry rather than silently forgetting the idea.
-	if err := os.Remove(s.ideaPath(idea.ID)); err != nil {
+	dir := filepath.Dir(s.ideaPath(idea.ID))
+	if err := os.Chmod(dir, 0o555); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Mkdir(s.ideaPath(idea.ID), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(s.ideaPath(idea.ID), "blocker"), []byte("x"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
 	err := s.Delete(idea.ID)
 	if err == nil || errors.Is(err, ErrNotFound) || !strings.Contains(err.Error(), "deleting idea") {
 		t.Fatalf("err = %v, want deleting idea error", err)
