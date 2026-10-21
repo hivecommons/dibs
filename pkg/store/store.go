@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/hivecommons/dibs/pkg/fsutil"
 )
@@ -294,7 +295,7 @@ func Validate(idea *Idea) error {
 	if strings.TrimSpace(idea.Title) == "" {
 		return &ValidationError{"title is required"}
 	}
-	if len(idea.Title) > MaxTitleLen {
+	if utf8.RuneCountInString(idea.Title) > MaxTitleLen {
 		return &ValidationError{fmt.Sprintf("title exceeds %d characters", MaxTitleLen)}
 	}
 	if len(idea.Tags) > MaxTags {
@@ -304,7 +305,7 @@ func Validate(idea *Idea) error {
 		if strings.TrimSpace(tag) == "" {
 			return &ValidationError{"tags cannot be blank"}
 		}
-		if len(tag) > MaxTagLen {
+		if utf8.RuneCountInString(tag) > MaxTagLen {
 			return &ValidationError{fmt.Sprintf("tag exceeds %d characters", MaxTagLen)}
 		}
 	}

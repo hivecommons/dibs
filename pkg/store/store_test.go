@@ -109,6 +109,8 @@ func TestValidation(t *testing.T) {
 		{"empty title", func(i *Idea) { i.Title = "  " }},
 		{"empty body", func(i *Idea) { i.Body = "" }},
 		{"long title", func(i *Idea) { i.Title = strings.Repeat("x", MaxTitleLen+1) }},
+		{"long multibyte title", func(i *Idea) { i.Title = strings.Repeat("é", MaxTitleLen+1) }},
+		{"long multibyte tag", func(i *Idea) { i.Tags = []string{strings.Repeat("é", MaxTagLen+1)} }},
 		{"oversized body", func(i *Idea) { i.Body = strings.Repeat("x", MaxBodyBytes+1) }},
 		{"bad visibility", func(i *Idea) { i.Visibility = "friends-only" }},
 		{"bad status", func(i *Idea) { i.Status = "bogus" }},
@@ -121,6 +123,16 @@ func TestValidation(t *testing.T) {
 		if !errors.As(err, &ve) {
 			t.Errorf("%s: want ValidationError, got %v", tc.name, err)
 		}
+	}
+}
+
+func TestValidationCountsCharacters(t *testing.T) {
+	s, _ := newTestStore(t)
+	idea := validIdea("alice")
+	idea.Title = strings.Repeat("é", MaxTitleLen)
+	idea.Tags = []string{strings.Repeat("é", MaxTagLen)}
+	if err := s.Create(idea); err != nil {
+		t.Fatalf("at-limit multibyte idea rejected: %v", err)
 	}
 }
 
