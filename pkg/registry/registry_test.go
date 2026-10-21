@@ -176,10 +176,10 @@ func TestOwnerUpdateBounds(t *testing.T) {
 		t.Fatalf("Merge: %v", err)
 	}
 	cases := map[string]OwnerUpdate{
-		"too many topics": {Topics: ptr(make([]string, MaxTopics+1))},
-		"long topic":      {Topics: ptr([]string{strings.Repeat("x", MaxTopicLen+1)})},
-		"blank topic":     {Topics: ptr([]string{"ok", "  "})},
-		"long appetite":   {Appetite: ptr(strings.Repeat("x", MaxAppetiteLen+1))},
+		"too many topics":         {Topics: ptr(make([]string, MaxTopics+1))},
+		"long topic":              {Topics: ptr([]string{strings.Repeat("x", MaxTopicLen+1)})},
+		"blank topic":             {Topics: ptr([]string{"ok", "  "})},
+		"long appetite":           {Appetite: ptr(strings.Repeat("x", MaxAppetiteLen+1))},
 		"long multibyte topic":    {Topics: ptr([]string{strings.Repeat("é", MaxTopicLen+1)})},
 		"long multibyte appetite": {Appetite: ptr(strings.Repeat("é", MaxAppetiteLen+1))},
 	}
