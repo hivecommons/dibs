@@ -1,0 +1,48 @@
+name: Feature request
+description: Suggest an improvement or new capability for Dibs
+title: "feature: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please check [ROADMAP.md](https://github.com/hivecommons/dibs/blob/main/ROADMAP.md) first, including its
+        **Deferred / non-goals** section (custodial payments or token issuance, replacing maintainers' review
+        and merge authority, unauthenticated uploads or anonymous settlement claims).
+  - type: dropdown
+    id: audience
+    attributes:
+      label: Who is this for?
+      options:
+        - Ideators
+        - Repository maintainers
+        - MCP / AI agent users
+        - Credit-wall or public API consumers
+        - Self-hosters and operators
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use case
+      description: What problem are you trying to solve, and who is affected?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: The UI change, API route, MCP tool, or configuration option you want.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds or other designs you have considered.
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility
+      description: Would this change existing API responses (see docs/credit-wall-api.md), MCP tool signatures, `DIBS_*` environment variables, or the stored data format?
