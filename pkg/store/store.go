@@ -692,6 +692,8 @@ func (s *Store) Transition(id, to string) (*Idea, error) {
 }
 
 // Delete removes an idea. The caller is responsible for authorization.
+// The idea file must be readable for rollback; if unreadable (other than not-exist),
+// the delete is aborted to ensure rollback can restore it if the index write fails.
 func (s *Store) Delete(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -700,6 +702,9 @@ func (s *Store) Delete(id string) error {
 	}
 	prevEntry := s.index[id]
 	prevRaw, readErr := os.ReadFile(s.ideaPath(id))
+	if readErr != nil && !errors.Is(readErr, os.ErrNotExist) {
+		return fmt.Errorf("store: reading idea before delete: %w", readErr)
+	}
 	if err := os.Remove(s.ideaPath(id)); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("store: deleting idea: %w", err)
 	}

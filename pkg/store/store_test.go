@@ -81,6 +81,44 @@ func TestCreateGetUpdateDelete(t *testing.T) {
 	}
 }
 
+// TestDeleteUnreadableIdeaFileAbortsDeletion verifies that Delete fails fast
+// when the idea file is unreadable (other than not-exist), aborting the delete
+// to ensure the file can be restored if the index write later fails.
+func TestDeleteUnreadableIdeaFileAbortsDeletion(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("test requires running as non-root (chmod is ignored as root)")
+	}
+
+	s, dir := newTestStore(t)
+	idea := validIdea("alice")
+	if err := s.Create(idea); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	ideaPath := filepath.Join(dir, "ideas", idea.ID+".json")
+	if err := os.Chmod(ideaPath, 0o000); err != nil {
+		t.Fatalf("Chmod(0o000): %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(ideaPath, 0o600) })
+
+	if err := s.Delete(idea.ID); err == nil {
+		t.Fatal("Delete should fail when idea file is unreadable")
+	}
+
+	// Restore permissions and verify the file still exists and Get works.
+	if err := os.Chmod(ideaPath, 0o600); err != nil {
+		t.Fatalf("Chmod(0o600): %v", err)
+	}
+
+	got, err := s.Get(idea.ID)
+	if err != nil {
+		t.Fatalf("Get after failed Delete: %v", err)
+	}
+	if got.ID != idea.ID {
+		t.Fatalf("Get returned wrong idea: %+v", got)
+	}
+}
+
 func TestCreateStoresAuthorIdentityFields(t *testing.T) {
 	s, _ := newTestStore(t)
 	idea := validIdea("okta:00u123")
