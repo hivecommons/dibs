@@ -11,7 +11,12 @@
 #   * `dibs --version` prints the ldflags-stamped commit (freshness probe)
 #   * /healthz answers 200 with that version (livenessProbe)
 #   * /readyz answers 200, i.e. /data is writable as 65532 (readinessProbe)
-#   * DIBS_METRICS_ADDR exposes dibs_* metrics (ServiceMonitor scrape)
+#   * GET / serves the landing page with HUB_URL substituted for the sign-in
+#     links and the browser hardening headers set (Ingress-facing contract)
+#   * the auth wall holds: public /api/credits answers 200, /api/me is 401
+#     without a hub cookie and 502 when the hub cannot be reached
+#   * DIBS_METRICS_ADDR exposes dibs_* metrics (ServiceMonitor scrape),
+#     with the request counter labelled by the route groups just exercised
 #   * SIGTERM drains and exits 0 inside terminationGracePeriodSeconds
 #
 # Usage: hack/smoke.sh IMAGE [EXPECTED_GIT_HASH]
@@ -39,6 +44,7 @@ fi
 # HUB_URL points at a closed port so registry sync fails fast and the test
 # does not depend on the network: the server must still come up (the
 # registry keeps serving its last-known state).
+HUB_URL="http://127.0.0.1:1"
 RUN_ARGS=(
   --user 65532:65532
   --read-only
@@ -49,7 +55,7 @@ RUN_ARGS=(
   -e DIBS_BASE_PATH=/
   -e DATA_DIR=/data
   -e DIBS_METRICS_ADDR=:9090
-  -e HUB_URL=http://127.0.0.1:1
+  -e "HUB_URL=${HUB_URL}"
   -p 127.0.0.1::8080
   -p 127.0.0.1::9090
 )
@@ -125,11 +131,68 @@ rm -f "$readyz_tmp"
 echo "  $readyz_code $readyz_body"
 [ "$readyz_code" = "200" ] || fail "/readyz returned $readyz_code (is /data writable for uid 65532?)"
 
-# 5. /metrics on DIBS_METRICS_ADDR: the names deploy/monitoring alerts on.
+# get_with_headers performs a GET and leaves the status code in `code`, the
+# response headers in `headers` and the body in `body`.
+get_with_headers() {
+  local url="$1"; shift
+  local hdr_tmp body_tmp
+  hdr_tmp="$(mktemp)"; body_tmp="$(mktemp)"
+  code="$(curl -sS -o "$body_tmp" -D "$hdr_tmp" -w '%{http_code}' --max-time 5 "$@" "$url")" \
+    || { rm -f "$hdr_tmp" "$body_tmp"; fail "GET $url failed"; }
+  headers="$(tr -d '\r' <"$hdr_tmp")"
+  body="$(cat "$body_tmp")"
+  rm -f "$hdr_tmp" "$body_tmp"
+}
+
+# 4b. GET /: the landing page is public (credit wall for logged-out
+#     visitors). server.New substitutes HUB_URL into the embedded HTML at
+#     startup, so every sign-in link must point at the configured hub and
+#     no placeholder may leak; securityHeaders wraps every route.
+step "checking landing page"
+get_with_headers "$base/"
+echo "  $code $(wc -c <<<"$body") bytes"
+[ "$code" = "200" ] || fail "GET / returned $code"
+grep -qi '^content-type: text/html' <<<"$headers" || fail "GET / is not text/html"
+grep -qi '^x-frame-options: DENY' <<<"$headers" || fail "GET / lacks X-Frame-Options: DENY"
+grep -qi '^x-content-type-options: nosniff' <<<"$headers" || fail "GET / lacks X-Content-Type-Options: nosniff"
+grep -q "href=\"${HUB_URL}\"" <<<"$body" || fail "GET / has no sign-in link to HUB_URL ($HUB_URL)"
+grep -q '__HUB_URL__' <<<"$body" && fail "GET / still contains the __HUB_URL__ placeholder"
+
+# 4c. Auth wall: the public read-only API answers without a session; the
+#     authenticated API rejects a missing cookie with 401 and, when the hub
+#     cannot be reached (HUB_URL is a closed port), reports 502 rather than
+#     letting the request through or hanging.
+step "checking public API and auth wall"
+get_with_headers "$base/api/credits"
+echo "  /api/credits $code"
+[ "$code" = "200" ] || fail "/api/credits (public) returned $code"
+grep -qi '^content-type: application/json' <<<"$headers" || fail "/api/credits is not application/json"
+get_with_headers "$base/api/me"
+echo "  /api/me (no cookie) $code $body"
+[ "$code" = "401" ] || fail "/api/me without a session returned $code (expected 401)"
+[[ "$body" == *'"error":"not authenticated"'* ]] || fail "/api/me 401 body lacks the JSON error"
+get_with_headers "$base/api/me" -H 'Cookie: hive_hub_user=smoke'
+echo "  /api/me (hub down) $code $body"
+[ "$code" = "502" ] || fail "/api/me with an unverifiable session returned $code (expected 502)"
+[[ "$body" == *'"error":"auth backend unavailable"'* ]] || fail "/api/me 502 body lacks the JSON error"
+
+# 5. /metrics on DIBS_METRICS_ADDR: the names deploy/monitoring alerts on,
+#    and the bounded request-counter labels for the routes exercised above
+#    (route_group + status_class only — never raw paths).
 step "checking /metrics on :$metrics_port"
 metrics="$(curl -fsS --max-time 5 "http://127.0.0.1:${metrics_port}/metrics")" || fail "/metrics request failed"
 grep -q '^# TYPE dibs_http_requests_total counter' <<<"$metrics" || fail "/metrics lacks dibs_http_requests_total"
 grep -q '^# TYPE dibs_http_request_duration_seconds histogram' <<<"$metrics" || fail "/metrics lacks dibs_http_request_duration_seconds"
+for series in \
+  'route_group="healthz",status_class="2xx"' \
+  'route_group="readyz",status_class="2xx"' \
+  'route_group="ui",status_class="2xx"' \
+  'route_group="api/credits",status_class="2xx"' \
+  'route_group="api/me",status_class="4xx"' \
+  'route_group="api/me",status_class="5xx"'; do
+  grep -Eq "^dibs_http_requests_total\{method=\"GET\",${series}\} [1-9][0-9]*\$" <<<"$metrics" \
+    || fail "/metrics lacks a non-zero dibs_http_requests_total{method=\"GET\",${series}} series"
+done
 
 # 6. SIGTERM drain: serveUntil must shut down cleanly (exit 0) well inside
 #    terminationGracePeriodSeconds (30s); 137 means the kubelet would SIGKILL.

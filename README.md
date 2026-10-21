@@ -291,8 +291,11 @@ To load richer repo profiles than fakehub's two entries, also set
 runs it the way [`deploy/deployment.yaml`](deploy/deployment.yaml) does
 (uid 65532, read-only root filesystem, only `/data` writable, all
 capabilities dropped) and checks `--version` is stamped, `/healthz` and
-`/readyz` answer 200, `/metrics` exposes the `dibs_*` series the alerts
-query, and SIGTERM drains to exit 0:
+`/readyz` answer 200, the landing page serves with `HUB_URL` substituted
+and the security headers set, the auth wall answers 401/502 around the
+public API, `/metrics` exposes the `dibs_*` series the alerts query
+(labelled by the route groups just exercised), and SIGTERM drains to
+exit 0:
 
 ```sh
 docker build --build-arg GIT_HASH="$(git rev-parse HEAD)" -t dibs:smoke .
