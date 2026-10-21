@@ -1,0 +1,87 @@
+name: Bug report
+description: Report a reproducible problem in Dibs (web UI, API, MCP endpoint, or a self-hosted deployment)
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem.
+        **Do not paste credentials or private ideas.** Remove `hive_hub_user` cookie values, `Authorization`
+        headers, GitHub tokens, `DIBS_LLM_API_KEY` / `DIBS_STT_KEY` values, and the text of private ideas
+        from everything below. For security vulnerabilities, follow
+        [SECURITY.md](https://github.com/hivecommons/dibs/blob/main/SECURITY.md) instead of filing an issue.
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment
+      description: Where did you hit the problem?
+      options:
+        - dibs.hivecommons.dev (hosted)
+        - Self-hosted ghcr.io/hivecommons/dibs image
+        - Built from source (cmd/dibs)
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Dibs version
+      description: |
+        The `version` field from `GET /healthz` (for the hosted service, open https://dibs.hivecommons.dev/healthz),
+        or the image tag / commit you built.
+      placeholder: "4e476bb"
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Area
+      description: Which part of Dibs shows the problem?
+      options:
+        - Landing page or sign-in
+        - Posting an idea or its AI refinement step
+        - Idea intake from an uploaded document or voice recording
+        - Matching, offers, or decisions
+        - Settlement (prefilled GitHub issue or issue-URL confirmation)
+        - Notifications
+        - Credit wall, leaderboard, or other public API
+        - MCP endpoint (/mcp)
+        - Self-hosting (deploy/ manifests, configuration, health checks)
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: client
+    attributes:
+      label: Browser or MCP client
+      description: Browser and version for web UI problems; the MCP client and version (for example Claude Code, Copilot CLI, Cursor, Claude Desktop) for `/mcp` problems.
+      placeholder: "Copilot CLI 1.0.88"
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: What you did, including the MCP tool or API route you called if relevant.
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened instead, including any HTTP status or error message.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Output or logs
+      description: Relevant response bodies, browser console output, or server logs. Redact credentials and private idea text first.
+      render: shell
