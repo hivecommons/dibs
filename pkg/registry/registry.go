@@ -31,6 +31,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/hivecommons/dibs/pkg/fsutil"
 )
@@ -403,12 +404,12 @@ func (r *Registry) ApplyOwnerUpdate(repoID, actor string, upd OwnerUpdate) (*Rep
 			if strings.TrimSpace(t) == "" {
 				return nil, errors.New("registry: topics cannot be blank")
 			}
-			if len(t) > MaxTopicLen {
+			if utf8.RuneCountInString(t) > MaxTopicLen {
 				return nil, fmt.Errorf("registry: topic exceeds %d characters", MaxTopicLen)
 			}
 		}
 	}
-	if upd.Appetite != nil && len(*upd.Appetite) > MaxAppetiteLen {
+	if upd.Appetite != nil && utf8.RuneCountInString(*upd.Appetite) > MaxAppetiteLen {
 		return nil, fmt.Errorf("registry: appetite exceeds %d characters", MaxAppetiteLen)
 	}
 	prevAccepting, prevTopics, prevAppetite := rp.AcceptingIdeas, rp.Topics, rp.Appetite

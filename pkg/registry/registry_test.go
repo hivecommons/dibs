@@ -180,6 +180,8 @@ func TestOwnerUpdateBounds(t *testing.T) {
 		"long topic":      {Topics: ptr([]string{strings.Repeat("x", MaxTopicLen+1)})},
 		"blank topic":     {Topics: ptr([]string{"ok", "  "})},
 		"long appetite":   {Appetite: ptr(strings.Repeat("x", MaxAppetiteLen+1))},
+		"long multibyte topic":    {Topics: ptr([]string{strings.Repeat("é", MaxTopicLen+1)})},
+		"long multibyte appetite": {Appetite: ptr(strings.Repeat("é", MaxAppetiteLen+1))},
 	}
 	for name, upd := range cases {
 		if _, err := r.ApplyOwnerUpdate("kubestellar/dibs", "bob", upd); err == nil {
@@ -193,6 +195,10 @@ func TestOwnerUpdateBounds(t *testing.T) {
 	ok := OwnerUpdate{Topics: ptr([]string{strings.Repeat("x", MaxTopicLen)}), Appetite: ptr(strings.Repeat("y", MaxAppetiteLen))}
 	if _, err := r.ApplyOwnerUpdate("kubestellar/dibs", "bob", ok); err != nil {
 		t.Fatalf("at-limit update rejected: %v", err)
+	}
+	multi := OwnerUpdate{Topics: ptr([]string{strings.Repeat("é", MaxTopicLen)}), Appetite: ptr(strings.Repeat("é", MaxAppetiteLen))}
+	if _, err := r.ApplyOwnerUpdate("kubestellar/dibs", "bob", multi); err != nil {
+		t.Fatalf("at-limit multibyte update rejected: %v", err)
 	}
 }
 
