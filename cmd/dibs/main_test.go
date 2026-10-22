@@ -137,7 +137,7 @@ func TestRunRejectsTrailingPositionalArgs(t *testing.T) {
 	}
 }
 
-
+func TestRunBadFlag(t *testing.T) {
 	var out, errOut bytes.Buffer
 	if err := run([]string{"--nope"}, &out, &errOut, testServe(nil, nil)); err == nil {
 		t.Fatal("expected error for unknown flag")

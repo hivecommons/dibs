@@ -132,14 +132,14 @@ func run(args []string, stdout, stderr io.Writer, serve func(*http.Server) error
 		}
 		return err
 	}
-	if *showVersion {
-		fmt.Fprintf(stdout, "dibs %s (%s)\n", gitShort, gitHash)
-		return nil
-	}
 	if fs.NArg() > 0 {
 		fmt.Fprintf(stderr, "dibs: unexpected argument: %q\n", fs.Arg(0))
 		fs.Usage()
 		return fmt.Errorf("unexpected argument: %q", fs.Arg(0))
+	}
+	if *showVersion {
+		fmt.Fprintf(stdout, "dibs %s (%s)\n", gitShort, gitHash)
+		return nil
 	}
 
 	addr := envOr("DIBS_ADDR", defaultAddr)
