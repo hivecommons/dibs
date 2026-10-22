@@ -14,7 +14,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -22,6 +21,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/hivecommons/dibs/pkg/envutil"
 	"github.com/ledongthuc/pdf"
 )
 
@@ -56,7 +56,7 @@ func (e *Error) Error() string { return e.Msg }
 
 func MaxUploadBytes() int64 {
 	mb := DefaultMaxUploadMB
-	if raw := strings.TrimSpace(os.Getenv("DIBS_INTAKE_MAX_MB")); raw != "" {
+	if raw := strings.TrimSpace(envutil.Get("DIBS_INTAKE_MAX_MB")); raw != "" {
 		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
 			mb = n
 		}
@@ -64,7 +64,7 @@ func MaxUploadBytes() int64 {
 	return int64(mb) * 1024 * 1024
 }
 
-func AudioEnabled() bool { return strings.TrimSpace(os.Getenv("DIBS_STT_URL")) != "" }
+func AudioEnabled() bool { return strings.TrimSpace(envutil.Get("DIBS_STT_URL")) != "" }
 
 func HandleConfig(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"audio": AudioEnabled()})
@@ -387,12 +387,12 @@ func skipRTFGroup(s string, i int) int {
 }
 
 func TranscribeWithContext(ctx context.Context, filename, contentType string, data []byte) (string, error) {
-	baseURL := strings.TrimRight(strings.TrimSpace(os.Getenv("DIBS_STT_URL")), "/")
+	baseURL := strings.TrimRight(strings.TrimSpace(envutil.Get("DIBS_STT_URL")), "/")
 	if baseURL == "" {
 		return "", &Error{Status: http.StatusNotImplemented, Msg: "audio transcription is not configured"}
 	}
-	key := strings.TrimSpace(os.Getenv("DIBS_STT_KEY"))
-	model := strings.TrimSpace(os.Getenv("DIBS_STT_MODEL"))
+	key := strings.TrimSpace(envutil.Get("DIBS_STT_KEY"))
+	model := strings.TrimSpace(envutil.Get("DIBS_STT_MODEL"))
 	if model == "" {
 		model = "whisper-1"
 	}

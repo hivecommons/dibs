@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -21,6 +20,7 @@ import (
 	"github.com/hivecommons/dibs/pkg/auth"
 	"github.com/hivecommons/dibs/pkg/catalog"
 	"github.com/hivecommons/dibs/pkg/deps"
+	"github.com/hivecommons/dibs/pkg/envutil"
 	"github.com/hivecommons/dibs/pkg/history"
 	"github.com/hivecommons/dibs/pkg/match"
 	"github.com/hivecommons/dibs/pkg/news"
@@ -53,15 +53,7 @@ const (
 // envOr reads key, honoring the legacy IDEATE_-prefixed name (the product's
 // pre-rename env prefix) as a fallback before the default.
 func envOr(key, def string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	if after, ok := strings.CutPrefix(key, "DIBS_"); ok {
-		if v := os.Getenv("IDEATE_" + after); v != "" {
-			return v
-		}
-	}
-	return def
+	return envutil.GetOr(key, def)
 }
 
 // listenMetrics serves the Prometheus /metrics endpoint on addr until it
