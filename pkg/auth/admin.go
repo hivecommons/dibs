@@ -1,8 +1,9 @@
 package auth
 
 import (
-	"os"
 	"strings"
+
+	"github.com/hivecommons/dibs/pkg/envutil"
 )
 
 const adminsEnv = "DIBS_ADMINS"
@@ -13,7 +14,7 @@ func IsAdmin(login string) bool {
 	if login == "" {
 		return false
 	}
-	for _, admin := range strings.Split(os.Getenv(adminsEnv), ",") {
+	for _, admin := range strings.Split(envutil.Get(adminsEnv), ",") {
 		if strings.EqualFold(strings.TrimSpace(admin), login) {
 			return true
 		}

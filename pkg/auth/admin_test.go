@@ -15,3 +15,11 @@ func TestIsAdminParsesEnv(t *testing.T) {
 		}
 	}
 }
+
+func TestIsAdminLegacyEnvFallback(t *testing.T) {
+	t.Setenv(adminsEnv, "")
+	t.Setenv("IDEATE_ADMINS", "alice")
+	if !IsAdmin("alice") {
+		t.Fatal("IsAdmin(alice) = false, want true via IDEATE_ADMINS")
+	}
+}

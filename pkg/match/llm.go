@@ -14,9 +14,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 	"time"
+
+	"github.com/hivecommons/dibs/pkg/envutil"
 )
 
 // Env vars configuring the LLM gateway.
@@ -43,30 +44,21 @@ type LLM struct {
 	Client  *http.Client
 }
 
-// envValue reads a DIBS_-prefixed var, honoring the legacy IDEATE_-prefixed
-// name (the product's pre-rename env prefix) as a fallback.
-func envValue(key string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return os.Getenv("IDEATE_" + strings.TrimPrefix(key, "DIBS_"))
-}
-
 // LLMFromEnv builds an LLM from the DIBS_LLM_* env vars (legacy IDEATE_LLM_*
 // names still honored), or nil when DIBS_LLM_BASE_URL is unset
 // (fallback-only mode).
 func LLMFromEnv() *LLM {
-	base := strings.TrimSpace(envValue(EnvLLMBaseURL))
+	base := strings.TrimSpace(envutil.Get(EnvLLMBaseURL))
 	if base == "" {
 		return nil
 	}
-	model := strings.TrimSpace(envValue(EnvLLMModel))
+	model := strings.TrimSpace(envutil.Get(EnvLLMModel))
 	if model == "" {
 		model = DefaultModel
 	}
 	return &LLM{
 		BaseURL: strings.TrimRight(base, "/"),
-		APIKey:  envValue(EnvLLMAPIKey),
+		APIKey:  envutil.Get(EnvLLMAPIKey),
 		Model:   model,
 	}
 }

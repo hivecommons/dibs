@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -21,6 +20,7 @@ import (
 	"github.com/hivecommons/dibs/pkg/auth"
 	"github.com/hivecommons/dibs/pkg/catalog"
 	"github.com/hivecommons/dibs/pkg/deps"
+	"github.com/hivecommons/dibs/pkg/envutil"
 	"github.com/hivecommons/dibs/pkg/history"
 	"github.com/hivecommons/dibs/pkg/match"
 	"github.com/hivecommons/dibs/pkg/news"
@@ -49,20 +49,6 @@ const (
 	// grace period.
 	shutdownTimeout = 20 * time.Second
 )
-
-// envOr reads key, honoring the legacy IDEATE_-prefixed name (the product's
-// pre-rename env prefix) as a fallback before the default.
-func envOr(key, def string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	if after, ok := strings.CutPrefix(key, "DIBS_"); ok {
-		if v := os.Getenv("IDEATE_" + after); v != "" {
-			return v
-		}
-	}
-	return def
-}
 
 // listenMetrics serves the Prometheus /metrics endpoint on addr until it
 // fails. It is a separate listener so ingress, which only targets the
@@ -142,10 +128,10 @@ func run(args []string, stdout, stderr io.Writer, serve func(*http.Server) error
 		return nil
 	}
 
-	addr := envOr("DIBS_ADDR", defaultAddr)
-	basePath := server.NormalizeBasePath(envOr("DIBS_BASE_PATH", server.DefaultBasePath))
-	hubURL := envOr("HUB_URL", defaultHubURL)
-	dataDir := envOr("DATA_DIR", defaultDataDir)
+	addr := envutil.GetOr("DIBS_ADDR", defaultAddr)
+	basePath := server.NormalizeBasePath(envutil.GetOr("DIBS_BASE_PATH", server.DefaultBasePath))
+	hubURL := envutil.GetOr("HUB_URL", defaultHubURL)
+	dataDir := envutil.GetOr("DATA_DIR", defaultDataDir)
 
 	st, err := store.New(dataDir)
 	if err != nil {
@@ -163,7 +149,7 @@ func run(args []string, stdout, stderr io.Writer, serve func(*http.Server) error
 	if err != nil {
 		return fmt.Errorf("opening repo news store: %w", err)
 	}
-	cncfCatalog, err := catalog.New(dataDir, envOr(settle.EnvGitHubToken, ""))
+	cncfCatalog, err := catalog.New(dataDir, envutil.GetOr(settle.EnvGitHubToken, ""))
 	if err != nil {
 		return fmt.Errorf("opening CNCF catalog: %w", err)
 	}
@@ -199,8 +185,8 @@ func run(args []string, stdout, stderr io.Writer, serve func(*http.Server) error
 	}
 	// Confirmed issue URLs are checked against GitHub before an idea settles;
 	// the token is optional (public repos read anonymously).
-	issueLookup := &settle.HTTPClient{Token: envOr(settle.EnvGitHubToken, "")}
-	backfiller := history.NewBackfiller(hist, envOr(settle.EnvGitHubToken, ""))
+	issueLookup := &settle.HTTPClient{Token: envutil.GetOr(settle.EnvGitHubToken, "")}
+	backfiller := history.NewBackfiller(hist, envutil.GetOr(settle.EnvGitHubToken, ""))
 	newsGen := news.NewGenerator(newsStore, backfiller, llm)
 
 	if seed := os.Getenv("REPOS_SEED_FILE"); seed != "" {
@@ -212,7 +198,7 @@ func run(args []string, stdout, stderr io.Writer, serve func(*http.Server) error
 
 	// Background hub→registry sync. Failures are logged, never fatal: the
 	// registry keeps serving its last-known (or seeded) state.
-	hubRepos := &registry.HTTPHubClient{BaseURL: hubURL, Token: envOr(settle.EnvGitHubToken, "")}
+	hubRepos := &registry.HTTPHubClient{BaseURL: hubURL, Token: envutil.GetOr(settle.EnvGitHubToken, "")}
 	// The loop is tied to run's lifetime so it cannot outlive the server.
 	appCtx, cancelApp := context.WithCancel(context.Background())
 	defer cancelApp()
@@ -260,7 +246,7 @@ func run(args []string, stdout, stderr io.Writer, serve func(*http.Server) error
 
 	// DIBS_METRICS_ADDR (e.g. ":9090") enables the internal /metrics
 	// listener; unset keeps it off.
-	if metricsAddr := envOr("DIBS_METRICS_ADDR", ""); metricsAddr != "" {
+	if metricsAddr := envutil.GetOr("DIBS_METRICS_ADDR", ""); metricsAddr != "" {
 		go func() { slog.Error("metrics listener stopped", "addr", metricsAddr, "err", listenMetrics(metricsAddr)) }()
 	}
 
