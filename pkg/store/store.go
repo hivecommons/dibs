@@ -740,7 +740,7 @@ func (s *Store) ListPublic() ([]*Idea, error) {
 func (s *Store) ListOfferedTo(repoIDs []string) ([]*Idea, error) {
 	want := map[string]bool{}
 	for _, r := range repoIDs {
-		want[r] = true
+		want[strings.ToLower(r)] = true
 	}
 	all, err := s.list(func(indexEntry) bool { return true })
 	if err != nil {
@@ -752,7 +752,7 @@ func (s *Store) ListOfferedTo(repoIDs []string) ([]*Idea, error) {
 			continue
 		}
 		for _, o := range idea.Offers {
-			if o.Status == OfferPending && want[o.RepoID] {
+			if o.Status == OfferPending && want[strings.ToLower(o.RepoID)] {
 				out = append(out, idea)
 				break
 			}

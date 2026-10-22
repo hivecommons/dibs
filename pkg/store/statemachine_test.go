@@ -171,3 +171,27 @@ func TestListOfferedTo(t *testing.T) {
 		t.Fatalf("other repo must see nothing, got %+v", got)
 	}
 }
+
+// TestListOfferedToCaseInsensitive: repo IDs compare case-insensitively, as
+// they do in OfferTo, so an offer stored as "Org/A" still reaches "org/a".
+func TestListOfferedToCaseInsensitive(t *testing.T) {
+	s, err := New(t.TempDir())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	idea := newIdea(t, s, VisibilityPrivate)
+	if _, err := s.Mutate(idea.ID, true, func(i *Idea) error {
+		i.Status = StatusOffered
+		i.Offers = []Offer{{RepoID: "Org/A", Status: OfferPending}}
+		return nil
+	}); err != nil {
+		t.Fatalf("Mutate: %v", err)
+	}
+	got, err := s.ListOfferedTo([]string{"org/a"})
+	if err != nil {
+		t.Fatalf("ListOfferedTo: %v", err)
+	}
+	if len(got) != 1 || got[0].ID != idea.ID {
+		t.Fatalf("want the offered idea despite case difference, got %+v", got)
+	}
+}
