@@ -20,10 +20,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
+	"github.com/hivecommons/dibs/pkg/envutil"
 	"github.com/hivecommons/dibs/pkg/store"
 )
 
@@ -68,10 +68,7 @@ type HTTPClient struct {
 // FromEnv returns an HTTPClient from DIBS_GITHUB_TOKEN (legacy
 // IDEATE_GITHUB_TOKEN still honored), or nil if unset.
 func FromEnv() *HTTPClient {
-	tok := strings.TrimSpace(os.Getenv(EnvGitHubToken))
-	if tok == "" {
-		tok = strings.TrimSpace(os.Getenv("IDEATE_GITHUB_TOKEN"))
-	}
+	tok := strings.TrimSpace(envutil.Get(EnvGitHubToken))
 	if tok == "" {
 		return nil
 	}

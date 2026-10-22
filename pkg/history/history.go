@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hivecommons/dibs/pkg/envutil"
 	"github.com/hivecommons/dibs/pkg/fsutil"
 	"github.com/hivecommons/dibs/pkg/indexformula"
 	"github.com/hivecommons/dibs/pkg/registry"
@@ -464,7 +465,7 @@ type pullActivity struct {
 }
 
 func clankerMarkers() []string {
-	raw := os.Getenv(EnvClankerMarkers)
+	raw := envutil.Get(EnvClankerMarkers)
 	if raw == "" {
 		raw = "hive: agent=,kubestellar-hive[bot]"
 	}
