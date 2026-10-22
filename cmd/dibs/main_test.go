@@ -86,6 +86,57 @@ func TestRunVersion(t *testing.T) {
 	}
 }
 
+func TestRunHelp(t *testing.T) {
+	var out, errOut bytes.Buffer
+	called := false
+	err := run([]string{"-h"}, &out, &errOut, func(*http.Server) error { called = true; return nil })
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if called {
+		t.Fatal("-h must not start the server")
+	}
+	if !strings.Contains(errOut.String(), "Usage of dibs") {
+		t.Fatalf("stderr = %q, want it to contain %q", errOut.String(), "Usage of dibs")
+	}
+}
+
+func TestRunRejectsPositionalArgs(t *testing.T) {
+	var out, errOut bytes.Buffer
+	called := false
+	err := run([]string{"serve"}, &out, &errOut, func(*http.Server) error { called = true; return nil })
+	if err == nil {
+		t.Fatal("expected error for unexpected positional argument")
+	}
+	if called {
+		t.Fatal("server must not start when unexpected positional args are present")
+	}
+	if !strings.Contains(err.Error(), "unexpected argument") {
+		t.Fatalf("err = %q, want it to mention %q", err.Error(), "unexpected argument")
+	}
+	if !strings.Contains(errOut.String(), "Usage of dibs") {
+		t.Fatalf("stderr = %q, want it to contain %q", errOut.String(), "Usage of dibs")
+	}
+}
+
+func TestRunRejectsTrailingPositionalArgs(t *testing.T) {
+	var out, errOut bytes.Buffer
+	called := false
+	err := run([]string{"--version", "extra"}, &out, &errOut, func(*http.Server) error { called = true; return nil })
+	if err == nil {
+		t.Fatal("expected error for unexpected positional argument after --version")
+	}
+	if called {
+		t.Fatal("server must not start when unexpected positional args are present")
+	}
+	if !strings.Contains(err.Error(), "unexpected argument") {
+		t.Fatalf("err = %q, want it to mention %q", err.Error(), "unexpected argument")
+	}
+	if out.String() != "" {
+		t.Fatalf("stdout = %q, want empty (version not printed)", out.String())
+	}
+}
+
 func TestRunBadFlag(t *testing.T) {
 	var out, errOut bytes.Buffer
 	if err := run([]string{"--nope"}, &out, &errOut, testServe(nil, nil)); err == nil {

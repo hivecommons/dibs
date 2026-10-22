@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -126,7 +127,15 @@ func run(args []string, stdout, stderr io.Writer, serve func(*http.Server) error
 	fs.SetOutput(stderr)
 	showVersion := fs.Bool("version", false, "print the embedded commit and exit")
 	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return nil
+		}
 		return err
+	}
+	if fs.NArg() > 0 {
+		fmt.Fprintf(stderr, "dibs: unexpected argument: %q\n", fs.Arg(0))
+		fs.Usage()
+		return fmt.Errorf("unexpected argument: %q", fs.Arg(0))
 	}
 	if *showVersion {
 		fmt.Fprintf(stdout, "dibs %s (%s)\n", gitShort, gitHash)
