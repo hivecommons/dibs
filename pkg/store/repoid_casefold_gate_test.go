@@ -1,0 +1,205 @@
+package store
+
+import (
+	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+// Advisory during the initial observation period; opt in to enforcement with
+// DIBS_CASEFOLD_GATE=strict go test -count=1 -v ./pkg/store.
+// This is a name-based tripwire, not data-flow analysis: aliases and identifier
+// values hidden in other expressions need review. Index expressions with an
+// identifier-shaped key are conservatively treated as map accesses.
+func TestRepoIDCasefoldGate(t *testing.T) {
+	root := filepath.Join("..", "..")
+	fset := token.NewFileSet()
+	hits := 0
+	for _, dir := range []string{"pkg", "cmd"} {
+		err := filepath.WalkDir(filepath.Join(root, dir), func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			file, err := parser.ParseFile(fset, path, nil, 0)
+			if err != nil {
+				return err
+			}
+			for _, pos := range casefoldSites(file) {
+				p := fset.Position(pos)
+				rel, err := filepath.Rel(root, path)
+				if err != nil {
+					return err
+				}
+				site := fmt.Sprintf("%s:%d", filepath.ToSlash(rel), p.Line)
+				if reason, ok := casefoldAllowlist[site]; ok {
+					t.Logf("reviewed %s: %s", site, reason)
+					continue
+				}
+				hits++
+				t.Logf("%s: use strings.EqualFold or canonicalise via the registry first", site)
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if hits > 0 && os.Getenv("DIBS_CASEFOLD_GATE") == "strict" {
+		t.Fatalf("%d unreviewed GitHub identifier comparison sites (see diagnostics above)", hits)
+	}
+	t.Logf("casefold audit: %d unreviewed sites; advisory unless DIBS_CASEFOLD_GATE=strict", hits)
+}
+
+// Keep exceptions narrow and explained. Line drift deliberately produces a new
+// advisory hit for review, rather than exempting a whole file or expression.
+var casefoldAllowlist = map[string]string{
+	"pkg/registry/registry.go:209": "reload preserves stored display spelling; lookupLocked supplies case-insensitive resolution",
+	"pkg/registry/registry.go:256": "hub upsert resolves existing spelling through lookupLocked before storing",
+	"pkg/registry/registry.go:315": "seed checks lookupLocked before inserting a new display spelling",
+	"pkg/registry/registry.go:326": "exact lookup fast path falls back to strings.EqualFold",
+	"pkg/history/history.go:100":   "reload restores the registry-canonical keys written by the backfiller",
+	"pkg/history/history.go:122":   "API callers resolve through the registry before reading history",
+	"pkg/history/history.go:135":   "backfiller writes registry List profile spelling",
+	"pkg/history/history.go:235":   "backfill work deduplication uses registry List profile spelling",
+	"pkg/history/history.go:238":   "backfill work reservation uses the same registry-canonical key",
+	"pkg/history/history.go:448":   "login is lower-cased at function entry before comparing to the lowercase bot name",
+	"pkg/news/news.go:79":          "reload restores registry-canonical keys written by the generator",
+	"pkg/news/news.go:92":          "API resolves the requested repo through the registry before reading news",
+	"pkg/news/news.go:110":         "generator cache lookup uses registry List profile spelling",
+	"pkg/news/news.go:121":         "generator writes registry List profile spelling",
+	"pkg/news/news.go:253":         "generation work deduplication uses registry List profile spelling",
+	"pkg/news/news.go:256":         "generation work reservation uses the same registry-canonical key",
+	"pkg/match/engine.go:175":      "match cache entries are generated from registry profiles, not caller spelling",
+	"pkg/match/engine.go:187":      "registry List supplies the same spelling used to build the match cache",
+	"pkg/match/engine.go:224":      "cached matches and profile both carry registry spelling; hash also includes that spelling",
+	"pkg/match/engine.go:234":      "replacement matches were generated from the same registry profile spelling",
+	"pkg/match/engine.go:397":      "corpus lookup is built from registry List profiles",
+	"pkg/match/engine.go:404":      "corpus results retain the spelling from those same registry profiles",
+	"pkg/api/index.go:94":          "directory index is built from registry List profiles",
+	"pkg/api/index.go:308":         "symbol lookup uses the same registry List spelling used to generate symbols",
+	"pkg/api/index.go:347":         "repoID has been replaced by Registry.Get's canonical profile spelling",
+}
+
+func casefoldSites(file *ast.File) []token.Pos {
+	var sites []token.Pos
+	ast.Inspect(file, func(n ast.Node) bool {
+		switch n := n.(type) {
+		case *ast.CallExpr:
+			if casefoldCall(n, "strings", "EqualFold") {
+				return false
+			}
+		case *ast.BinaryExpr:
+			if (n.Op == token.EQL || n.Op == token.NEQ) &&
+				!casefoldEmpty(n.X) && !casefoldEmpty(n.Y) &&
+				(casefoldIdentifier(n.X) || casefoldIdentifier(n.Y)) {
+				sites = append(sites, n.Pos())
+			}
+		case *ast.SwitchStmt:
+			if casefoldIdentifier(n.Tag) {
+				sites = append(sites, n.Tag.Pos())
+			}
+		case *ast.IndexExpr:
+			if casefoldIdentifier(n.Index) {
+				sites = append(sites, n.Pos())
+			}
+		}
+		return true
+	})
+	return sites
+}
+
+func casefoldIdentifier(e ast.Expr) bool {
+	switch e := e.(type) {
+	case *ast.ParenExpr:
+		return casefoldIdentifier(e.X)
+	case *ast.Ident:
+		return casefoldName(e.Name)
+	case *ast.SelectorExpr:
+		return casefoldName(e.Sel.Name)
+	case *ast.IndexExpr:
+		// PassedRepos is a slice of GitHub identifiers, not an identifier
+		// itself. Recognise its elements in comparisons and map keys.
+		switch x := e.X.(type) {
+		case *ast.Ident:
+			return x.Name == "PassedRepos"
+		case *ast.SelectorExpr:
+			return x.Sel.Name == "PassedRepos"
+		}
+	}
+	// Calls, including strings.ToLower and store.CanonicalRepoID, are
+	// outside this raw-operand check; aliases/wrappers need human review.
+	return false
+}
+
+func casefoldName(name string) bool {
+	switch name {
+	case "RepoID", "TargetRepo", "Owner", "User", "Login", "repoID", "owner", "user", "login":
+		return true
+	}
+	return false
+}
+
+func casefoldEmpty(e ast.Expr) bool {
+	if p, ok := e.(*ast.ParenExpr); ok {
+		return casefoldEmpty(p.X)
+	}
+	lit, ok := e.(*ast.BasicLit)
+	// Empty checks do not compare GitHub identities.
+	return ok && lit.Kind == token.STRING && (lit.Value == `""` || lit.Value == "``")
+}
+
+func casefoldCall(call *ast.CallExpr, pkg, name string) bool {
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok || sel.Sel.Name != name {
+		return false
+	}
+	id, ok := sel.X.(*ast.Ident)
+	return ok && id.Name == pkg
+}
+
+func TestCasefoldSites(t *testing.T) {
+	for _, tc := range []struct {
+		name, stmt string
+		want       int
+	}{
+		{"repo equality", `if o.RepoID == rp.RepoID {}`, 1},
+		{"owner inequality", `if owner != rp.Owner {}`, 1},
+		{"user", `if user == x.User {}`, 1},
+		{"login", `if x.Login != login {}`, 1},
+		{"target", `if i.TargetRepo == repoID {}`, 1},
+		{"passed element", `if i.PassedRepos[k] == candidate {}`, 1},
+		{"passed key", `m[i.PassedRepos[k]] = true`, 1},
+		{"switch", `switch (rp.Owner) { case "alice": }`, 1},
+		{"map read", `_ = m[o.RepoID]`, 1},
+		{"map write", `m[repoID] = true`, 1},
+		{"folded map", `m[strings.ToLower(o.RepoID)] = true`, 0},
+		{"canonical map", `_ = m[store.CanonicalRepoID(repoID)]`, 0},
+		{"folded equality", `if strings.ToLower(owner) == strings.ToLower(login) {}`, 0},
+		{"half folded", `if strings.ToLower(owner) == login {}`, 1},
+		{"equal fold", `if strings.EqualFold(o.RepoID, repoID) {}`, 0},
+		{"empty", `if (i.TargetRepo) != ("") {}`, 0},
+		{"empty reversed", "if `` == user {}", 0},
+		{"unrelated", `if status == "accepted" {}`, 0},
+		{"slice index", `_ = i.PassedRepos[k]`, 0},
+		{"folded switch", `switch strings.ToLower(login) { case "alice": }`, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f, err := parser.ParseFile(token.NewFileSet(), "fixture.go", "package fixture; func f() {"+tc.stmt+"}", 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := len(casefoldSites(f)); got != tc.want {
+				t.Fatalf("got %d hits, want %d for %s", got, tc.want, tc.stmt)
+			}
+		})
+	}
+}
