@@ -104,9 +104,9 @@ Use this only if the workflow is unavailable.
            .type == "streamable-http" and .url == "https://dibs.hivecommons.dev/mcp"))'
    ```
 
-   Record the successful verification in #375 before closing it. When the
-   listing changes, update its version and this verification command, and
-   repeat step 1, before publishing again.
+   When the listing changes, update its version and this verification
+   command, and repeat step 1, before publishing again. (The original
+   listing was verified and tracked in #375, now closed.)
 
 See also the registry's
 [remote server guidance](https://github.com/modelcontextprotocol/registry/blob/main/docs/modelcontextprotocol-io/remote-servers.mdx).

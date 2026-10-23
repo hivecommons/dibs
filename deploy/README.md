@@ -16,8 +16,8 @@ kubectl apply -f deploy/ingress.yaml
 
 1. **DNS**: a `dibs.hivecommons.dev` A/CNAME record pointing at the cluster's
    ingress load balancer (same target as `hive.hivecommons.dev`). The legacy
-   `dibs.kubestellar.io` record stays until it is demoted to a redirect
-   (hivecommons/hive#5925).
+   `dibs.kubestellar.io` host is now a permanent redirect to
+   `dibs.hivecommons.dev` (hivecommons/hive#5925, done).
 2. **cert-manager** with a `letsencrypt` ClusterIssuer (the ingress requests
    the TLS cert via the `cert-manager.io/cluster-issuer` annotation; adjust
    the issuer name in `ingress.yaml` if yours differs).
@@ -28,8 +28,8 @@ kubectl apply -f deploy/ingress.yaml
    `hive_hub_user` session cookie, so Dibs and the hub must share a
    registrable domain — the hub scopes the cookie to `.hivecommons.dev`, and
    a browser will not send it to a host outside that scope. This is why Dibs
-   is served at `dibs.hivecommons.dev` and why the legacy host must become a
-   redirect rather than keep serving the app (hivecommons/hive#5925).
+   is served at `dibs.hivecommons.dev` and why the legacy host is a redirect
+   rather than serving the app (hivecommons/hive#5925).
 
 ## Environment variables
 
@@ -43,7 +43,7 @@ kubectl apply -f deploy/ingress.yaml
 | `DIBS_LLM_BASE_URL` | Secret (optional) | unset | litellm gateway; unset ⇒ deterministic fallback matcher |
 | `DIBS_LLM_API_KEY` | Secret (optional) | unset | Gateway API key |
 | `DIBS_LLM_MODEL` | Secret (optional) | gateway default | Model name |
-| `DIBS_GITHUB_TOKEN` | Secret (optional) | unset | Token used to open credited settlement issues; unset ⇒ accepts recorded, issues not opened |
+| `DIBS_GITHUB_TOKEN` | Secret (optional) | unset | **Legacy mode only**: when set, Dibs opens the credited issue server-side on accept. Unset (default), the ideator files a prefilled GitHub issue themselves. Also authenticates the GitHub lookup that verifies a confirmed issue URL (anonymous otherwise) |
 | `DIBS_ADMINS` | Secret (optional) | unset | Comma-separated, case-insensitive GitHub logins granted admin access (idea-moderation endpoints) |
 | `DIBS_CLANKER_MARKERS` | ConfigMap (optional) | `hive: agent=,kubestellar-hive[bot]` | Comma-separated, case-insensitive markers matched against PR branch/labels/body/author to classify agent activity |
 | `DIBS_INTAKE_MAX_MB` | ConfigMap (optional) | `25` | Max upload size (MB) accepted for idea-intake file uploads |
@@ -59,9 +59,9 @@ Create the secret with real values instead of applying the placeholder:
 
 ```sh
 kubectl -n dibs create secret generic dibs-secrets \
-  --from-literal=DIBS_GITHUB_TOKEN=ghp_... \
   --from-literal=DIBS_LLM_BASE_URL=https://... \
-  --from-literal=DIBS_LLM_API_KEY=sk-...
+  --from-literal=DIBS_LLM_API_KEY=sk-... \
+  --from-literal=DIBS_GITHUB_TOKEN=ghp_...   # optional; legacy server-side issue creation
 ```
 
 ## Notes
