@@ -76,6 +76,7 @@ deployments also work.
 |---|---|---|
 | `DIBS_BASE_PATH` | `/` | Base path every route/asset is served under (set e.g. `/ideas` for path-prefixed proxying) |
 | `DIBS_ADDR` | `:8080` | Listen address |
+| `DIBS_METRICS_ADDR` | (unset) | Internal Prometheus `/metrics` listener (e.g. `:9090`); unset keeps it off. See [`deploy/`](deploy/README.md) |
 | `HUB_URL` | `https://hive.hivecommons.dev` | Hive hub for session validation & repo sync |
 | `DATA_DIR` | `/data` | JSON store directory |
 | `REPOS_SEED_FILE` | (unset) | Static JSON seed of repo profiles for dev/demo |
@@ -306,4 +307,4 @@ hack/smoke.sh dibs:smoke "$(git rev-parse HEAD)"
 
 Apache-2.0 — see [LICENSE](LICENSE).
 
-Handshake icon: [Twemoji](https://twemoji.twitter.com/), [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+Handshake icon: [Twemoji](https://github.com/twitter/twemoji), [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/).
