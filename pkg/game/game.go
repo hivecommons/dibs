@@ -5,6 +5,8 @@
 package game
 
 import (
+	"strings"
+
 	"github.com/hivecommons/dibs/pkg/store"
 )
 
@@ -153,12 +155,12 @@ func Badges(ideas []*store.Idea) []Badge {
 	for _, i := range ideas {
 		repos := map[string]bool{}
 		for _, o := range i.Offers {
-			repos[o.RepoID] = true
+			repos[strings.ToLower(o.RepoID)] = true
 		}
 		if i.TargetRepo != "" {
-			repos[i.TargetRepo] = true
+			repos[strings.ToLower(i.TargetRepo)] = true
 			if accepted(i) {
-				acceptedRepos[i.TargetRepo] = true
+				acceptedRepos[strings.ToLower(i.TargetRepo)] = true
 			}
 		}
 		pairs += len(repos)
