@@ -178,6 +178,31 @@ func TestBadges(t *testing.T) {
 }
 
 // TestBadgesRecomputeIdempotent: badges, like the score, derive from state.
+func TestBadgesPairingsFoldCase(t *testing.T) {
+	ideas := []*store.Idea{
+		idea(store.StatusAccepted, []string{"Org/A"}, "org/a"),
+		idea(store.StatusOffered, []string{"a/2", "a/3", "a/4"}, ""),
+	}
+	if got := badgeIDs(Badges(ideas)); !reflect.DeepEqual(got, []string{"first-dibs"}) {
+		t.Fatalf("Org/A offer + org/a accept must be one pairing (4 total, no pollinator): %v", got)
+	}
+}
+
+func TestBadgesAcceptingReposFoldCase(t *testing.T) {
+	ideas := []*store.Idea{
+		idea(store.StatusAccepted, nil, "Org/A"),
+		idea(store.StatusAccepted, nil, "org/a"),
+		idea(store.StatusAccepted, nil, "org/b"),
+	}
+	if got := badgeIDs(Badges(ideas)); !reflect.DeepEqual(got, []string{"first-dibs"}) {
+		t.Fatalf("case variants must not earn Hivemind: %v", got)
+	}
+	ideas = append(ideas, idea(store.StatusAccepted, nil, "org/c"))
+	if got := badgeIDs(Badges(ideas)); !reflect.DeepEqual(got, []string{"first-dibs", "hivemind"}) {
+		t.Fatalf("three distinct accepting repos must earn Hivemind: %v", got)
+	}
+}
+
 func TestBadgesRecomputeIdempotent(t *testing.T) {
 	ideas := []*store.Idea{idea(store.StatusSettled, []string{"a/1"}, "a/1")}
 	first := Badges(ideas)
