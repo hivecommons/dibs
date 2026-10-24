@@ -118,3 +118,34 @@ func TestTruncateOneLine(t *testing.T) {
 func TestLogWarnDefault(t *testing.T) {
 	logWarn("news refresh %s: %v", "o/r", "boom") // must not panic
 }
+
+func TestRefreshAsyncStalenessGate(t *testing.T) {
+	st, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	now := newsNow()
+	if err := st.upsert("org/fresh", nil, now); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	if err := st.upsert("org/stale", nil, now.AddDate(0, 0, -1)); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	f := &fakeFetcher{}
+	g := NewGenerator(st, f, nil)
+	g.Now = func() time.Time { return now }
+	g.Logf = nil
+
+	if g.needsRefresh("org/fresh") {
+		t.Fatal("fresh repo should not need refresh")
+	}
+	if !g.needsRefresh("org/stale") || !g.needsRefresh("org/missing") {
+		t.Fatal("stale and missing repos should need refresh")
+	}
+
+	g.RefreshAsync([]registry.RepoProfile{{RepoID: "org/fresh"}})
+	time.Sleep(50 * time.Millisecond)
+	if n := f.calls; n != 0 {
+		t.Fatalf("fresh repo fetched %d times, want 0", n)
+	}
+}
