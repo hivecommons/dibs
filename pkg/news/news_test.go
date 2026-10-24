@@ -232,7 +232,8 @@ func TestUpsertRollsBackWhenPersistFails(t *testing.T) {
 		t.Fatal(err)
 	}
 	item := func(fp string) []cachedItem {
-		return []cachedItem{{Item: Item{Date: "2026-08-18"}, Fingerprint: fp}}
+		// normalizeRepoNews drops items without PRCount/TLDR, so the fixture must pass that filter.
+		return []cachedItem{{Item: Item{Date: "2026-08-18", PRCount: 1, TLDR: "x"}, Fingerprint: fp}}
 	}
 	if err := s.upsert("org/old", item("a"), newsNow()); err != nil {
 		t.Fatal(err)
