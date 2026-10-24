@@ -132,8 +132,17 @@ func (s *Store) Upsert(repoID string, days []DayActivity, fetchedAt time.Time) e
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	h := normalizeHistory(RepoHistory{RepoID: repoID, Version: BackfillVersion, Days: days, FetchedAt: fetchedAt.UTC()})
+	prev, existed := s.data[repoID]
 	s.data[repoID] = h
-	return s.persistLocked()
+	if err := s.persistLocked(); err != nil {
+		if existed {
+			s.data[repoID] = prev
+		} else {
+			delete(s.data, repoID)
+		}
+		return err
+	}
+	return nil
 }
 
 func (s *Store) persistLocked() error {

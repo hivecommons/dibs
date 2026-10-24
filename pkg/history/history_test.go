@@ -480,3 +480,32 @@ func TestNewStoreLoadsAndNormalizesExistingFile(t *testing.T) {
 func TestLogWarnDefault(t *testing.T) {
 	logWarn("history backfill %s: %v", "o/r", "boom") // must not panic
 }
+
+func TestUpsertRollsBackWhenPersistFails(t *testing.T) {
+	s, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Upsert("org/old", []DayActivity{{Date: "2026-08-18", MergedPRs: 1}}, fixedNow()); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := s.Get("org/old")
+	s.path = filepath.Join(t.TempDir(), "missing", "repo-history.json")
+
+	if err := s.Upsert("org/old", []DayActivity{{Date: "2026-08-18", MergedPRs: 9}}, fixedNow()); err == nil {
+		t.Fatal("expected persist error")
+	}
+	if err := s.Upsert("org/new", []DayActivity{{Date: "2026-08-18", MergedPRs: 2}}, fixedNow()); err == nil {
+		t.Fatal("expected persist error")
+	}
+	after, ok := s.Get("org/old")
+	if !ok || !reflect.DeepEqual(before, after) {
+		t.Fatalf("existing entry changed after failed upsert: %+v vs %+v", before, after)
+	}
+	if _, ok := s.Get("org/new"); ok {
+		t.Fatal("new entry served after failed persist")
+	}
+	if got := s.List(); len(got) != 1 {
+		t.Fatalf("List len = %d, want 1", len(got))
+	}
+}
