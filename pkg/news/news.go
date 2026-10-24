@@ -118,8 +118,17 @@ func (s *Store) getCached(repoID string) map[string]cachedItem {
 func (s *Store) upsert(repoID string, items []cachedItem, fetchedAt time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	prev, existed := s.data[repoID]
 	s.data[repoID] = normalizeRepoNews(repoNews{RepoID: repoID, Items: items, FetchedAt: fetchedAt.UTC()})
-	return s.persistLocked()
+	if err := s.persistLocked(); err != nil {
+		if existed {
+			s.data[repoID] = prev
+		} else {
+			delete(s.data, repoID)
+		}
+		return err
+	}
+	return nil
 }
 
 func (s *Store) persistLocked() error {

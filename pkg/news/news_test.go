@@ -225,3 +225,30 @@ func TestNewStoreLoadsAndNormalizesExistingFile(t *testing.T) {
 		t.Fatalf("items not newest-first/filtered: %+v", items)
 	}
 }
+
+func TestUpsertRollsBackWhenPersistFails(t *testing.T) {
+	s, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := func(fp string) []cachedItem {
+		return []cachedItem{{Item: Item{Date: "2026-08-18"}, Fingerprint: fp}}
+	}
+	if err := s.upsert("org/old", item("a"), newsNow()); err != nil {
+		t.Fatal(err)
+	}
+	s.path = filepath.Join(t.TempDir(), "missing", "repo-news.json")
+
+	if err := s.upsert("org/old", item("b"), newsNow()); err == nil {
+		t.Fatal("expected persist error")
+	}
+	if err := s.upsert("org/new", item("c"), newsNow()); err == nil {
+		t.Fatal("expected persist error")
+	}
+	if got := s.getCached("org/old")["2026-08-18"].Fingerprint; got != "a" {
+		t.Fatalf("fingerprint = %q, want a", got)
+	}
+	if got := s.Get("org/new"); len(got) != 0 {
+		t.Fatalf("new entry served after failed persist: %+v", got)
+	}
+}
