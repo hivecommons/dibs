@@ -103,6 +103,14 @@ func (s *Store) Get(repoID string) []Item {
 	return out
 }
 
+// fetchedAt returns when repoID was last refreshed; ok is false if never.
+func (s *Store) fetchedAt(repoID string) (time.Time, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	rn, ok := s.data[repoID]
+	return rn.FetchedAt, ok
+}
+
 func (s *Store) getCached(repoID string) map[string]cachedItem {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -185,13 +193,17 @@ func NewGenerator(store *Store, fetcher PullFetcher, llm *match.LLM) *Generator 
 	return &Generator{Store: store, Fetcher: fetcher, LLM: llm, Logf: logWarn}
 }
 
-// RefreshAsync starts bounded non-blocking generation for listed repos.
+// RefreshAsync starts bounded non-blocking generation for listed repos whose
+// news is missing or older than the current UTC day.
 func (g *Generator) RefreshAsync(repos []registry.RepoProfile) {
 	if g == nil || g.Store == nil || g.Fetcher == nil {
 		return
 	}
 	for _, rp := range repos {
 		repoID := rp.RepoID
+		if !g.needsRefresh(repoID) {
+			continue
+		}
 		if !g.markActive(repoID) {
 			continue
 		}
@@ -242,6 +254,17 @@ func (g *Generator) Refresh(ctx context.Context, repoID string) error {
 		items = append(items, item)
 	}
 	return g.Store.upsert(repoID, items, now)
+}
+
+// needsRefresh mirrors history.Backfiller: a repo is polled at most once per
+// UTC day once news has been persisted for it.
+func (g *Generator) needsRefresh(repoID string) bool {
+	fetched, ok := g.Store.fetchedAt(repoID)
+	if !ok || fetched.IsZero() {
+		return true
+	}
+	today := g.now().UTC().Truncate(24 * time.Hour)
+	return fetched.UTC().Truncate(24 * time.Hour).Before(today)
 }
 
 func (g *Generator) semaphore() chan struct{} {

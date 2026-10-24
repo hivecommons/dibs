@@ -217,6 +217,9 @@ func run(args []string, stdout, stderr io.Writer, serve func(*http.Server) error
 				return
 			}
 			server.RecordJob(server.JobRegistrySync, err)
+			// Gated by catalog.needsRefresh, so this retries a failed or
+			// empty catalog and honors RefreshInterval regardless of hub sync.
+			cncfCatalog.RefreshAsync()
 			if err != nil {
 				slog.Warn("registry sync failed", "job", server.JobRegistrySync, "err", err)
 			} else {
