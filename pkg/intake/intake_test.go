@@ -30,12 +30,51 @@ func TestExtractTextFormats(t *testing.T) {
 	if !strings.Contains(got, "Idea") || !strings.Contains(got, "Help & ship") || strings.Contains(got, "<p>") {
 		t.Fatalf("html stripped to %q", got)
 	}
+	got, err = ExtractDocument(".html", []byte(`<html><head><style>body{color:red}</style>
+   <script>window.dataLayer=[];gtag('js')</script>
+   <!-- generator: Word 16 --></head>
+   <body><p>Idea: add a dark mode</p></body></html>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cleanText(got); got != "Idea: add a dark mode" {
+		t.Fatalf("html with style/script/comment extracted %q", got)
+	}
 	got, err = ExtractDocument(".rtf", []byte(`{\rtf1\ansi This is \b bold\b0  idea\par done}`))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(got, "This is") || !strings.Contains(got, "bold") || strings.Contains(got, `\b`) {
 		t.Fatalf("rtf stripped to %q", got)
+	}
+}
+
+func TestStripTagsSkipsNonTextRegions(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name, in, want string
+	}{
+		{"style", `<p>a</p><style type="text/css">p > b{}</style><p>b</p>`, "a b"},
+		{"script", `<p>a</p><script>if (x < 1 && y > 2) { w("<p>no</p>") }</script><p>b</p>`, "a b"},
+		{"noscript", `<p>a</p><noscript><p>enable JS</p></noscript><p>b</p>`, "a b"},
+		{"template", `<p>a</p><template><p>row</p></template><p>b</p>`, "a b"},
+		{"nested template", `a<template><template>x</template>y</template>b`, "a b"},
+		{"comment with gt", `a<!-- if x > 1 -->b`, "a b"},
+		{"empty comments", `a<!-->b<!--->c`, "a b c"},
+		{"uppercase", `a<SCRIPT>x()</Script >b`, "a b"},
+		{"similar names kept", `<scripts>a</scripts><styled>b</styled>`, "a b"},
+		{"unterminated comment", `a<!-- b`, "a"},
+		{"unterminated element", `a<script>b`, "a"},
+		{"unterminated open tag", `a<style`, "a"},
+		{"unterminated close tag", `a<style>b</style`, "a"},
+		{"unterminated nested template", `a<template><template`, "a"},
+		{"comment marker inside tag", `<a title="<!--">a</a>b<p>c`, "a b c"},
+		{"entities", `<style>x</style>Help &amp; ship`, "Help & ship"},
+	}
+	for _, tc := range cases {
+		if got := cleanText(StripTags(tc.in)); got != tc.want {
+			t.Errorf("%s: StripTags(%q) = %q, want %q", tc.name, tc.in, got, tc.want)
+		}
 	}
 }
 

@@ -252,11 +252,23 @@ func ExtractDOCX(data []byte) (string, error) {
 	return "", fmt.Errorf("word/document.xml not found")
 }
 
+// StripTags reduces HTML to its text. Comments and the contents of
+// htmlSkippedElements are dropped as a whole, since they are not rendered
+// text and a "Save as HTML" page is mostly inline CSS and JS.
 func StripTags(s string) string {
 	var b strings.Builder
 	inTag := false
 	spacePending := false
-	for _, r := range s {
+	for i := 0; i < len(s); {
+		r, size := utf8.DecodeRuneInString(s[i:])
+		if r == '<' && !inTag {
+			if end := skipHTMLRegion(s, i); end > i {
+				i = end
+				spacePending = true
+				continue
+			}
+		}
+		i += size
 		switch r {
 		case '<':
 			inTag = true
@@ -277,6 +289,69 @@ func StripTags(s string) string {
 		}
 	}
 	return html.UnescapeString(b.String())
+}
+
+// htmlSkippedElements hold no rendered document text. Only template can
+// nest; the others are raw text and end at their first closing tag.
+var htmlSkippedElements = []string{"script", "style", "noscript", "template"}
+
+// skipHTMLRegion returns the index just past the comment or skipped element
+// that starts at s[i] (a '<'), the end of input if it is unterminated, or i
+// if s[i] starts neither.
+func skipHTMLRegion(s string, i int) int {
+	if strings.HasPrefix(s[i:], "<!--") {
+		// Searching from the first '-' also ends the empty comments
+		// "<!-->" and "<!--->" where a browser does.
+		if end := strings.Index(s[i+2:], "-->"); end >= 0 {
+			return i + 2 + end + len("-->")
+		}
+		return len(s)
+	}
+	for _, name := range htmlSkippedElements {
+		if !htmlTagAt(s, i+1, name) {
+			continue
+		}
+		depth := 0
+		for j := i; j < len(s); j++ {
+			if s[j] != '<' {
+				continue
+			}
+			switch {
+			case j+1 < len(s) && s[j+1] == '/' && htmlTagAt(s, j+2, name):
+				depth--
+			case j == i || (name == "template" && htmlTagAt(s, j+1, name)):
+				depth++
+			default:
+				continue
+			}
+			end := strings.IndexByte(s[j:], '>')
+			if end < 0 {
+				return len(s)
+			}
+			if depth == 0 {
+				return j + end + 1
+			}
+			j += end
+		}
+		return len(s)
+	}
+	return i
+}
+
+// htmlTagAt reports whether the tag name starting at s[i] is name, matched
+// case-insensitively and ending at whitespace, '/', '>' or end of input.
+func htmlTagAt(s string, i int, name string) bool {
+	if len(s)-i < len(name) || !strings.EqualFold(s[i:i+len(name)], name) {
+		return false
+	}
+	if i+len(name) == len(s) {
+		return true
+	}
+	switch s[i+len(name)] {
+	case ' ', '\t', '\n', '\r', '\f', '/', '>':
+		return true
+	}
+	return false
 }
 
 func StripRTF(s string) string {
