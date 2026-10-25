@@ -24,13 +24,16 @@ import (
 // repos ranked below the cap are not re-scored (LLM cost) or re-notified.
 const MaxMatches = 10
 
-// CapMatches returns at most MaxMatches leading entries of an already
-// score-sorted slice, for surfacing the persisted cache to callers.
+// CapMatches returns a score-desc sorted copy of ms limited to MaxMatches
+// entries. It sorts first because the persisted order is not guaranteed
+// (ScoreForRepo appends without re-sorting).
 func CapMatches(ms []store.Match) []store.Match {
-	if len(ms) > MaxMatches {
-		return ms[:MaxMatches]
+	out := append([]store.Match(nil), ms...)
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Score > out[j].Score })
+	if len(out) > MaxMatches {
+		out = out[:MaxMatches]
 	}
-	return ms
+	return out
 }
 
 // MaxCNCFCandidates caps how many BM25-ranked CNCF projects reach the LLM.

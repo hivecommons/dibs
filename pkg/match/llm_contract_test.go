@@ -201,10 +201,10 @@ func TestParseRefinedEmptyTitleAfterStrip(t *testing.T) {
 	}
 }
 
-// TestMatchesForIdeaCappedAtMaxMatches: with more candidate repos than
+// TestMatchesForIdeaPersistsAllCapsReturn: with more candidate repos than
 // MaxMatches the result is truncated to the top-scoring MaxMatches, sorted
 // by score descending — the LLM cost control the constant documents.
-func TestMatchesForIdeaCappedAtMaxMatches(t *testing.T) {
+func TestMatchesForIdeaPersistsAllCapsReturn(t *testing.T) {
 	st, reg := newFixtures(t)
 	n := MaxMatches + 5
 	repos := make([]registry.RepoProfile, 0, n)
