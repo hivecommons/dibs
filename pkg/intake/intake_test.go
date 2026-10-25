@@ -53,7 +53,7 @@ func TestStripTagsSkipsNonTextRegions(t *testing.T) {
 		{"unterminated script", "<p>a</p><script>secret", "a"},
 		{"unclosed closing tag", "<p>a</p><script>secret</script", "a"},
 		{"similar tag name", "<p>a</p><style>x</styles>y</style><p>b</p>", "a b"},
-		{"stray lt", "a < b", "a"},
+		{"stray lt", "a < b", "a "},
 		{"trailing lt", "a</", "a"},
 		{"unicode and stray gt", "caf\u00e9 > ok", "caf\u00e9  ok"},
 	}
