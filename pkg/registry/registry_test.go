@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -47,6 +48,84 @@ func TestHTTPHubClientEnrichesEmptyDescriptions(t *testing.T) {
 	}
 	if len(repos) != 1 || repos[0].Description != "Enriched from GitHub" {
 		t.Fatalf("repos not enriched: %+v", repos)
+	}
+}
+
+func enrichHubServer(t *testing.T, repos []RepoProfile) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(repos)
+	}))
+}
+
+func TestSyncEnrichesEachRepoOnce(t *testing.T) {
+	hub := enrichHubServer(t, []RepoProfile{
+		{RepoID: "o/a", HiveID: "h", Owner: "alice"},
+		{RepoID: "o/b", HiveID: "h", Owner: "alice"},
+	})
+	defer hub.Close()
+	var hits atomic.Int32
+	gh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		_ = json.NewEncoder(w).Encode(map[string]string{"description": "from github"})
+	}))
+	defer gh.Close()
+	c := &HTTPHubClient{BaseURL: hub.URL, GitHubAPI: gh.URL}
+	reg, _ := newTestRegistry(t)
+	for i := 0; i < 2; i++ {
+		if err := reg.Sync(context.Background(), c); err != nil {
+			t.Fatalf("Sync: %v", err)
+		}
+	}
+	if got := hits.Load(); got != 2 {
+		t.Fatalf("GitHub hits = %d, want 2 (once per repo)", got)
+	}
+	if p, _ := reg.Get("o/a"); p == nil || p.Description != "from github" {
+		t.Fatalf("description not stored: %+v", p)
+	}
+}
+
+func TestEnrichmentStopsOnRateLimit(t *testing.T) {
+	hub := enrichHubServer(t, []RepoProfile{
+		{RepoID: "o/a", HiveID: "h", Owner: "alice"},
+		{RepoID: "o/b", HiveID: "h", Owner: "alice"},
+		{RepoID: "o/c", HiveID: "h", Owner: "alice"},
+	})
+	defer hub.Close()
+	var hits atomic.Int32
+	gh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer gh.Close()
+	c := &HTTPHubClient{BaseURL: hub.URL, GitHubAPI: gh.URL}
+	reg, _ := newTestRegistry(t)
+	if err := reg.Sync(context.Background(), c); err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	if got := hits.Load(); got != 1 {
+		t.Fatalf("GitHub hits = %d, want 1 (loop must stop at first 403)", got)
+	}
+}
+
+func TestEnrichmentNotRetriedForEmptyDescription(t *testing.T) {
+	hub := enrichHubServer(t, []RepoProfile{{RepoID: "o/a", HiveID: "h", Owner: "alice"}})
+	defer hub.Close()
+	var hits atomic.Int32
+	gh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		_ = json.NewEncoder(w).Encode(map[string]string{"description": ""})
+	}))
+	defer gh.Close()
+	c := &HTTPHubClient{BaseURL: hub.URL, GitHubAPI: gh.URL}
+	reg, _ := newTestRegistry(t)
+	for i := 0; i < 2; i++ {
+		if err := reg.Sync(context.Background(), c); err != nil {
+			t.Fatalf("Sync: %v", err)
+		}
+	}
+	if got := hits.Load(); got != 1 {
+		t.Fatalf("GitHub hits = %d, want 1", got)
 	}
 }
 
