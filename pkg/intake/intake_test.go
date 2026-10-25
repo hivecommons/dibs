@@ -39,6 +39,31 @@ func TestExtractTextFormats(t *testing.T) {
 	}
 }
 
+func TestStripTagsSkipsNonTextRegions(t *testing.T) {
+	t.Parallel()
+	cases := []struct{ name, in, want string }{
+		{"entities", "<h1>Idea</h1><p>Help &amp; ship</p>", "Idea Help & ship"},
+		{"style", "<p>a</p><style>p > b { color: red }</style><p>b</p>", "a b"},
+		{"script", "<p>a</p><script>if (x > 1) { y() }</script><p>b</p>", "a b"},
+		{"noscript", "<p>a</p><noscript>enable js</noscript><p>b</p>", "a b"},
+		{"template", "<p>a</p><template><p>hidden</p></template><p>b</p>", "a b"},
+		{"uppercase", "<p>a</p><SCRIPT type=x>secret</SCRIPT ><p>b</p>", "a b"},
+		{"comment", "<p>a</p><!-- if x > 1 --><p>b</p>", "a b"},
+		{"unterminated comment", "<p>a</p><!-- hidden > text", "a"},
+		{"unterminated script", "<p>a</p><script>secret", "a"},
+		{"unclosed closing tag", "<p>a</p><script>secret</script", "a"},
+		{"similar tag name", "<p>a</p><style>x</styles>y</style><p>b</p>", "a b"},
+		{"stray lt", "a < b", "a"},
+		{"trailing lt", "a</", "a"},
+		{"unicode and stray gt", "caf\u00e9 > ok", "caf\u00e9  ok"},
+	}
+	for _, tc := range cases {
+		if got := StripTags(tc.in); got != tc.want {
+			t.Errorf("%s: StripTags(%q) = %q, want %q", tc.name, tc.in, got, tc.want)
+		}
+	}
+}
+
 func TestExtractDOCX(t *testing.T) {
 	t.Parallel()
 	var buf bytes.Buffer

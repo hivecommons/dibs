@@ -256,27 +256,84 @@ func StripTags(s string) string {
 	var b strings.Builder
 	inTag := false
 	spacePending := false
-	for _, r := range s {
-		switch r {
-		case '<':
-			inTag = true
+	for i := 0; i < len(s); {
+		c := s[i]
+		if !inTag && c == '<' {
 			spacePending = true
-		case '>':
-			inTag = false
-		default:
-			if inTag {
+			if strings.HasPrefix(s[i:], "<!--") {
+				i = skipHTMLComment(s, i)
 				continue
 			}
-			if spacePending {
-				if b.Len() > 0 {
-					b.WriteByte(' ')
-				}
-				spacePending = false
+			if name := htmlTagName(s, i+1); htmlSkippedElement(name) {
+				i = skipHTMLElement(s, i, name)
+				continue
 			}
-			b.WriteRune(r)
+			inTag = true
+			i++
+			continue
 		}
+		if inTag {
+			if c == '>' {
+				inTag = false
+			}
+			i++
+			continue
+		}
+		r, size := utf8.DecodeRuneInString(s[i:])
+		if c == '>' {
+			i++
+			continue
+		}
+		if spacePending {
+			if b.Len() > 0 {
+				b.WriteByte(' ')
+			}
+			spacePending = false
+		}
+		b.WriteRune(r)
+		i += size
 	}
 	return html.UnescapeString(b.String())
+}
+
+func skipHTMLComment(s string, i int) int {
+	end := strings.Index(s[i+4:], "-->")
+	if end < 0 {
+		return len(s)
+	}
+	return i + 4 + end + 3
+}
+
+func htmlTagName(s string, i int) string {
+	start := i
+	for i < len(s) && (s[i] >= 'a' && s[i] <= 'z' || s[i] >= 'A' && s[i] <= 'Z' || s[i] >= '0' && s[i] <= '9') {
+		i++
+	}
+	return strings.ToLower(s[start:i])
+}
+
+func htmlSkippedElement(name string) bool {
+	switch name {
+	case "script", "style", "noscript", "template":
+		return true
+	}
+	return false
+}
+
+// skipHTMLElement returns the index just past the closing tag matching the
+// element opened at s[i], or len(s) when it is never closed.
+func skipHTMLElement(s string, i int, name string) int {
+	for j := i + 1; j < len(s); j++ {
+		if s[j] != '<' || j+1 >= len(s) || s[j+1] != '/' || htmlTagName(s, j+2) != name {
+			continue
+		}
+		end := strings.IndexByte(s[j:], '>')
+		if end < 0 {
+			return len(s)
+		}
+		return j + end + 1
+	}
+	return len(s)
 }
 
 func StripRTF(s string) string {
