@@ -23,11 +23,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -99,6 +101,21 @@ type HTTPHubClient struct {
 	Client    *http.Client
 	Token     string
 	GitHubAPI string
+
+	// enrichMu guards looked and notBefore. looked remembers repos whose
+	// GitHub lookup already completed (even with an empty description or a
+	// non-200) so each sync does not spend the anonymous 60 req/hr bucket,
+	// which settlement verification shares, retrying them. notBefore is the
+	// rate-limit reset time before which enrichment is skipped.
+	enrichMu  sync.Mutex
+	looked    map[string]bool
+	notBefore time.Time
+}
+
+// descriptionSkipper is implemented by hub clients that can avoid enriching
+// repos the registry already has a description for.
+type descriptionSkipper interface {
+	ListReposSkippingDescriptions(ctx context.Context, known func(repoID string) bool) ([]RepoProfile, error)
 }
 
 // ReposPath is the hub endpoint listing hive-managed repos.
@@ -111,6 +128,12 @@ const maxReposBody = 4 << 20
 
 // ListRepos implements HubClient.
 func (c *HTTPHubClient) ListRepos(ctx context.Context) ([]RepoProfile, error) {
+	return c.ListReposSkippingDescriptions(ctx, nil)
+}
+
+// ListReposSkippingDescriptions is ListRepos, except repos for which known
+// returns true are not enriched from GitHub. known may be nil.
+func (c *HTTPHubClient) ListReposSkippingDescriptions(ctx context.Context, known func(repoID string) bool) ([]RepoProfile, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+ReposPath, nil)
 	if err != nil {
 		return nil, fmt.Errorf("registry: building hub request: %w", err)
@@ -131,11 +154,17 @@ func (c *HTTPHubClient) ListRepos(ctx context.Context) ([]RepoProfile, error) {
 	if err := json.NewDecoder(io.LimitReader(resp.Body, maxReposBody)).Decode(&repos); err != nil {
 		return nil, fmt.Errorf("registry: decoding hub response: %w", err)
 	}
-	c.enrichDescriptions(ctx, repos)
+	c.enrichDescriptions(ctx, repos, known)
 	return repos, nil
 }
 
-func (c *HTTPHubClient) enrichDescriptions(ctx context.Context, repos []RepoProfile) {
+func (c *HTTPHubClient) enrichDescriptions(ctx context.Context, repos []RepoProfile, known func(repoID string) bool) {
+	c.enrichMu.Lock()
+	wait := time.Now().Before(c.notBefore)
+	c.enrichMu.Unlock()
+	if wait {
+		return
+	}
 	client := c.Client
 	if client == nil {
 		client = &http.Client{Timeout: hubRequestTimeout}
@@ -146,6 +175,15 @@ func (c *HTTPHubClient) enrichDescriptions(ctx context.Context, repos []RepoProf
 	}
 	for i := range repos {
 		if strings.TrimSpace(repos[i].Description) != "" || !strings.Contains(repos[i].RepoID, "/") {
+			continue
+		}
+		if known != nil && known(repos[i].RepoID) {
+			continue
+		}
+		c.enrichMu.Lock()
+		done := c.looked[repos[i].RepoID]
+		c.enrichMu.Unlock()
+		if done {
 			continue
 		}
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/repos/"+repos[i].RepoID, nil)
@@ -161,6 +199,22 @@ func (c *HTTPHubClient) enrichDescriptions(ctx context.Context, repos []RepoProf
 		if err != nil {
 			continue
 		}
+		if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusTooManyRequests {
+			resp.Body.Close()
+			slog.Warn("registry: GitHub refused description lookup; skipping enrichment this sync", "status", resp.StatusCode)
+			if reset, err := strconv.ParseInt(resp.Header.Get("X-RateLimit-Reset"), 10, 64); err == nil {
+				c.enrichMu.Lock()
+				c.notBefore = time.Unix(reset, 0)
+				c.enrichMu.Unlock()
+			}
+			return
+		}
+		c.enrichMu.Lock()
+		if c.looked == nil {
+			c.looked = map[string]bool{}
+		}
+		c.looked[repos[i].RepoID] = true
+		c.enrichMu.Unlock()
 		var gh struct {
 			Description string `json:"description"`
 		}
@@ -281,11 +335,25 @@ func sanitizeContributeURL(raw string) string {
 
 // Sync pulls the hub's repo list and merges it.
 func (r *Registry) Sync(ctx context.Context, hub HubClient) error {
-	repos, err := hub.ListRepos(ctx)
+	var repos []RepoProfile
+	var err error
+	if s, ok := hub.(descriptionSkipper); ok {
+		repos, err = s.ListReposSkippingDescriptions(ctx, r.hasDescription)
+	} else {
+		repos, err = hub.ListRepos(ctx)
+	}
 	if err != nil {
 		return err
 	}
 	return r.Merge(repos)
+}
+
+// hasDescription reports whether the stored profile already has a description.
+func (r *Registry) hasDescription(repoID string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	existing, ok := r.lookupLocked(repoID)
+	return ok && strings.TrimSpace(existing.Description) != ""
 }
 
 // LoadSeedFile merges profiles from a static JSON seed file (REPOS_SEED_FILE).
