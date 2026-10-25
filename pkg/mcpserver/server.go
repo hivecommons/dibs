@@ -12,6 +12,7 @@ import (
 
 	"github.com/hivecommons/dibs/pkg/auth"
 	"github.com/hivecommons/dibs/pkg/deps"
+	"github.com/hivecommons/dibs/pkg/match"
 	"github.com/hivecommons/dibs/pkg/registry"
 	"github.com/hivecommons/dibs/pkg/store"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -294,7 +295,7 @@ func (t *tools) getIdea(ctx context.Context, req *mcpsdk.CallToolRequest, in get
 	if authErr == nil && id != nil {
 		viewer = id.Username
 	}
-	matches, offers := idea.Matches, idea.Offers
+	matches, offers := match.CapMatches(idea.Matches), idea.Offers
 	if idea.Author != viewer {
 		matches, offers = nil, t.offersForViewer(idea.Offers, viewer)
 	}
