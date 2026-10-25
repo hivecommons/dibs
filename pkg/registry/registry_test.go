@@ -8,9 +8,11 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func newTestRegistry(t *testing.T) (*Registry, string) {
@@ -511,5 +513,93 @@ func TestOwnerMatchIsCaseInsensitive(t *testing.T) {
 	on := true
 	if _, err := r.ApplyOwnerUpdate("kubestellar/dibs", "Bob", OwnerUpdate{AcceptingIdeas: &on}); err != nil {
 		t.Fatalf("ApplyOwnerUpdate mixed-case actor: %v", err)
+	}
+}
+
+func TestEnrichmentBacksOffUntilRateLimitReset(t *testing.T) {
+	hub := enrichHubServer(t, []RepoProfile{
+		{RepoID: "o/a", HiveID: "h", Owner: "alice"},
+		{RepoID: "o/b", HiveID: "h", Owner: "alice"},
+	})
+	defer hub.Close()
+	var hits atomic.Int32
+	reset := time.Now().Add(time.Hour).Unix()
+	gh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(reset, 10))
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer gh.Close()
+	c := &HTTPHubClient{BaseURL: hub.URL, GitHubAPI: gh.URL}
+	reg, _ := newTestRegistry(t)
+	for i := 0; i < 3; i++ {
+		if err := reg.Sync(context.Background(), c); err != nil {
+			t.Fatalf("Sync #%d: %v", i+1, err)
+		}
+	}
+	if got := hits.Load(); got != 1 {
+		t.Fatalf("GitHub hits = %d, want 1 (later syncs must skip enrichment until the reset time)", got)
+	}
+	if !c.notBefore.Equal(time.Unix(reset, 0)) {
+		t.Fatalf("notBefore = %v, want %v", c.notBefore, time.Unix(reset, 0))
+	}
+	c.enrichMu.Lock()
+	looked := c.looked["o/a"]
+	c.enrichMu.Unlock()
+	if looked {
+		t.Fatalf("rate-limited repo must not be marked as looked up, so it is retried after the reset")
+	}
+}
+
+func TestEnrichmentResumesAfterRateLimitReset(t *testing.T) {
+	hub := enrichHubServer(t, []RepoProfile{{RepoID: "o/a", HiveID: "h", Owner: "alice"}})
+	defer hub.Close()
+	var hits atomic.Int32
+	gh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if hits.Add(1) == 1 {
+			w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(time.Now().Add(-time.Minute).Unix(), 10))
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]string{"description": "after reset"})
+	}))
+	defer gh.Close()
+	c := &HTTPHubClient{BaseURL: hub.URL, GitHubAPI: gh.URL}
+	reg, _ := newTestRegistry(t)
+	for i := 0; i < 2; i++ {
+		if err := reg.Sync(context.Background(), c); err != nil {
+			t.Fatalf("Sync #%d: %v", i+1, err)
+		}
+	}
+	if got := hits.Load(); got != 2 {
+		t.Fatalf("GitHub hits = %d, want 2 (a reset in the past must not block the next sync)", got)
+	}
+	if p, _ := reg.Get("o/a"); p == nil || p.Description != "after reset" {
+		t.Fatalf("description not enriched after reset: %+v", p)
+	}
+}
+
+func TestEnrichmentRateLimitWithoutResetHeaderDoesNotArmBackoff(t *testing.T) {
+	hub := enrichHubServer(t, []RepoProfile{{RepoID: "o/a", HiveID: "h", Owner: "alice"}})
+	defer hub.Close()
+	var hits atomic.Int32
+	gh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		w.Header().Set("X-RateLimit-Reset", "soon")
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer gh.Close()
+	c := &HTTPHubClient{BaseURL: hub.URL, GitHubAPI: gh.URL}
+	reg, _ := newTestRegistry(t)
+	for i := 0; i < 2; i++ {
+		if err := reg.Sync(context.Background(), c); err != nil {
+			t.Fatalf("Sync #%d: %v", i+1, err)
+		}
+	}
+	if !c.notBefore.IsZero() {
+		t.Fatalf("notBefore = %v, want zero when the reset header is unparseable", c.notBefore)
+	}
+	if got := hits.Load(); got != 2 {
+		t.Fatalf("GitHub hits = %d, want 2 (no back-off armed, so each sync retries once)", got)
 	}
 }
