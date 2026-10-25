@@ -141,6 +141,12 @@ Dibs exposes a stateless Streamable HTTP MCP endpoint at
 `https://dibs.hivecommons.dev/mcp`, so Claude Code, Copilot CLI, Cursor, and
 other MCP clients can submit ideas without leaving the agent.
 
+Dibs is listed in the official MCP Registry as `dev.hivecommons/dibs`
+([registry entry](https://registry.modelcontextprotocol.io/v0.1/servers?search=dev.hivecommons%2Fdibs)).
+Search for that full name: a plain `dibs` search also returns the unrelated
+1stDibs marketplace. How the listing is published is covered in
+[MCP Registry publishing](docs/mcp-registry.md).
+
 Available tools:
 
 | Tool | Auth | Purpose |
