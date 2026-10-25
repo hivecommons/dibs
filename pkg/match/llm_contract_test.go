@@ -246,8 +246,8 @@ func TestMatchesForIdeaCappedAtMaxMatches(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	if len(kept.Matches) != MaxMatches {
-		t.Fatalf("persisted %d matches, want the capped %d", len(kept.Matches), MaxMatches)
+	if len(kept.Matches) != n {
+		t.Fatalf("persisted %d matches, want the full cache of %d", len(kept.Matches), n)
 	}
 }
 

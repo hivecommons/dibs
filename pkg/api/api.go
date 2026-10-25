@@ -232,7 +232,7 @@ func (a *API) handleAdminIdeas(w http.ResponseWriter, r *http.Request) {
 			Status:         idea.Status,
 			CreatedAt:      idea.CreatedAt,
 			UpdatedAt:      idea.UpdatedAt,
-			Matches:        summarizeMatches(idea.Matches, idea.CNCFMatches),
+			Matches:        summarizeMatches(match.CapMatches(idea.Matches), idea.CNCFMatches),
 		})
 	}
 	writeJSON(w, http.StatusOK, out)

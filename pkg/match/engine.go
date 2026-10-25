@@ -19,8 +19,19 @@ import (
 	"github.com/hivecommons/dibs/pkg/store"
 )
 
-// MaxMatches caps how many candidate repos an idea keeps — LLM cost control.
+// MaxMatches caps how many candidate repos are RETURNED/surfaced for an idea.
+// It does not cap the persisted cache, which holds every scored candidate so
+// repos ranked below the cap are not re-scored (LLM cost) or re-notified.
 const MaxMatches = 10
+
+// CapMatches returns at most MaxMatches leading entries of an already
+// score-sorted slice, for surfacing the persisted cache to callers.
+func CapMatches(ms []store.Match) []store.Match {
+	if len(ms) > MaxMatches {
+		return ms[:MaxMatches]
+	}
+	return ms
+}
 
 // MaxCNCFCandidates caps how many BM25-ranked CNCF projects reach the LLM.
 const MaxCNCFCandidates = 15
@@ -168,7 +179,8 @@ func truncate(s string, n int) string {
 // MatchesForIdea returns the idea's candidate repos (accepting-only, minus
 // passed/offered ones), scoring lazily: cached matches whose RepoHash still
 // matches are reused; everything else is (re)scored, persisted, and — if
-// strong and fresh — notified to both sides. Sorted by score desc, capped.
+// strong and fresh — notified to both sides. The full set is persisted; the
+// returned slice is sorted by score desc and capped at MaxMatches.
 func (e *Engine) MatchesForIdea(ctx context.Context, idea *store.Idea) ([]store.Match, error) {
 	cached := map[string]store.Match{}
 	for _, m := range idea.Matches {
@@ -197,11 +209,8 @@ func (e *Engine) MatchesForIdea(ctx context.Context, idea *store.Idea) ([]store.
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Score > out[j].Score })
-	if len(out) > MaxMatches {
-		out = out[:MaxMatches]
-	}
 	if changed {
-		persisted := out
+		persisted := append([]store.Match(nil), out...)
 		if _, err := e.Store.Mutate(idea.ID, false, func(i *store.Idea) error {
 			i.Matches = persisted
 			i.MatchesUpdatedAt = time.Now().UTC()
@@ -210,6 +219,7 @@ func (e *Engine) MatchesForIdea(ctx context.Context, idea *store.Idea) ([]store.
 			return nil, err
 		}
 	}
+	out = CapMatches(out)
 	if out == nil {
 		out = []store.Match{}
 	}
