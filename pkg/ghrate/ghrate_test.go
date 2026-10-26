@@ -24,6 +24,11 @@ func TestLimiter(t *testing.T) {
 	}{
 		{"reset header", resp(403, "X-RateLimit-Remaining", "0", "X-RateLimit-Reset", strconv.FormatInt(base.Add(time.Hour).Unix(), 10)), time.Hour},
 		{"retry-after", resp(403, "Retry-After", "90"), 90 * time.Second},
+		{"secondary 403 prefers retry-after", resp(403, "Retry-After", "60", "X-RateLimit-Remaining", "42", "X-RateLimit-Reset", strconv.FormatInt(base.Add(time.Hour).Unix(), 10)), time.Minute},
+		{"secondary 429 prefers retry-after", resp(429, "Retry-After", "60", "X-RateLimit-Reset", strconv.FormatInt(base.Add(time.Hour).Unix(), 10)), time.Minute},
+		{"invalid retry-after uses reset", resp(429, "Retry-After", "soon", "X-RateLimit-Reset", strconv.FormatInt(base.Add(time.Hour).Unix(), 10)), time.Hour},
+		{"negative retry-after uses reset", resp(429, "Retry-After", "-1", "X-RateLimit-Reset", strconv.FormatInt(base.Add(time.Hour).Unix(), 10)), time.Hour},
+		{"zero retry-after takes precedence", resp(429, "Retry-After", "0", "X-RateLimit-Reset", strconv.FormatInt(base.Add(time.Hour).Unix(), 10)), 0},
 		{"bare 429 falls back", resp(429), Cooldown},
 		{"unparseable falls back", resp(429, "X-RateLimit-Reset", "soon"), Cooldown},
 		{"plain 403 ignored", resp(403), 0},

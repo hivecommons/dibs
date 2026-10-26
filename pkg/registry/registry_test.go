@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -601,5 +602,54 @@ func TestEnrichmentRateLimitWithoutResetHeaderDoesNotArmBackoff(t *testing.T) {
 	}
 	if got := hits.Load(); got != 2 {
 		t.Fatalf("GitHub hits = %d, want 2 (no back-off armed, so each sync retries once)", got)
+	}
+}
+
+func TestEnrichmentRetryAfterPrecedence(t *testing.T) {
+	for _, status := range []int{http.StatusForbidden, http.StatusTooManyRequests} {
+		for _, retry := range []string{"60", "0", "soon", "-1", ""} {
+			t.Run(fmt.Sprintf("%d/retry=%s", status, retry), func(t *testing.T) {
+				hub := enrichHubServer(t, []RepoProfile{{RepoID: "o/a", HiveID: "h", Owner: "alice"}})
+				defer hub.Close()
+				reset := time.Now().Add(time.Hour).Unix()
+				var hits atomic.Int32
+				gh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					hits.Add(1)
+					w.Header().Set("Retry-After", retry)
+					w.Header().Set("X-RateLimit-Remaining", "42")
+					w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(reset, 10))
+					w.WriteHeader(status)
+				}))
+				defer gh.Close()
+				c := &HTTPHubClient{BaseURL: hub.URL, GitHubAPI: gh.URL}
+				before := time.Now()
+				if _, err := c.ListRepos(context.Background()); err != nil {
+					t.Fatal(err)
+				}
+				after := time.Now()
+				switch retry {
+				case "60", "0":
+					secs, _ := strconv.Atoi(retry)
+					delay := time.Duration(secs) * time.Second
+					if c.notBefore.Before(before.Add(delay)) || c.notBefore.After(after.Add(delay)) {
+						t.Fatalf("notBefore = %v, want between %v and %v", c.notBefore, before.Add(delay), after.Add(delay))
+					}
+				default:
+					if !c.notBefore.Equal(time.Unix(reset, 0)) {
+						t.Fatalf("notBefore = %v, want reset %v", c.notBefore, time.Unix(reset, 0))
+					}
+				}
+				if _, err := c.ListRepos(context.Background()); err != nil {
+					t.Fatal(err)
+				}
+				wantHits := int32(1)
+				if retry == "0" {
+					wantHits = 2
+				}
+				if got := hits.Load(); got != wantHits {
+					t.Fatalf("GitHub hits = %d, want %d", got, wantHits)
+				}
+			})
+		}
 	}
 }

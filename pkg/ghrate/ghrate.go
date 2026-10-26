@@ -50,10 +50,11 @@ func (l *Limiter) ObserveAt(resp *http.Response, now time.Time) {
 		return
 	}
 	until := now.Add(Cooldown)
-	if reset, err := strconv.ParseInt(strings.TrimSpace(resp.Header.Get("X-RateLimit-Reset")), 10, 64); err == nil {
-		until = time.Unix(reset, 0)
-	} else if secs, err := strconv.ParseInt(strings.TrimSpace(resp.Header.Get("Retry-After")), 10, 64); err == nil && secs >= 0 {
+	// Retry-After describes secondary limits; the primary reset may be much later.
+	if secs, err := strconv.ParseInt(strings.TrimSpace(resp.Header.Get("Retry-After")), 10, 64); err == nil && secs >= 0 {
 		until = now.Add(time.Duration(secs) * time.Second)
+	} else if reset, err := strconv.ParseInt(strings.TrimSpace(resp.Header.Get("X-RateLimit-Reset")), 10, 64); err == nil {
+		until = time.Unix(reset, 0)
 	}
 	l.mu.Lock()
 	if until.After(l.notBefore) {

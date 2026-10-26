@@ -202,7 +202,12 @@ func (c *HTTPHubClient) enrichDescriptions(ctx context.Context, repos []RepoProf
 		if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusTooManyRequests {
 			resp.Body.Close()
 			slog.Warn("registry: GitHub refused description lookup; skipping enrichment this sync", "status", resp.StatusCode)
-			if reset, err := strconv.ParseInt(resp.Header.Get("X-RateLimit-Reset"), 10, 64); err == nil {
+			// A secondary limit can lift before the primary window resets.
+			if secs, err := strconv.ParseInt(strings.TrimSpace(resp.Header.Get("Retry-After")), 10, 64); err == nil && secs >= 0 {
+				c.enrichMu.Lock()
+				c.notBefore = time.Now().Add(time.Duration(secs) * time.Second)
+				c.enrichMu.Unlock()
+			} else if reset, err := strconv.ParseInt(strings.TrimSpace(resp.Header.Get("X-RateLimit-Reset")), 10, 64); err == nil {
 				c.enrichMu.Lock()
 				c.notBefore = time.Unix(reset, 0)
 				c.enrichMu.Unlock()
