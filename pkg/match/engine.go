@@ -291,6 +291,12 @@ func (e *Engine) cncfMatchesForIdea(ctx context.Context, idea *store.Idea, persi
 	if e == nil || e.Catalog == nil {
 		return []CNCFMatch{}, nil
 	}
+	// Edits to title/body clear the persisted set in Store.Update, so a hash
+	// match means neither the idea nor the catalog changed.
+	catalogHash := e.Catalog.Fingerprint()
+	if persist && len(idea.CNCFMatches) > 0 && idea.CNCFCatalogHash == catalogHash {
+		return append([]CNCFMatch(nil), idea.CNCFMatches...), nil
+	}
 	scanned := len(e.Catalog.List())
 	candidates := e.Catalog.TopK(idea.Title+" "+idea.Body, MaxCNCFCandidates)
 	if len(candidates) == 0 {
@@ -353,6 +359,7 @@ func (e *Engine) cncfMatchesForIdea(ctx context.Context, idea *store.Idea, persi
 		}
 		if _, err := e.Store.Mutate(idea.ID, false, func(i *store.Idea) error {
 			i.CNCFMatches = persisted
+			i.CNCFCatalogHash = catalogHash
 			i.MatchesUpdatedAt = time.Now().UTC()
 			return nil
 		}); err != nil {
