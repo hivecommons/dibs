@@ -277,3 +277,43 @@ func TestCNCFMatchesServedFromPersistedCache(t *testing.T) {
 		t.Fatalf("llm calls after catalog change = %d, want 4", calls.Load())
 	}
 }
+
+// TestPersistRematchResultsStoresCatalogHash: committing rematch results
+// records the catalog fingerprint so the next CNCF lookup is a cache hit.
+func TestPersistRematchResultsStoresCatalogHash(t *testing.T) {
+	cs := cncfTestCatalog(t, []catalog.Project{
+		{Name: "Istio", RepoID: "istio/istio", Description: "Service mesh sidecar proxy"},
+	})
+	srv, calls := fakeGateway(t, func(string) string { return `{"score": 80, "reason": "fits"}` })
+	st, err := store.New(t.TempDir())
+	if err != nil {
+		t.Fatalf("store.New: %v", err)
+	}
+	idea := &store.Idea{Title: "Service mesh sidecar proxy", Body: "Route traffic.", Author: "u", Visibility: "public"}
+	if err := st.Create(idea); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	e := &Engine{Catalog: cs, Store: st, LLM: &LLM{BaseURL: srv.URL + "/v1", Model: "test"}}
+	cncf := []CNCFMatch{{Name: "Istio", RepoID: "istio/istio", Score: 80}}
+
+	if err := e.PersistRematchResults(idea.ID, idea.UpdatedAt, "tldr", nil, cncf); err != nil {
+		t.Fatalf("PersistRematchResults: %v", err)
+	}
+	got, err := st.Get(idea.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.CNCFCatalogHash != cs.Fingerprint() {
+		t.Fatalf("CNCFCatalogHash = %q, want %q", got.CNCFCatalogHash, cs.Fingerprint())
+	}
+	ms, err := e.CNCFMatchesForIdea(context.Background(), got)
+	if err != nil {
+		t.Fatalf("CNCFMatchesForIdea: %v", err)
+	}
+	if calls.Load() != 0 {
+		t.Fatalf("llm calls = %d, want 0 (cache hit)", calls.Load())
+	}
+	if len(ms) != 1 || ms[0].RepoID != "istio/istio" {
+		t.Fatalf("matches = %+v", ms)
+	}
+}
