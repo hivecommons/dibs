@@ -595,6 +595,10 @@ func (e *Engine) PersistRematchResults(ideaID string, expectedUpdatedAt time.Tim
 			}
 		}
 	}
+	var catalogHash string
+	if e.Catalog != nil {
+		catalogHash = e.Catalog.Fingerprint()
+	}
 	updated, err := e.Store.Mutate(ideaID, false, func(i *store.Idea) error {
 		if !unchangedSince(i, expectedUpdatedAt) {
 			return ErrIdeaChanged
@@ -602,6 +606,9 @@ func (e *Engine) PersistRematchResults(ideaID string, expectedUpdatedAt time.Tim
 		i.TLDR = tldr
 		i.Matches = append([]store.Match(nil), matches...)
 		i.CNCFMatches = append([]CNCFMatch(nil), cncf...)
+		if e.Catalog != nil {
+			i.CNCFCatalogHash = catalogHash
+		}
 		i.MatchesUpdatedAt = time.Now().UTC()
 		return nil
 	})
