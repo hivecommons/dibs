@@ -173,21 +173,15 @@ func (s *Store) Refresh(ctx context.Context) error {
 		return err
 	}
 	fetchedAt := s.now().UTC()
-	limited := s.limiter.WaitAt(s.now())
 	for i := range projects {
 		projects[i].FetchedAt = fetchedAt
-		if limited {
+		// Once GitHub rate-limits us, keep the landscape data we have rather
+		// than hammering the API until the reset.
+		if s.limiter.WaitAt(s.now()) {
 			continue
 		}
-		if err := s.enrich(ctx, &projects[i]); err != nil {
-			if errors.Is(err, errSkip) {
-				// Rate limited: keep what we have rather than hammering GitHub.
-				limited = true
-				continue
-			}
-			if s.Logf != nil {
-				s.Logf("catalog enrich %s: %v", projects[i].RepoID, err)
-			}
+		if err := s.enrich(ctx, &projects[i]); err != nil && s.Logf != nil {
+			s.Logf("catalog enrich %s: %v", projects[i].RepoID, err)
 		}
 	}
 	s.mu.Lock()
@@ -311,11 +305,7 @@ func repoIDFromURL(raw string) (string, bool) {
 	return parts[0] + "/" + repo, true
 }
 
-// errSkip means GitHub rate-limited us; errNotFound is a per-repo miss.
-var (
-	errSkip     = errors.New("github enrichment skipped")
-	errNotFound = errors.New("github repo not found")
-)
+var errSkip = errors.New("github enrichment skipped")
 
 func (s *Store) enrich(ctx context.Context, p *Project) error {
 	var repo struct {
@@ -324,7 +314,7 @@ func (s *Store) enrich(ctx context.Context, p *Project) error {
 		Language    string   `json:"language"`
 	}
 	if err := s.getJSON(ctx, "/repos/"+p.RepoID, &repo); err != nil {
-		if errors.Is(err, errNotFound) {
+		if errors.Is(err, errSkip) {
 			return nil
 		}
 		return err
@@ -338,7 +328,7 @@ func (s *Store) enrich(ctx context.Context, p *Project) error {
 	if err == nil {
 		p.Readme = readme
 	} else if errors.Is(err, errSkip) {
-		return err
+		return nil
 	}
 	return nil
 }
@@ -361,7 +351,7 @@ func (s *Store) getJSON(ctx context.Context, path string, out any) error {
 		return errSkip
 	}
 	if resp.StatusCode == http.StatusNotFound {
-		return errNotFound
+		return errSkip
 	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("github returned status %d", resp.StatusCode)
@@ -387,7 +377,7 @@ func (s *Store) getReadme(ctx context.Context, repoID string) (string, error) {
 		return "", errSkip
 	}
 	if resp.StatusCode == http.StatusNotFound {
-		return "", errNotFound
+		return "", errSkip
 	}
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("github readme returned status %d", resp.StatusCode)
