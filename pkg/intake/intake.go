@@ -273,7 +273,7 @@ func StripTags(s string) string {
 			n := string(name)
 			spacePending = true
 			if skip == "" {
-				if tt == nethtml.StartTagToken && slices.Contains(htmlSkippedElements, n) {
+				if tt != nethtml.EndTagToken && slices.Contains(htmlSkippedElements, n) {
 					skip, depth = n, 1
 				}
 				continue
