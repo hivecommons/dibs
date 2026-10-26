@@ -126,8 +126,14 @@ func (e *Engine) EnsureTLDR(ctx context.Context, idea *store.Idea) (string, erro
 	if idea.TLDR != "" {
 		return idea.TLDR, nil
 	}
+	expected := idea.UpdatedAt
 	tldr := e.generateTLDR(ctx, idea)
+	stale := false
 	updated, err := e.Store.Mutate(idea.ID, false, func(i *store.Idea) error {
+		if !unchangedSince(i, expected) {
+			stale = true
+			return nil
+		}
 		if i.TLDR == "" {
 			i.TLDR = tldr
 		}
@@ -135,6 +141,9 @@ func (e *Engine) EnsureTLDR(ctx context.Context, idea *store.Idea) (string, erro
 	})
 	if err != nil {
 		return "", err
+	}
+	if stale {
+		return tldr, nil
 	}
 	idea.TLDR = updated.TLDR
 	return updated.TLDR, nil
@@ -185,6 +194,7 @@ func truncate(s string, n int) string {
 // strong and fresh — notified to both sides. The full set is persisted; the
 // returned slice is sorted by score desc and capped at MaxMatches.
 func (e *Engine) MatchesForIdea(ctx context.Context, idea *store.Idea) ([]store.Match, error) {
+	expected := idea.UpdatedAt
 	cached := map[string]store.Match{}
 	for _, m := range idea.Matches {
 		cached[m.RepoID] = m
@@ -215,6 +225,9 @@ func (e *Engine) MatchesForIdea(ctx context.Context, idea *store.Idea) ([]store.
 	if changed {
 		persisted := append([]store.Match(nil), out...)
 		if _, err := e.Store.Mutate(idea.ID, false, func(i *store.Idea) error {
+			if !unchangedSince(i, expected) {
+				return nil
+			}
 			i.Matches = persisted
 			i.MatchesUpdatedAt = time.Now().UTC()
 			return nil
@@ -238,9 +251,13 @@ func (e *Engine) ScoreForRepo(ctx context.Context, idea *store.Idea, rp *registr
 			return m, nil
 		}
 	}
+	expected := idea.UpdatedAt
 	m := e.score(ctx, idea, rp, hash)
 	boostAccepting(&m, rp)
 	if _, err := e.Store.Mutate(idea.ID, false, func(i *store.Idea) error {
+		if !unchangedSince(i, expected) {
+			return nil
+		}
 		kept := m
 		replaced := false
 		for k := range i.Matches {
@@ -297,6 +314,7 @@ func (e *Engine) cncfMatchesForIdea(ctx context.Context, idea *store.Idea, persi
 	if persist && len(idea.CNCFMatches) > 0 && idea.CNCFCatalogHash == catalogHash {
 		return append([]CNCFMatch(nil), idea.CNCFMatches...), nil
 	}
+	expected := idea.UpdatedAt
 	scanned := len(e.Catalog.List())
 	candidates := e.Catalog.TopK(idea.Title+" "+idea.Body, MaxCNCFCandidates)
 	if len(candidates) == 0 {
@@ -358,6 +376,9 @@ func (e *Engine) cncfMatchesForIdea(ctx context.Context, idea *store.Idea, persi
 			persisted = persisted[:MaxMatches]
 		}
 		if _, err := e.Store.Mutate(idea.ID, false, func(i *store.Idea) error {
+			if !unchangedSince(i, expected) {
+				return nil
+			}
 			i.CNCFMatches = persisted
 			i.CNCFCatalogHash = catalogHash
 			i.MatchesUpdatedAt = time.Now().UTC()
@@ -556,6 +577,12 @@ func (e *Engine) RematchIdea(ctx context.Context, idea *store.Idea, persist bool
 	return work.TLDR, matches, cncf, nil
 }
 
+// unchangedSince reports whether the stored idea is still the version that
+// was scored; a mismatch means an edit invalidated the snapshot's results.
+func unchangedSince(i *store.Idea, expected time.Time) bool {
+	return i.UpdatedAt.Equal(expected)
+}
+
 // PersistRematchResults commits a previously computed rematch result if the
 // idea has not changed since expectedUpdatedAt, then emits the normal match
 // notifications for persisted hive matches.
@@ -569,7 +596,7 @@ func (e *Engine) PersistRematchResults(ideaID string, expectedUpdatedAt time.Tim
 		}
 	}
 	updated, err := e.Store.Mutate(ideaID, false, func(i *store.Idea) error {
-		if !i.UpdatedAt.Equal(expectedUpdatedAt) {
+		if !unchangedSince(i, expectedUpdatedAt) {
 			return ErrIdeaChanged
 		}
 		i.TLDR = tldr
