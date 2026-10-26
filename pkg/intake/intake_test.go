@@ -69,6 +69,9 @@ func TestStripTagsSkipsNonTextRegions(t *testing.T) {
 		{"unterminated close tag", `a<style>b</style`, "a"},
 		{"unterminated nested template", `a<template><template`, "a"},
 		{"comment marker inside tag", `<a title="<!--">a</a>b<p>c`, "a b c"},
+		{"quoted gt in double-quoted attribute", `<p title=">leak">hello</p>`, "hello"},
+		{"quoted gt in single-quoted attribute", `<a data-x='a>b'>c</a>`, "c"},
+		{"quoted attribute text never leaks", `<img alt="x <b>y</b> z">k<span title='<i>q</i>'>m</span>`, "k m"},
 		{"entities", `<style>x</style>Help &amp; ship`, "Help & ship"},
 	}
 	for _, tc := range cases {
