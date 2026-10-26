@@ -296,7 +296,7 @@ func TestPersistRematchResultsStoresCatalogHash(t *testing.T) {
 	e := &Engine{Catalog: cs, Store: st, LLM: &LLM{BaseURL: srv.URL + "/v1", Model: "test"}}
 	cncf := []CNCFMatch{{Name: "Istio", RepoID: "istio/istio", Score: 80}}
 
-	if err := e.PersistRematchResults(idea.ID, idea.UpdatedAt, "tldr", nil, cncf); err != nil {
+	if err := e.PersistRematchResults(idea.ID, idea.UpdatedAt, "tldr", nil, cncf, cs.Fingerprint()); err != nil {
 		t.Fatalf("PersistRematchResults: %v", err)
 	}
 	got, err := st.Get(idea.ID)
@@ -315,5 +315,38 @@ func TestPersistRematchResultsStoresCatalogHash(t *testing.T) {
 	}
 	if len(ms) != 1 || ms[0].RepoID != "istio/istio" {
 		t.Fatalf("matches = %+v", ms)
+	}
+}
+
+// TestPersistRematchResultsCatalogChanged: results computed against an older
+// catalog are rejected instead of being stamped with the new fingerprint.
+func TestPersistRematchResultsCatalogChanged(t *testing.T) {
+	cs := cncfTestCatalog(t, []catalog.Project{
+		{Name: "Istio", RepoID: "istio/istio", Description: "Service mesh sidecar proxy"},
+	})
+	st, err := store.New(t.TempDir())
+	if err != nil {
+		t.Fatalf("store.New: %v", err)
+	}
+	idea := &store.Idea{Title: "Service mesh", Body: "Route traffic.", Author: "u", Visibility: "public"}
+	if err := st.Create(idea); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	e := &Engine{Catalog: cs, Store: st}
+	computedHash := e.CatalogFingerprint()
+	e.Catalog = cncfTestCatalog(t, []catalog.Project{
+		{Name: "Linkerd", RepoID: "linkerd/linkerd2", Description: "Ultralight service mesh"},
+	})
+	cncf := []CNCFMatch{{Name: "Istio", RepoID: "istio/istio", Score: 80}}
+
+	if err := e.PersistRematchResults(idea.ID, idea.UpdatedAt, "tldr", nil, cncf, computedHash); err != ErrCatalogChanged {
+		t.Fatalf("err = %v, want ErrCatalogChanged", err)
+	}
+	got, err := st.Get(idea.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.CNCFCatalogHash != "" || len(got.CNCFMatches) != 0 {
+		t.Fatalf("stale results persisted: hash=%q matches=%+v", got.CNCFCatalogHash, got.CNCFMatches)
 	}
 }

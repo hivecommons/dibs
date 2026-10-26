@@ -141,6 +141,7 @@ type adminRematchJob struct {
 	Dry           bool
 	IdeaUpdatedAt time.Time
 	TLDR          string
+	CatalogHash   string
 	Matches       adminMatchSummary
 	Error         string
 	FinishedAt    time.Time
@@ -300,15 +301,16 @@ func (a *API) tryApplyDryRematch(w http.ResponseWriter, idea *store.Idea) bool {
 	}
 	existing.Status = "applying"
 	tldr := existing.TLDR
+	catalogHash := existing.CatalogHash
 	hive := append([]store.Match(nil), existing.Matches.Hive...)
 	cncf := append([]store.CNCFMatch(nil), existing.Matches.CNCF...)
 	a.rematchMu.Unlock()
 
-	if err := a.Engine.PersistRematchResults(idea.ID, idea.UpdatedAt, tldr, hive, cncf); err != nil {
+	if err := a.Engine.PersistRematchResults(idea.ID, idea.UpdatedAt, tldr, hive, cncf, catalogHash); err != nil {
 		a.rematchMu.Lock()
 		existing.Status = "stale"
 		a.rematchMu.Unlock()
-		if errors.Is(err, match.ErrIdeaChanged) || errors.Is(err, match.ErrRepoChanged) {
+		if errors.Is(err, match.ErrIdeaChanged) || errors.Is(err, match.ErrRepoChanged) || errors.Is(err, match.ErrCatalogChanged) {
 			writeError(w, http.StatusConflict, "no completed dry run to apply")
 			return true
 		}
@@ -339,6 +341,7 @@ func (a *API) runAdminRematch(parent context.Context, idea *store.Idea, persist 
 		job.Next++
 		job.Events = append(job.Events, adminRematchEvent{Seq: job.Next, ProgressEvent: ev})
 	}
+	catalogHash := a.Engine.CatalogFingerprint()
 	tldr, hive, cncf, err := a.Engine.RematchIdea(ctx, idea, persist, progress)
 	a.rematchMu.Lock()
 	defer a.rematchMu.Unlock()
@@ -350,6 +353,7 @@ func (a *API) runAdminRematch(parent context.Context, idea *store.Idea, persist 
 	}
 	job.Status = "done"
 	job.TLDR = tldr
+	job.CatalogHash = catalogHash
 	job.Matches = adminMatchSummary{Count: len(hive) + len(cncf), Hive: hive, CNCF: cncf}
 }
 

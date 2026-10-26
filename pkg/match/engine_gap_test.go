@@ -168,7 +168,7 @@ func TestPersistRematchResultsHappyPathAndNotify(t *testing.T) {
 	}
 	cncf := []CNCFMatch{{Name: "Istio", RepoID: "istio/istio", Score: 42}}
 
-	if err := e.PersistRematchResults(idea.ID, idea.UpdatedAt, "the tldr", matches, cncf); err != nil {
+	if err := e.PersistRematchResults(idea.ID, idea.UpdatedAt, "the tldr", matches, cncf, ""); err != nil {
 		t.Fatalf("PersistRematchResults: %v", err)
 	}
 	got, _ := st.Get(idea.ID)
@@ -192,11 +192,11 @@ func TestPersistRematchResultsRepoChanged(t *testing.T) {
 	idea := createIdea(t, st, "T", "B body")
 
 	stale := []store.Match{{RepoID: "org/a", Score: 90, RepoHash: "stale-hash"}}
-	if err := e.PersistRematchResults(idea.ID, idea.UpdatedAt, "t", stale, nil); err != ErrRepoChanged {
+	if err := e.PersistRematchResults(idea.ID, idea.UpdatedAt, "t", stale, nil, ""); err != ErrRepoChanged {
 		t.Fatalf("stale hash: want ErrRepoChanged, got %v", err)
 	}
 	missing := []store.Match{{RepoID: "org/gone", Score: 90, RepoHash: "x"}}
-	if err := e.PersistRematchResults(idea.ID, idea.UpdatedAt, "t", missing, nil); err != ErrRepoChanged {
+	if err := e.PersistRematchResults(idea.ID, idea.UpdatedAt, "t", missing, nil, ""); err != ErrRepoChanged {
 		t.Fatalf("missing repo: want ErrRepoChanged, got %v", err)
 	}
 	got, _ := st.Get(idea.ID)
@@ -211,7 +211,7 @@ func TestPersistRematchResultsIdeaChanged(t *testing.T) {
 	st, reg := newFixtures(t)
 	e := &Engine{Store: st, Registry: reg}
 	idea := createIdea(t, st, "T", "B body")
-	if err := e.PersistRematchResults(idea.ID, idea.UpdatedAt.Add(-time.Second), "t", nil, nil); err != ErrIdeaChanged {
+	if err := e.PersistRematchResults(idea.ID, idea.UpdatedAt.Add(-time.Second), "t", nil, nil, ""); err != ErrIdeaChanged {
 		t.Fatalf("want ErrIdeaChanged, got %v", err)
 	}
 }
