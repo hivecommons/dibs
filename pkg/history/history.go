@@ -19,6 +19,7 @@ import (
 
 	"github.com/hivecommons/dibs/pkg/envutil"
 	"github.com/hivecommons/dibs/pkg/fsutil"
+	"github.com/hivecommons/dibs/pkg/ghrate"
 	"github.com/hivecommons/dibs/pkg/indexformula"
 	"github.com/hivecommons/dibs/pkg/registry"
 	"github.com/hivecommons/dibs/pkg/settle"
@@ -188,9 +189,10 @@ type Backfiller struct {
 	Now     func() time.Time
 	Logf    func(string, ...any)
 
-	sem    chan struct{}
-	mu     sync.Mutex
-	active map[string]bool
+	sem     chan struct{}
+	mu      sync.Mutex
+	active  map[string]bool
+	limiter ghrate.Limiter
 }
 
 // NewBackfiller returns a production backfiller.
@@ -206,7 +208,7 @@ func NewBackfiller(store *Store, token string) *Backfiller {
 // RefreshAsync starts a bounded, non-blocking refresh for repos that have no
 // history or whose last successful fetch is from a previous UTC day.
 func (b *Backfiller) RefreshAsync(repos []registry.RepoProfile) {
-	if b == nil || b.Store == nil {
+	if b == nil || b.Store == nil || b.RateLimited() {
 		return
 	}
 	for _, rp := range repos {
@@ -260,6 +262,9 @@ func (b *Backfiller) Backfill(ctx context.Context, repoID string) error {
 	if b == nil || b.Store == nil {
 		return nil
 	}
+	if b.RateLimited() {
+		return errSkipRepo
+	}
 	select {
 	case b.semaphore() <- struct{}{}:
 		defer func() { <-b.semaphore() }()
@@ -295,6 +300,15 @@ func (b *Backfiller) Backfill(ctx context.Context, repoID string) error {
 		}
 	}
 	return b.Store.Upsert(repoID, sortedDays(days), fetchedAt)
+}
+
+// RateLimited reports whether GitHub asked us to back off and the reset has
+// not passed yet.
+func (b *Backfiller) RateLimited() bool {
+	if b == nil {
+		return false
+	}
+	return b.limiter.WaitAt(b.now())
 }
 
 func (b *Backfiller) semaphore() chan struct{} {
@@ -388,6 +402,9 @@ func isDibsFiledIssue(body string) bool {
 // FetchMergedPullRequests fetches recent merged PRs for repoID using the same
 // GitHub client, auth, timeout, pagination, and skip semantics as Backfill.
 func (b *Backfiller) FetchMergedPullRequests(ctx context.Context, repoID string) ([]MergedPullRequest, error) {
+	if b.RateLimited() {
+		return nil, errSkipRepo
+	}
 	var out []MergedPullRequest
 	for page := 1; page <= maxPullPages; page++ {
 		path := fmt.Sprintf("/repos/%s/pulls?state=closed&sort=updated&direction=desc&per_page=%d&page=%d", repoID, perPage, page)
@@ -537,6 +554,7 @@ func (b *Backfiller) getJSON(ctx context.Context, path string, out any) error {
 	}
 	defer resp.Body.Close()
 	if shouldSkip(resp) {
+		b.limiter.ObserveAt(resp, b.now())
 		return errSkipRepo
 	}
 	if resp.StatusCode == http.StatusAccepted {
@@ -548,11 +566,7 @@ func (b *Backfiller) getJSON(ctx context.Context, path string, out any) error {
 	return json.NewDecoder(io.LimitReader(resp.Body, maxBodyBytes)).Decode(out)
 }
 
-func shouldSkip(resp *http.Response) bool {
-	return resp.StatusCode == http.StatusTooManyRequests ||
-		(resp.StatusCode == http.StatusForbidden &&
-			(resp.Header.Get("Retry-After") != "" || resp.Header.Get("X-RateLimit-Remaining") == "0"))
-}
+func shouldSkip(resp *http.Response) bool { return ghrate.IsLimited(resp) }
 
 // logWarn is the default Logf: a constant message with the detail as an attr.
 func logWarn(format string, args ...any) {

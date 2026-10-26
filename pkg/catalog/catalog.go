@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/hivecommons/dibs/pkg/fsutil"
+	"github.com/hivecommons/dibs/pkg/ghrate"
 	"gopkg.in/yaml.v3"
 )
 
@@ -74,7 +75,8 @@ type Store struct {
 	// OnRefresh, when set, receives the result of each background refresh.
 	OnRefresh func(error)
 
-	active bool
+	active  bool
+	limiter ghrate.Limiter
 }
 
 // New opens dir/cncf-catalog.json if present.
@@ -173,6 +175,11 @@ func (s *Store) Refresh(ctx context.Context) error {
 	fetchedAt := s.now().UTC()
 	for i := range projects {
 		projects[i].FetchedAt = fetchedAt
+		// Once GitHub rate-limits us, keep the landscape data we have rather
+		// than hammering the API until the reset.
+		if s.limiter.WaitAt(s.now()) {
+			continue
+		}
 		if err := s.enrich(ctx, &projects[i]); err != nil && s.Logf != nil {
 			s.Logf("catalog enrich %s: %v", projects[i].RepoID, err)
 		}
@@ -339,7 +346,11 @@ func (s *Store) getJSON(ctx context.Context, path string, out any) error {
 		return err
 	}
 	defer resp.Body.Close()
-	if shouldSkip(resp) || resp.StatusCode == http.StatusNotFound {
+	if shouldSkip(resp) {
+		s.limiter.ObserveAt(resp, s.now())
+		return errSkip
+	}
+	if resp.StatusCode == http.StatusNotFound {
 		return errSkip
 	}
 	if resp.StatusCode != http.StatusOK {
@@ -361,7 +372,11 @@ func (s *Store) getReadme(ctx context.Context, repoID string) (string, error) {
 		return "", err
 	}
 	defer resp.Body.Close()
-	if shouldSkip(resp) || resp.StatusCode == http.StatusNotFound {
+	if shouldSkip(resp) {
+		s.limiter.ObserveAt(resp, s.now())
+		return "", errSkip
+	}
+	if resp.StatusCode == http.StatusNotFound {
 		return "", errSkip
 	}
 	if resp.StatusCode != http.StatusOK {
@@ -402,10 +417,7 @@ func (s *Store) githubRequest(ctx context.Context, method, path string) (*http.R
 	return req, nil
 }
 
-func shouldSkip(resp *http.Response) bool {
-	return resp.StatusCode == http.StatusTooManyRequests ||
-		(resp.StatusCode == http.StatusForbidden && (resp.Header.Get("Retry-After") != "" || resp.Header.Get("X-RateLimit-Remaining") == "0"))
-}
+func shouldSkip(resp *http.Response) bool { return ghrate.IsLimited(resp) }
 
 var mdNoise = regexp.MustCompile(`(?m)^\s*(#|>|!\[|\[!\[|---|<[^>]+>|\[[^\]]+\]:)`)
 
