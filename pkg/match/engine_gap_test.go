@@ -313,3 +313,11 @@ func TestScoreForRepoAppliesAcceptingBoost(t *testing.T) {
 		t.Fatalf("MatchesForIdea after feed scoring: %+v, err %v", ms, err)
 	}
 }
+
+func TestLLMFromEnvTrimsAPIKey(t *testing.T) {
+	t.Setenv("DIBS_LLM_BASE_URL", "http://litellm:4000/v1")
+	t.Setenv("DIBS_LLM_API_KEY", " key\n")
+	if l := LLMFromEnv(); l == nil || l.APIKey != "key" {
+		t.Fatalf("API key not trimmed: %+v", l)
+	}
+}

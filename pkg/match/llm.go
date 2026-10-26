@@ -58,7 +58,7 @@ func LLMFromEnv() *LLM {
 	}
 	return &LLM{
 		BaseURL: strings.TrimRight(base, "/"),
-		APIKey:  envutil.Get(EnvLLMAPIKey),
+		APIKey:  strings.TrimSpace(envutil.Get(EnvLLMAPIKey)),
 		Model:   model,
 	}
 }

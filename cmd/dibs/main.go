@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -54,6 +55,12 @@ const (
 // pre-rename env prefix) as a fallback before the default.
 func envOr(key, def string) string {
 	return envutil.GetOr(key, def)
+}
+
+// githubTokenFromEnv returns DIBS_GITHUB_TOKEN with surrounding whitespace
+// removed; a trailing newline would make the Authorization header invalid.
+func githubTokenFromEnv() string {
+	return strings.TrimSpace(envOr(settle.EnvGitHubToken, ""))
 }
 
 // listenMetrics serves the Prometheus /metrics endpoint on addr until it
@@ -155,7 +162,8 @@ func run(args []string, stdout, stderr io.Writer, serve func(*http.Server) error
 	if err != nil {
 		return fmt.Errorf("opening repo news store: %w", err)
 	}
-	cncfCatalog, err := catalog.New(dataDir, envOr(settle.EnvGitHubToken, ""))
+	ghToken := githubTokenFromEnv()
+	cncfCatalog, err := catalog.New(dataDir, ghToken)
 	if err != nil {
 		return fmt.Errorf("opening CNCF catalog: %w", err)
 	}
@@ -191,8 +199,8 @@ func run(args []string, stdout, stderr io.Writer, serve func(*http.Server) error
 	}
 	// Confirmed issue URLs are checked against GitHub before an idea settles;
 	// the token is optional (public repos read anonymously).
-	issueLookup := &settle.HTTPClient{Token: envOr(settle.EnvGitHubToken, "")}
-	backfiller := history.NewBackfiller(hist, envOr(settle.EnvGitHubToken, ""))
+	issueLookup := &settle.HTTPClient{Token: ghToken}
+	backfiller := history.NewBackfiller(hist, ghToken)
 	newsGen := news.NewGenerator(newsStore, backfiller, llm)
 
 	if seed := os.Getenv("REPOS_SEED_FILE"); seed != "" {
@@ -204,7 +212,7 @@ func run(args []string, stdout, stderr io.Writer, serve func(*http.Server) error
 
 	// Background hub→registry sync. Failures are logged, never fatal: the
 	// registry keeps serving its last-known (or seeded) state.
-	hubRepos := &registry.HTTPHubClient{BaseURL: hubURL, Token: envOr(settle.EnvGitHubToken, "")}
+	hubRepos := &registry.HTTPHubClient{BaseURL: hubURL, Token: ghToken}
 	// The loop is tied to run's lifetime so it cannot outlive the server.
 	appCtx, cancelApp := context.WithCancel(context.Background())
 	defer cancelApp()
