@@ -23,6 +23,9 @@ func TestLimiter(t *testing.T) {
 		want time.Duration // zero means no back-off
 	}{
 		{"reset header", resp(403, "X-RateLimit-Remaining", "0", "X-RateLimit-Reset", strconv.FormatInt(base.Add(time.Hour).Unix(), 10)), time.Hour},
+		{"retry-after beats reset", resp(403, "Retry-After", "60", "X-RateLimit-Remaining", "0", "X-RateLimit-Reset", strconv.FormatInt(base.Add(time.Hour).Unix(), 10)), time.Minute},
+		{"secondary limit ignores reset", resp(403, "Retry-After", "60", "X-RateLimit-Remaining", "4000", "X-RateLimit-Reset", strconv.FormatInt(base.Add(time.Hour).Unix(), 10)), time.Minute},
+		{"reset without exhausted quota falls back", resp(429, "X-RateLimit-Remaining", "5", "X-RateLimit-Reset", strconv.FormatInt(base.Add(time.Hour).Unix(), 10)), Cooldown},
 		{"retry-after", resp(403, "Retry-After", "90"), 90 * time.Second},
 		{"bare 429 falls back", resp(429), Cooldown},
 		{"unparseable falls back", resp(429, "X-RateLimit-Reset", "soon"), Cooldown},

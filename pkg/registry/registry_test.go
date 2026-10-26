@@ -13,6 +13,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/hivecommons/dibs/pkg/ghrate"
 )
 
 func newTestRegistry(t *testing.T) (*Registry, string) {
@@ -526,6 +528,7 @@ func TestEnrichmentBacksOffUntilRateLimitReset(t *testing.T) {
 	reset := time.Now().Add(time.Hour).Unix()
 	gh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hits.Add(1)
+		w.Header().Set("X-RateLimit-Remaining", "0")
 		w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(reset, 10))
 		w.WriteHeader(http.StatusTooManyRequests)
 	}))
@@ -551,12 +554,38 @@ func TestEnrichmentBacksOffUntilRateLimitReset(t *testing.T) {
 	}
 }
 
+func TestEnrichmentRetryAfterBeatsReset(t *testing.T) {
+	hub := enrichHubServer(t, []RepoProfile{{RepoID: "o/a", HiveID: "h", Owner: "alice"}})
+	defer hub.Close()
+	reset := time.Now().Add(time.Hour).Unix()
+	gh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Retry-After", "60")
+		w.Header().Set("X-RateLimit-Remaining", "0")
+		w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(reset, 10))
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer gh.Close()
+	c := &HTTPHubClient{BaseURL: hub.URL, GitHubAPI: gh.URL}
+	reg, _ := newTestRegistry(t)
+	before := time.Now()
+	if err := reg.Sync(context.Background(), c); err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	c.enrichMu.Lock()
+	nb := c.notBefore
+	c.enrichMu.Unlock()
+	if nb.Before(before.Add(59*time.Second)) || nb.After(time.Now().Add(61*time.Second)) {
+		t.Fatalf("notBefore = %v, want about 60s from now, not the hourly reset", nb)
+	}
+}
+
 func TestEnrichmentResumesAfterRateLimitReset(t *testing.T) {
 	hub := enrichHubServer(t, []RepoProfile{{RepoID: "o/a", HiveID: "h", Owner: "alice"}})
 	defer hub.Close()
 	var hits atomic.Int32
 	gh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if hits.Add(1) == 1 {
+			w.Header().Set("X-RateLimit-Remaining", "0")
 			w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(time.Now().Add(-time.Minute).Unix(), 10))
 			w.WriteHeader(http.StatusForbidden)
 			return
@@ -579,7 +608,7 @@ func TestEnrichmentResumesAfterRateLimitReset(t *testing.T) {
 	}
 }
 
-func TestEnrichmentRateLimitWithoutResetHeaderDoesNotArmBackoff(t *testing.T) {
+func TestEnrichmentRateLimitWithoutResetHeaderFallsBackToCooldown(t *testing.T) {
 	hub := enrichHubServer(t, []RepoProfile{{RepoID: "o/a", HiveID: "h", Owner: "alice"}})
 	defer hub.Close()
 	var hits atomic.Int32
@@ -596,10 +625,10 @@ func TestEnrichmentRateLimitWithoutResetHeaderDoesNotArmBackoff(t *testing.T) {
 			t.Fatalf("Sync #%d: %v", i+1, err)
 		}
 	}
-	if !c.notBefore.IsZero() {
-		t.Fatalf("notBefore = %v, want zero when the reset header is unparseable", c.notBefore)
+	if time.Until(c.notBefore) < ghrate.Cooldown-time.Minute {
+		t.Fatalf("notBefore = %v, want about ghrate.Cooldown from now", c.notBefore)
 	}
-	if got := hits.Load(); got != 2 {
-		t.Fatalf("GitHub hits = %d, want 2 (no back-off armed, so each sync retries once)", got)
+	if got := hits.Load(); got != 1 {
+		t.Fatalf("GitHub hits = %d, want 1 (cooldown armed after the first refusal)", got)
 	}
 }

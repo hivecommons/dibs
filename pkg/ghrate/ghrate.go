@@ -49,17 +49,32 @@ func (l *Limiter) ObserveAt(resp *http.Response, now time.Time) {
 	if resp == nil || !IsLimited(resp) {
 		return
 	}
-	until := now.Add(Cooldown)
-	if reset, err := strconv.ParseInt(strings.TrimSpace(resp.Header.Get("X-RateLimit-Reset")), 10, 64); err == nil {
-		until = time.Unix(reset, 0)
-	} else if secs, err := strconv.ParseInt(strings.TrimSpace(resp.Header.Get("Retry-After")), 10, 64); err == nil && secs >= 0 {
-		until = now.Add(time.Duration(secs) * time.Second)
-	}
+	until := Deadline(resp, now)
 	l.mu.Lock()
 	if until.After(l.notBefore) {
 		l.notBefore = until
 	}
 	l.mu.Unlock()
+}
+
+// Deadline returns when a rate-limited resp lets requests resume. Retry-After
+// wins (GitHub sends it with secondary limits alongside the primary
+// X-RateLimit-Reset); the reset time applies only when the primary quota is
+// exhausted. Otherwise it falls back to now+Cooldown.
+func Deadline(resp *http.Response, now time.Time) time.Time {
+	ra := strings.TrimSpace(resp.Header.Get("Retry-After"))
+	if secs, err := strconv.ParseInt(ra, 10, 64); err == nil && secs >= 0 {
+		return now.Add(time.Duration(secs) * time.Second)
+	}
+	if t, err := http.ParseTime(ra); err == nil {
+		return t
+	}
+	if resp.Header.Get("X-RateLimit-Remaining") == "0" {
+		if reset, err := strconv.ParseInt(strings.TrimSpace(resp.Header.Get("X-RateLimit-Reset")), 10, 64); err == nil {
+			return time.Unix(reset, 0)
+		}
+	}
+	return now.Add(Cooldown)
 }
 
 // IsLimited reports whether resp is a GitHub primary or secondary rate limit.

@@ -29,13 +29,13 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
 
 	"github.com/hivecommons/dibs/pkg/fsutil"
+	"github.com/hivecommons/dibs/pkg/ghrate"
 )
 
 // MaxAppetiteLen caps the free-text appetite note.
@@ -202,11 +202,9 @@ func (c *HTTPHubClient) enrichDescriptions(ctx context.Context, repos []RepoProf
 		if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusTooManyRequests {
 			resp.Body.Close()
 			slog.Warn("registry: GitHub refused description lookup; skipping enrichment this sync", "status", resp.StatusCode)
-			if reset, err := strconv.ParseInt(resp.Header.Get("X-RateLimit-Reset"), 10, 64); err == nil {
-				c.enrichMu.Lock()
-				c.notBefore = time.Unix(reset, 0)
-				c.enrichMu.Unlock()
-			}
+			c.enrichMu.Lock()
+			c.notBefore = ghrate.Deadline(resp, time.Now())
+			c.enrichMu.Unlock()
 			return
 		}
 		c.enrichMu.Lock()
