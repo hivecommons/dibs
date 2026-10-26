@@ -73,6 +73,12 @@ func TestStripTagsSkipsNonTextRegions(t *testing.T) {
 		{"quoted gt in single-quoted attribute", `<a data-x='a>b'>c</a>`, "c"},
 		{"quoted attribute text never leaks", `<img alt="x <b>y</b> z">k<span title='<i>q</i>'>m</span>`, "k m"},
 		{"entities", `<style>x</style>Help &amp; ship`, "Help & ship"},
+		{"self-closing script", `<script/>alert(1)</script>Hello`, "Hello"},
+		{"self-closing script with space", `<script />alert(1)</script>Hello`, "Hello"},
+		{"self-closing uppercase script", `<SCRIPT/>alert(1)</SCRIPT>Hello`, "Hello"},
+		{"self-closing style", `<style/>p{}</style>Hello`, "Hello"},
+		{"self-closing noscript", `<noscript/>x</noscript>Hello`, "Hello"},
+		{"self-closing template", `<template/>hidden</template>Hello`, "Hello"},
 	}
 	for _, tc := range cases {
 		if got := cleanText(StripTags(tc.in)); got != tc.want {
