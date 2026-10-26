@@ -175,6 +175,12 @@ type PullFetcher interface {
 	FetchMergedPullRequests(ctx context.Context, repoID string) ([]history.MergedPullRequest, error)
 }
 
+// rateLimitedFetcher is optionally implemented by a PullFetcher that knows
+// GitHub is rate-limiting it (history.Backfiller does).
+type rateLimitedFetcher interface {
+	RateLimited() bool
+}
+
 // Generator refreshes repo news asynchronously.
 type Generator struct {
 	Store   *Store
@@ -196,7 +202,7 @@ func NewGenerator(store *Store, fetcher PullFetcher, llm *match.LLM) *Generator 
 // RefreshAsync starts bounded non-blocking generation for listed repos whose
 // news is missing or older than the current UTC day.
 func (g *Generator) RefreshAsync(repos []registry.RepoProfile) {
-	if g == nil || g.Store == nil || g.Fetcher == nil {
+	if g == nil || g.Store == nil || g.Fetcher == nil || g.rateLimited() {
 		return
 	}
 	for _, rp := range repos {
@@ -214,6 +220,11 @@ func (g *Generator) RefreshAsync(repos []registry.RepoProfile) {
 			}
 		}()
 	}
+}
+
+func (g *Generator) rateLimited() bool {
+	rl, ok := g.Fetcher.(rateLimitedFetcher)
+	return ok && rl.RateLimited()
 }
 
 // Refresh fetches recent merged PRs, reusing cached daily cards until a day's
