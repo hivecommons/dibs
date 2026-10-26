@@ -160,6 +160,9 @@ type Idea struct {
 	UpdatedAt      time.Time   `json:"updatedAt"`
 	Matches        []Match     `json:"matches"`
 	CNCFMatches    []CNCFMatch `json:"cncfMatches,omitempty"`
+	// CNCFCatalogHash fingerprints the catalog CNCFMatches were computed
+	// against; a missing or different value means the cache is stale.
+	CNCFCatalogHash string `json:"cncfCatalogHash,omitempty"`
 	// MatchesUpdatedAt is bumped whenever stored hive/CNCF suggestions change.
 	MatchesUpdatedAt time.Time `json:"matchesUpdatedAt,omitempty"`
 	// SuggestionsSeenAt records when the author last opened this idea's suggestions.
@@ -630,6 +633,7 @@ func (s *Store) Update(idea *Idea) error {
 		idea.TLDR = ""
 		idea.Matches = []Match{}
 		idea.CNCFMatches = []CNCFMatch{}
+		idea.CNCFCatalogHash = ""
 		idea.MatchesUpdatedAt = time.Time{}
 		idea.SuggestionsSeenAt = time.Time{}
 	} else {
@@ -639,6 +643,7 @@ func (s *Store) Update(idea *Idea) error {
 		}
 		if idea.CNCFMatches == nil {
 			idea.CNCFMatches = existing.CNCFMatches
+			idea.CNCFCatalogHash = existing.CNCFCatalogHash
 		}
 		idea.MatchesUpdatedAt = existing.MatchesUpdatedAt
 		idea.SuggestionsSeenAt = existing.SuggestionsSeenAt

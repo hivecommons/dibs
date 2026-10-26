@@ -204,3 +204,76 @@ func TestLLMScoreCNCFErrorAndClamps(t *testing.T) {
 		})
 	}
 }
+
+// TestCNCFMatchesServedFromPersistedCache: a second call with an unchanged
+// idea and catalog makes no LLM calls and leaves MatchesUpdatedAt alone; a body
+// edit or a catalog change forces a recompute.
+func TestCNCFMatchesServedFromPersistedCache(t *testing.T) {
+	projects := []catalog.Project{
+		{Name: "Istio", RepoID: "istio/istio", Description: "Service mesh sidecar proxy"},
+	}
+	cs := cncfTestCatalog(t, projects)
+	srv, calls := fakeGateway(t, func(string) string { return `{"score": 80, "reason": "fits"}` })
+	st, err := store.New(t.TempDir())
+	if err != nil {
+		t.Fatalf("store.New: %v", err)
+	}
+	idea := &store.Idea{Title: "Service mesh sidecar proxy", Body: "Route traffic.", Author: "u", Visibility: "public"}
+	if err := st.Create(idea); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	e := &Engine{Catalog: cs, Store: st, LLM: &LLM{BaseURL: srv.URL + "/v1", Model: "test"}}
+	ctx := context.Background()
+
+	get := func() *store.Idea {
+		t.Helper()
+		got, err := st.Get(idea.ID)
+		if err != nil {
+			t.Fatalf("Get: %v", err)
+		}
+		return got
+	}
+
+	if _, err := e.CNCFMatchesForIdea(ctx, get()); err != nil {
+		t.Fatalf("first call: %v", err)
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("llm calls after first = %d, want 1", calls.Load())
+	}
+	first := get()
+	ms, err := e.CNCFMatchesForIdea(ctx, first)
+	if err != nil {
+		t.Fatalf("second call: %v", err)
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("llm calls after cached call = %d, want 1", calls.Load())
+	}
+	if len(ms) != 1 || ms[0].RepoID != "istio/istio" {
+		t.Fatalf("cached matches = %+v", ms)
+	}
+	if second := get(); !second.MatchesUpdatedAt.Equal(first.MatchesUpdatedAt) {
+		t.Fatalf("MatchesUpdatedAt moved on cache hit: %v -> %v", first.MatchesUpdatedAt, second.MatchesUpdatedAt)
+	}
+
+	// Body edit clears the cache in Store.Update.
+	cur := get()
+	cur.Body = "A different body about meshes."
+	if err := st.Update(cur); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	if _, err := e.CNCFMatchesForIdea(ctx, get()); err != nil {
+		t.Fatalf("after edit: %v", err)
+	}
+	if calls.Load() != 2 {
+		t.Fatalf("llm calls after body edit = %d, want 2", calls.Load())
+	}
+
+	// Catalog change invalidates the cached set.
+	e.Catalog = cncfTestCatalog(t, append(projects, catalog.Project{Name: "Linkerd", RepoID: "linkerd/linkerd2", Description: "Service mesh"}))
+	if _, err := e.CNCFMatchesForIdea(ctx, get()); err != nil {
+		t.Fatalf("after catalog change: %v", err)
+	}
+	if calls.Load() != 4 {
+		t.Fatalf("llm calls after catalog change = %d, want 4", calls.Load())
+	}
+}

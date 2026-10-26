@@ -3,7 +3,9 @@ package catalog
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -105,6 +107,18 @@ func (s *Store) List() []Project {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return append([]Project(nil), s.projects...)
+}
+
+// Fingerprint hashes the score-relevant fields of every project so callers can
+// tell whether previously derived matches are still valid. Order-independent.
+func (s *Store) Fingerprint() string {
+	projects := s.List()
+	sort.Slice(projects, func(i, j int) bool { return projects[i].RepoID < projects[j].RepoID })
+	h := sha256.New()
+	for _, p := range projects {
+		fmt.Fprintf(h, "%q|%q|%q|%q|%q|%q|%q|%q|%q\n", p.RepoID, p.Name, p.Description, p.Category, p.Subcategory, p.Maturity, strings.Join(p.Topics, ","), p.Language, p.Readme)
+	}
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 // TopK ranks projects against query with BM25.

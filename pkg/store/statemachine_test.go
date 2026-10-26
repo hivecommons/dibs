@@ -76,6 +76,7 @@ func TestUpdateInvalidatesMatchCache(t *testing.T) {
 		i.TLDR = "cached tldr"
 		i.Matches = []Match{{RepoID: "org/repo", Score: 88, RepoHash: "h"}}
 		i.CNCFMatches = []CNCFMatch{{Name: "Envoy", RepoID: "envoyproxy/envoy", Score: 77}}
+		i.CNCFCatalogHash = "cat-hash"
 		i.MatchesUpdatedAt = time.Now().UTC()
 		i.SuggestionsSeenAt = i.MatchesUpdatedAt.Add(-time.Minute)
 		return nil
@@ -90,7 +91,7 @@ func TestUpdateInvalidatesMatchCache(t *testing.T) {
 	}
 	got, _ := s.Get(idea.ID)
 	if got.TLDR != "cached tldr" || len(got.Matches) != 1 || len(got.CNCFMatches) != 1 ||
-		got.MatchesUpdatedAt.IsZero() || got.SuggestionsSeenAt.IsZero() {
+		got.CNCFCatalogHash != "cat-hash" || got.MatchesUpdatedAt.IsZero() || got.SuggestionsSeenAt.IsZero() {
 		t.Fatalf("cache must survive a non-content update: %+v", got)
 	}
 
@@ -101,7 +102,7 @@ func TestUpdateInvalidatesMatchCache(t *testing.T) {
 	}
 	got, _ = s.Get(idea.ID)
 	if got.TLDR != "" || len(got.Matches) != 0 || len(got.CNCFMatches) != 0 ||
-		!got.MatchesUpdatedAt.IsZero() || !got.SuggestionsSeenAt.IsZero() {
+		got.CNCFCatalogHash != "" || !got.MatchesUpdatedAt.IsZero() || !got.SuggestionsSeenAt.IsZero() {
 		t.Fatalf("content edit must clear TLDR and suggestions: %+v", got)
 	}
 }
