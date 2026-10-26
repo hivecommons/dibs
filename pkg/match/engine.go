@@ -73,6 +73,8 @@ const MaxTLDRLen = 280
 var (
 	ErrIdeaChanged = errors.New("match: idea changed during rematch")
 	ErrRepoChanged = errors.New("match: repo changed during rematch")
+	// ErrCatalogChanged means the CNCF catalog changed after the results were computed.
+	ErrCatalogChanged = errors.New("match: catalog changed during rematch")
 )
 
 // maxPromptBody bounds how much idea body we send to the LLM.
@@ -474,6 +476,7 @@ func (e *Engine) RematchIdea(ctx context.Context, idea *store.Idea, persist bool
 		return "", nil, nil, fmt.Errorf("match: engine is nil")
 	}
 	work := *idea
+	catalogHash := e.CatalogFingerprint()
 	if work.TLDR == "" {
 		if progress != nil {
 			progress(ProgressEvent{Phase: "tldr_start", Note: "Generating TLDR"})
@@ -567,7 +570,7 @@ func (e *Engine) RematchIdea(ctx context.Context, idea *store.Idea, persist bool
 		})
 	}
 	if persist {
-		if err := e.PersistRematchResults(idea.ID, work.UpdatedAt, work.TLDR, matches, cncf); err != nil {
+		if err := e.PersistRematchResults(idea.ID, work.UpdatedAt, work.TLDR, matches, cncf, catalogHash); err != nil {
 			return "", nil, nil, err
 		}
 	}
@@ -583,10 +586,21 @@ func unchangedSince(i *store.Idea, expected time.Time) bool {
 	return i.UpdatedAt.Equal(expected)
 }
 
+// CatalogFingerprint returns the current CNCF catalog fingerprint, or "" when
+// no catalog is configured.
+func (e *Engine) CatalogFingerprint() string {
+	if e == nil || e.Catalog == nil {
+		return ""
+	}
+	return e.Catalog.Fingerprint()
+}
+
 // PersistRematchResults commits a previously computed rematch result if the
 // idea has not changed since expectedUpdatedAt, then emits the normal match
-// notifications for persisted hive matches.
-func (e *Engine) PersistRematchResults(ideaID string, expectedUpdatedAt time.Time, tldr string, matches []store.Match, cncf []CNCFMatch) error {
+// notifications for persisted hive matches. catalogHash is the catalog
+// fingerprint taken before the CNCF set was computed; a catalog that has since
+// changed yields ErrCatalogChanged.
+func (e *Engine) PersistRematchResults(ideaID string, expectedUpdatedAt time.Time, tldr string, matches []store.Match, cncf []CNCFMatch, catalogHash string) error {
 	if e.Registry != nil {
 		for _, m := range matches {
 			rp, err := e.Registry.Get(m.RepoID)
@@ -595,9 +609,8 @@ func (e *Engine) PersistRematchResults(ideaID string, expectedUpdatedAt time.Tim
 			}
 		}
 	}
-	var catalogHash string
-	if e.Catalog != nil {
-		catalogHash = e.Catalog.Fingerprint()
+	if e.Catalog != nil && e.Catalog.Fingerprint() != catalogHash {
+		return ErrCatalogChanged
 	}
 	updated, err := e.Store.Mutate(ideaID, false, func(i *store.Idea) error {
 		if !unchangedSince(i, expectedUpdatedAt) {

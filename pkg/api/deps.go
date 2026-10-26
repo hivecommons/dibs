@@ -65,7 +65,8 @@ type Matcher interface {
 	ScoreForRepo(ctx context.Context, idea *store.Idea, rp *registry.RepoProfile) (store.Match, error)
 	Refine(ctx context.Context, title, body string, repo *registry.RepoProfile) *match.RefinedDraft
 	RematchIdea(ctx context.Context, idea *store.Idea, persist bool, progress match.ProgressFunc) (string, []store.Match, []match.CNCFMatch, error)
-	PersistRematchResults(ideaID string, expectedUpdatedAt time.Time, tldr string, matches []store.Match, cncf []match.CNCFMatch) error
+	CatalogFingerprint() string
+	PersistRematchResults(ideaID string, expectedUpdatedAt time.Time, tldr string, matches []store.Match, cncf []match.CNCFMatch, catalogHash string) error
 }
 
 // IdeaSettler opens the credited GitHub issue on accept. A nil IdeaSettler

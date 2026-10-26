@@ -136,11 +136,11 @@ func (m *faultMatcher) RematchIdea(ctx context.Context, idea *store.Idea, persis
 	return m.Matcher.RematchIdea(ctx, idea, persist, progress)
 }
 
-func (m *faultMatcher) PersistRematchResults(ideaID string, expectedUpdatedAt time.Time, tldr string, matches []store.Match, cncf []match.CNCFMatch) error {
+func (m *faultMatcher) PersistRematchResults(ideaID string, expectedUpdatedAt time.Time, tldr string, matches []store.Match, cncf []match.CNCFMatch, catalogHash string) error {
 	if m.persistErr != nil {
 		return m.persistErr
 	}
-	return m.Matcher.PersistRematchResults(ideaID, expectedUpdatedAt, tldr, matches, cncf)
+	return m.Matcher.PersistRematchResults(ideaID, expectedUpdatedAt, tldr, matches, cncf, catalogHash)
 }
 
 // faultNotifier wraps a Notifier and fails Add and MarkRead.
