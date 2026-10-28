@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -17,10 +18,31 @@ import (
 // This is a name-based tripwire, not data-flow analysis: aliases and identifier
 // values hidden in other expressions need review. Index expressions with an
 // identifier-shaped key are conservatively treated as map accesses.
+//
+// Allowlist entries that no longer point at a flagged site are a failure in
+// every mode: a reason attached to a line that drifted exempts nothing, and
+// the site it used to cover resurfaces as an unreviewed hit that an advisory
+// run never surfaces in CI output.
 func TestRepoIDCasefoldGate(t *testing.T) {
-	root := filepath.Join("..", "..")
+	hits, stale, err := casefoldAudit(filepath.Join("..", ".."), casefoldAllowlist, t.Logf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stale) > 0 {
+		t.Fatalf("%d stale casefold allowlist entries no longer mark a flagged site; re-pin them to the current line (and re-review) or delete them: %s", len(stale), strings.Join(stale, ", "))
+	}
+	if hits > 0 && os.Getenv("DIBS_CASEFOLD_GATE") == "strict" {
+		t.Fatalf("%d unreviewed GitHub identifier comparison sites (see diagnostics above)", hits)
+	}
+	t.Logf("casefold audit: %d unreviewed sites; advisory unless DIBS_CASEFOLD_GATE=strict", hits)
+}
+
+// casefoldAudit scans non-test Go files under root/pkg and root/cmd. It
+// returns the number of flagged sites absent from allowlist and the allowlist
+// entries that matched no flagged site, sorted for stable diagnostics.
+func casefoldAudit(root string, allowlist map[string]string, logf func(string, ...any)) (hits int, stale []string, err error) {
 	fset := token.NewFileSet()
-	hits := 0
+	used := map[string]bool{}
 	for _, dir := range []string{"pkg", "cmd"} {
 		err := filepath.WalkDir(filepath.Join(root, dir), func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
@@ -40,50 +62,62 @@ func TestRepoIDCasefoldGate(t *testing.T) {
 					return err
 				}
 				site := fmt.Sprintf("%s:%d", filepath.ToSlash(rel), p.Line)
-				if reason, ok := casefoldAllowlist[site]; ok {
-					t.Logf("reviewed %s: %s", site, reason)
+				if reason, ok := allowlist[site]; ok {
+					used[site] = true
+					logf("reviewed %s: %s", site, reason)
 					continue
 				}
 				hits++
-				t.Logf("%s: use strings.EqualFold or canonicalise via the registry first", site)
+				logf("%s: use strings.EqualFold or canonicalise via the registry first", site)
 			}
 			return nil
 		})
 		if err != nil {
-			t.Fatal(err)
+			return 0, nil, err
 		}
 	}
-	if hits > 0 && os.Getenv("DIBS_CASEFOLD_GATE") == "strict" {
-		t.Fatalf("%d unreviewed GitHub identifier comparison sites (see diagnostics above)", hits)
+	for site := range allowlist {
+		if !used[site] {
+			stale = append(stale, site)
+		}
 	}
-	t.Logf("casefold audit: %d unreviewed sites; advisory unless DIBS_CASEFOLD_GATE=strict", hits)
+	sort.Strings(stale)
+	return hits, stale, nil
 }
 
 // Keep exceptions narrow and explained. Line drift deliberately produces a new
-// advisory hit for review, rather than exempting a whole file or expression.
+// advisory hit for review, rather than exempting a whole file or expression;
+// the drifted entry itself fails the gate so the hit cannot go unnoticed.
 var casefoldAllowlist = map[string]string{
-	"pkg/registry/registry.go:209": "reload preserves stored display spelling; lookupLocked supplies case-insensitive resolution",
-	"pkg/registry/registry.go:256": "hub upsert resolves existing spelling through lookupLocked before storing",
-	"pkg/registry/registry.go:315": "seed checks lookupLocked before inserting a new display spelling",
-	"pkg/registry/registry.go:326": "exact lookup fast path falls back to strings.EqualFold",
-	"pkg/history/history.go:100":   "reload restores the registry-canonical keys written by the backfiller",
-	"pkg/history/history.go:122":   "API callers resolve through the registry before reading history",
-	"pkg/history/history.go:135":   "backfiller writes registry List profile spelling",
-	"pkg/history/history.go:235":   "backfill work deduplication uses registry List profile spelling",
-	"pkg/history/history.go:238":   "backfill work reservation uses the same registry-canonical key",
-	"pkg/history/history.go:448":   "login is lower-cased at function entry before comparing to the lowercase bot name",
+	"pkg/registry/registry.go:184": "description-enrichment memo is keyed by the hub profile spelling on both write and read; a respelled profile costs one extra lookup, never a wrong result",
+	"pkg/registry/registry.go:214": "description-enrichment memo write uses the same hub profile spelling as the read above",
+	"pkg/registry/registry.go:261": "reload preserves stored display spelling; lookupLocked supplies case-insensitive resolution",
+	"pkg/registry/registry.go:308": "hub upsert resolves existing spelling through lookupLocked before storing",
+	"pkg/registry/registry.go:381": "seed checks lookupLocked before inserting a new display spelling",
+	"pkg/registry/registry.go:392": "exact lookup fast path falls back to strings.EqualFold",
+	"pkg/history/history.go:101":   "reload restores the registry-canonical keys written by the backfiller",
+	"pkg/history/history.go:123":   "API callers resolve through the registry before reading history",
+	"pkg/history/history.go:136":   "persist-failure rollback snapshots the entry under the same registry List profile spelling it is about to overwrite",
+	"pkg/history/history.go:137":   "backfiller writes registry List profile spelling",
+	"pkg/history/history.go:140":   "persist-failure rollback restores the snapshot under the key written three lines above",
+	"pkg/history/history.go:246":   "backfill work deduplication uses registry List profile spelling",
+	"pkg/history/history.go:249":   "backfill work reservation uses the same registry-canonical key",
+	"pkg/history/history.go:474":   "login is lower-cased at function entry before comparing to the lowercase bot name",
 	"pkg/news/news.go:79":          "reload restores registry-canonical keys written by the generator",
 	"pkg/news/news.go:92":          "API resolves the requested repo through the registry before reading news",
-	"pkg/news/news.go:110":         "generator cache lookup uses registry List profile spelling",
-	"pkg/news/news.go:121":         "generator writes registry List profile spelling",
-	"pkg/news/news.go:253":         "generation work deduplication uses registry List profile spelling",
-	"pkg/news/news.go:256":         "generation work reservation uses the same registry-canonical key",
-	"pkg/match/engine.go:175":      "match cache entries are generated from registry profiles, not caller spelling",
-	"pkg/match/engine.go:187":      "registry List supplies the same spelling used to build the match cache",
-	"pkg/match/engine.go:224":      "cached matches and profile both carry registry spelling; hash also includes that spelling",
-	"pkg/match/engine.go:234":      "replacement matches were generated from the same registry profile spelling",
-	"pkg/match/engine.go:397":      "corpus lookup is built from registry List profiles",
-	"pkg/match/engine.go:404":      "corpus results retain the spelling from those same registry profiles",
+	"pkg/news/news.go:110":         "generator staleness check reads the same registry List profile key the generator writes",
+	"pkg/news/news.go:118":         "generator cache lookup uses registry List profile spelling",
+	"pkg/news/news.go:129":         "persist-failure rollback snapshots the entry under the same registry List profile spelling it is about to overwrite",
+	"pkg/news/news.go:130":         "generator writes registry List profile spelling",
+	"pkg/news/news.go:133":         "persist-failure rollback restores the snapshot under the key written three lines above",
+	"pkg/news/news.go:296":         "generation work deduplication uses registry List profile spelling",
+	"pkg/news/news.go:299":         "generation work reservation uses the same registry-canonical key",
+	"pkg/match/engine.go:196":      "match cache entries are generated from registry profiles, not caller spelling",
+	"pkg/match/engine.go:209":      "registry List supplies the same spelling used to build the match cache",
+	"pkg/match/engine.go:247":      "cached matches and profile both carry registry spelling; hash also includes that spelling",
+	"pkg/match/engine.go:258":      "replacement matches were generated from the same registry profile spelling",
+	"pkg/match/engine.go:428":      "corpus lookup is built from registry List profiles",
+	"pkg/match/engine.go:435":      "corpus results retain the spelling from those same registry profiles",
 	"pkg/api/index.go:94":          "directory index is built from registry List profiles",
 	"pkg/api/index.go:308":         "symbol lookup uses the same registry List spelling used to generate symbols",
 	"pkg/api/index.go:347":         "repoID has been replaced by Registry.Get's canonical profile spelling",
@@ -201,5 +235,51 @@ func TestCasefoldSites(t *testing.T) {
 				t.Fatalf("got %d hits, want %d for %s", got, tc.want, tc.stmt)
 			}
 		})
+	}
+}
+
+func TestCasefoldAuditReportsStaleAllowlistEntries(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "pkg", "fixture")
+	for _, d := range []string{dir, filepath.Join(root, "cmd")} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	src := "package fixture\n\nfunc f(m map[string]bool, repoID, other string) bool {\n\tm[repoID] = true // line 4: flagged\n\treturn other == \"x\"\n}\n"
+	if err := os.WriteFile(filepath.Join(dir, "fixture.go"), []byte(src), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "fixture_test.go"), []byte("package fixture\n\nfunc g(repoID string, m map[string]bool) { m[repoID] = true }\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var logs []string
+	logf := func(format string, args ...any) { logs = append(logs, fmt.Sprintf(format, args...)) }
+
+	hits, stale, err := casefoldAudit(root, map[string]string{
+		"pkg/fixture/fixture.go:4": "fixture key is canonical",
+		"pkg/fixture/fixture.go:5": "drifted: line 5 is not a flagged site",
+		"pkg/fixture/gone.go:1":    "drifted: file no longer exists",
+	}, logf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hits != 0 {
+		t.Fatalf("hits = %d, want 0 (the only site is allowlisted); logs: %q", hits, logs)
+	}
+	want := []string{"pkg/fixture/fixture.go:5", "pkg/fixture/gone.go:1"}
+	if strings.Join(stale, ",") != strings.Join(want, ",") {
+		t.Fatalf("stale = %q, want %q", stale, want)
+	}
+	if len(logs) != 1 || !strings.HasPrefix(logs[0], "reviewed pkg/fixture/fixture.go:4:") {
+		t.Fatalf("logs = %q, want exactly one reviewed line for the allowlisted site (test files must be skipped)", logs)
+	}
+
+	hits, stale, err = casefoldAudit(root, nil, logf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hits != 1 || len(stale) != 0 {
+		t.Fatalf("without allowlist: hits = %d, stale = %q; want 1 hit and no stale entries", hits, stale)
 	}
 }

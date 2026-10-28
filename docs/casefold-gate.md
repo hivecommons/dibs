@@ -13,6 +13,12 @@ requires re-review, not a broad exemption. This is syntactic, not type/data-flow
 analysis: aliases, wrappers, already-normalised locals and canonical registry
 values still need human review.
 
+Allowlist entries are pinned to `file:line`, so an edit above a reviewed site
+moves it off its entry. The gate then **fails in every mode** with the stale
+entries listed: re-pin each one to the current line (re-reading the reason
+against the new code) or delete it. Without that check the site resurfaces as
+an unreviewed hit that an advisory `go test` run without `-v` never prints.
+
 The gate is **advisory by default**. See its diagnostics with:
 
 ```sh
