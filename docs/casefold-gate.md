@@ -31,8 +31,28 @@ Opt in locally to failing on unreviewed hits:
 DIBS_CASEFOLD_GATE=strict go test -count=1 -v ./pkg/store -run '^TestRepoIDCasefoldGate$'
 ```
 
-The badge fix is deliberately a separate PR under #461. Until it lands, its
-three map keys remain unreviewed hits, not allowlisted bugs. No workflow or CI
-job is added. After approximately two weeks with zero unreviewed hits, open a
-follow-up PR to make the gate failing by default; do not silently enable it as
-part of this advisory rollout.
+## CI observation and ratchet
+
+CI runs the audit again with `-count=1 -v` directly after the test suite and
+copies its full output to both the CI log and job summary. This is a step in
+the existing job. A passing non-verbose `go test` discards `t.Logf` output, so
+runs since the original 2026-10-23 rollout supplied no usable observations.
+The observation clock restarts after #508 merged on 2026-10-28, once this
+visible CI step lands; do not count the earlier period as zero hits.
+
+The recorded baseline is **0 unreviewed sites**, measured at `main@1938d81`
+(#508), and stored as `casefoldBaseline` in the gate test. New unreviewed sites
+must be reviewed or fixed, rather than accepted by raising the baseline.
+
+Per the decision on #509, CI uses `DIBS_CASEFOLD_GATE=ratchet-warning` for one
+release. Counts above the baseline print `WARNING` and the individual sites
+without failing. Stale allowlist entries, scanner errors and test failures
+still fail the job; the reporting pipeline preserves the test exit status.
+
+After the first release containing this step, open a follow-up PR changing the
+workflow environment to `DIBS_CASEFOLD_GATE=ratchet`. That mode fails only when
+the unreviewed count exceeds the recorded baseline (equal or lower passes).
+It does not change the local advisory default. `strict` continues to fail on
+any unreviewed site, independently of the baseline. Verify the visible CI
+observations before enabling enforcement; the old two-week period without
+diagnostics is not evidence for that switch.
