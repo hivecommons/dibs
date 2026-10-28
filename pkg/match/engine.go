@@ -130,21 +130,15 @@ func (e *Engine) EnsureTLDR(ctx context.Context, idea *store.Idea) (string, erro
 	}
 	expected := idea.UpdatedAt
 	tldr := e.generateTLDR(ctx, idea)
-	stale := false
-	updated, err := e.Store.Mutate(idea.ID, false, func(i *store.Idea) error {
-		if !unchangedSince(i, expected) {
-			stale = true
-			return nil
-		}
+	updated, committed, err := e.commitIfFresh(idea.ID, expected, func(i *store.Idea) {
 		if i.TLDR == "" {
 			i.TLDR = tldr
 		}
-		return nil
 	})
 	if err != nil {
 		return "", err
 	}
-	if stale {
+	if !committed {
 		return tldr, nil
 	}
 	idea.TLDR = updated.TLDR
@@ -202,6 +196,7 @@ func (e *Engine) MatchesForIdea(ctx context.Context, idea *store.Idea) ([]store.
 		cached[m.RepoID] = m
 	}
 	var out []store.Match
+	var notify []pendingMatch
 	changed := false
 	// All hive-managed repos are candidates; acceptingIdeas is a boost, not a
 	// gate (no hub repo has opted in yet — a gate would empty the pool).
@@ -219,22 +214,22 @@ func (e *Engine) MatchesForIdea(ctx context.Context, idea *store.Idea) ([]store.
 		boostAccepting(&m, &rp)
 		out = append(out, m)
 		changed = true
-		if m.Score >= NotifyThreshold && e.Notifier != nil {
-			e.Notifier.NewMatch(idea.Author, rp.Owner, idea, &rp, m.Score)
+		if m.Score >= NotifyThreshold {
+			notify = append(notify, pendingMatch{repo: rp, score: m.Score})
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Score > out[j].Score })
 	if changed {
 		persisted := append([]store.Match(nil), out...)
-		if _, err := e.Store.Mutate(idea.ID, false, func(i *store.Idea) error {
-			if !unchangedSince(i, expected) {
-				return nil
-			}
+		_, committed, err := e.commitIfFresh(idea.ID, expected, func(i *store.Idea) {
 			i.Matches = persisted
 			i.MatchesUpdatedAt = time.Now().UTC()
-			return nil
-		}); err != nil {
+		})
+		if err != nil {
 			return nil, err
+		}
+		if committed {
+			e.notifyMatches(idea, notify)
 		}
 	}
 	out = CapMatches(out)
@@ -256,10 +251,7 @@ func (e *Engine) ScoreForRepo(ctx context.Context, idea *store.Idea, rp *registr
 	expected := idea.UpdatedAt
 	m := e.score(ctx, idea, rp, hash)
 	boostAccepting(&m, rp)
-	if _, err := e.Store.Mutate(idea.ID, false, func(i *store.Idea) error {
-		if !unchangedSince(i, expected) {
-			return nil
-		}
+	_, committed, err := e.commitIfFresh(idea.ID, expected, func(i *store.Idea) {
 		kept := m
 		replaced := false
 		for k := range i.Matches {
@@ -273,12 +265,12 @@ func (e *Engine) ScoreForRepo(ctx context.Context, idea *store.Idea, rp *registr
 			i.Matches = append(i.Matches, kept)
 		}
 		i.MatchesUpdatedAt = time.Now().UTC()
-		return nil
-	}); err != nil {
+	})
+	if err != nil {
 		return store.Match{}, err
 	}
-	if m.Score >= NotifyThreshold && e.Notifier != nil {
-		e.Notifier.NewMatch(idea.Author, rp.Owner, idea, rp, m.Score)
+	if committed && m.Score >= NotifyThreshold {
+		e.notifyMatches(idea, []pendingMatch{{repo: *rp, score: m.Score}})
 	}
 	return m, nil
 }
@@ -377,14 +369,10 @@ func (e *Engine) cncfMatchesForIdea(ctx context.Context, idea *store.Idea, persi
 		if len(persisted) > MaxMatches {
 			persisted = persisted[:MaxMatches]
 		}
-		if _, err := e.Store.Mutate(idea.ID, false, func(i *store.Idea) error {
-			if !unchangedSince(i, expected) {
-				return nil
-			}
+		if _, _, err := e.commitIfFresh(idea.ID, expected, func(i *store.Idea) {
 			i.CNCFMatches = persisted
 			i.CNCFCatalogHash = catalogHash
 			i.MatchesUpdatedAt = time.Now().UTC()
-			return nil
 		}); err != nil {
 			return nil, err
 		}
@@ -586,6 +574,48 @@ func unchangedSince(i *store.Idea, expected time.Time) bool {
 	return i.UpdatedAt.Equal(expected)
 }
 
+// errStaleSnapshot aborts a Store.Mutate so a stale snapshot writes nothing.
+var errStaleSnapshot = errors.New("match: stale idea snapshot")
+
+// commitIfFresh is the single gate through which Engine writers release side
+// effects. It runs apply on the stored idea and persists the result only if
+// the idea is still the version captured at expected; otherwise it writes
+// nothing and reports committed=false. Callers must notify (or otherwise act
+// on the computed results) only when committed is true.
+func (e *Engine) commitIfFresh(ideaID string, expected time.Time, apply func(*store.Idea)) (updated *store.Idea, committed bool, err error) {
+	updated, err = e.Store.Mutate(ideaID, false, func(i *store.Idea) error {
+		if !unchangedSince(i, expected) {
+			return errStaleSnapshot
+		}
+		apply(i)
+		return nil
+	})
+	if errors.Is(err, errStaleSnapshot) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	return updated, true, nil
+}
+
+// pendingMatch is a strong match held back until its persist has committed.
+type pendingMatch struct {
+	repo  registry.RepoProfile
+	score float64
+}
+
+// notifyMatches emits NewMatch for already-committed matches, in order.
+func (e *Engine) notifyMatches(idea *store.Idea, pending []pendingMatch) {
+	if e.Notifier == nil {
+		return
+	}
+	for k := range pending {
+		p := &pending[k]
+		e.Notifier.NewMatch(idea.Author, p.repo.Owner, idea, &p.repo, p.score)
+	}
+}
+
 // CatalogFingerprint returns the current CNCF catalog fingerprint, or "" when
 // no catalog is configured.
 func (e *Engine) CatalogFingerprint() string {
@@ -612,10 +642,7 @@ func (e *Engine) PersistRematchResults(ideaID string, expectedUpdatedAt time.Tim
 	if e.Catalog != nil && e.Catalog.Fingerprint() != catalogHash {
 		return ErrCatalogChanged
 	}
-	updated, err := e.Store.Mutate(ideaID, false, func(i *store.Idea) error {
-		if !unchangedSince(i, expectedUpdatedAt) {
-			return ErrIdeaChanged
-		}
+	updated, committed, err := e.commitIfFresh(ideaID, expectedUpdatedAt, func(i *store.Idea) {
 		i.TLDR = tldr
 		i.Matches = append([]store.Match(nil), matches...)
 		i.CNCFMatches = append([]CNCFMatch(nil), cncf...)
@@ -623,20 +650,24 @@ func (e *Engine) PersistRematchResults(ideaID string, expectedUpdatedAt time.Tim
 			i.CNCFCatalogHash = catalogHash
 		}
 		i.MatchesUpdatedAt = time.Now().UTC()
-		return nil
 	})
 	if err != nil {
 		return err
 	}
+	if !committed {
+		return ErrIdeaChanged
+	}
 	if e.Notifier != nil {
+		var pending []pendingMatch
 		for _, m := range matches {
 			if m.Score < NotifyThreshold {
 				continue
 			}
 			if rp, err := e.Registry.Get(m.RepoID); err == nil {
-				e.Notifier.NewMatch(updated.Author, rp.Owner, updated, rp, m.Score)
+				pending = append(pending, pendingMatch{repo: *rp, score: m.Score})
 			}
 		}
+		e.notifyMatches(updated, pending)
 	}
 	return nil
 }
