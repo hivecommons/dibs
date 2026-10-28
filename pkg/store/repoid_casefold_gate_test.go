@@ -17,7 +17,8 @@ import (
 // unreviewed sites; review those sites or fix their comparisons instead.
 const casefoldBaseline = 0
 
-// Advisory during the initial observation period; opt in to enforcement with
+// Advisory by default; CI observes in ratchet-warning mode before switching to
+// ratchet enforcement. For local zero-hit enforcement, run
 // DIBS_CASEFOLD_GATE=strict go test -count=1 -v ./pkg/store.
 // This is a name-based tripwire, not data-flow analysis: aliases and identifier
 // values hidden in other expressions need review. Index expressions with an
@@ -36,19 +37,32 @@ func TestRepoIDCasefoldGate(t *testing.T) {
 		t.Fatalf("%d stale casefold allowlist entries no longer mark a flagged site; re-pin them to the current line (and re-review) or delete them: %s", len(stale), strings.Join(stale, ", "))
 	}
 	mode := os.Getenv("DIBS_CASEFOLD_GATE")
+	fails, err := casefoldGateFails(mode, hits, casefoldBaseline)
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Logf("casefold audit: %d unreviewed sites; baseline %d; mode %q", hits, casefoldBaseline, mode)
 	if hits > casefoldBaseline {
 		t.Logf("WARNING: casefold audit increased by %d sites above baseline; review diagnostics above", hits-casefoldBaseline)
 	}
-	if casefoldGateFails(mode, hits, casefoldBaseline) {
+	if fails {
 		t.Fatalf("%d unreviewed GitHub identifier comparison sites (baseline %d; see diagnostics above)", hits, casefoldBaseline)
 	}
 }
 
-// ratchet-warning is the first release's CI mode. Switch to ratchet after that
-// release to enforce only increases; strict remains a local zero-hit opt-in.
-func casefoldGateFails(mode string, hits, baseline int) bool {
-	return (mode == "strict" && hits > 0) || (mode == "ratchet" && hits > baseline)
+// ratchet-warning is CI's initial observation mode; see docs/casefold-gate.md
+// for the switch to ratchet. Reject unknown modes so typos cannot disable it.
+func casefoldGateFails(mode string, hits, baseline int) (bool, error) {
+	switch mode {
+	case "", "ratchet-warning":
+		return false, nil
+	case "ratchet":
+		return hits > baseline, nil
+	case "strict":
+		return hits > 0, nil
+	default:
+		return false, fmt.Errorf("unknown DIBS_CASEFOLD_GATE mode %q (want empty, ratchet-warning, ratchet or strict)", mode)
+	}
 }
 
 func TestCasefoldGatePolicy(t *testing.T) {
@@ -68,8 +82,24 @@ func TestCasefoldGatePolicy(t *testing.T) {
 		{"strict zero", "strict", 0, 0, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := casefoldGateFails(tc.mode, tc.hits, tc.baseline); got != tc.want {
+			got, err := casefoldGateFails(tc.mode, tc.hits, tc.baseline)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tc.want {
 				t.Fatalf("mode %q with %d hits and baseline %d: fail = %v, want %v", tc.mode, tc.hits, tc.baseline, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestCasefoldGateRejectsUnknownMode(t *testing.T) {
+	for _, mode := range []string{"rachet", "ratchet_warning", "STRICT"} {
+		t.Run(mode, func(t *testing.T) {
+			// Even a clean audit must expose an invalid enforcement setting.
+			_, err := casefoldGateFails(mode, 0, 0)
+			if err == nil || !strings.Contains(err.Error(), fmt.Sprintf("unknown DIBS_CASEFOLD_GATE mode %q", mode)) {
+				t.Fatalf("mode %q: got error %v, want unknown mode diagnostic", mode, err)
 			}
 		})
 	}

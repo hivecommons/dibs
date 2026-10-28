@@ -44,15 +44,29 @@ The recorded baseline is **0 unreviewed sites**, measured at `main@1938d81`
 (#508), and stored as `casefoldBaseline` in the gate test. New unreviewed sites
 must be reviewed or fixed, rather than accepted by raising the baseline.
 
-Per the decision on #509, CI uses `DIBS_CASEFOLD_GATE=ratchet-warning` for one
-release. Counts above the baseline print `WARNING` and the individual sites
+Per the decision on #509, CI starts with `DIBS_CASEFOLD_GATE=ratchet-warning`.
+Dibs publishes a commit-sha image after each green `main` CI run rather than
+using tagged releases (see [the release runbook](../runbooks/release-rollback.md#how-releases-reach-the-cluster)).
+For this gate, the one-release warning window means **14 calendar days from
+the first successful `main` CI run containing the visible audit step**. Use
+that run's timestamp to determine the earliest enforcement date; a merge or
+image publication alone does not end the window.
+
+Counts above the baseline print `WARNING` and the individual sites
 without failing. Stale allowlist entries, scanner errors and test failures
 still fail the job; the reporting pipeline preserves the test exit status.
 
-After the first release containing this step, open a follow-up PR changing the
-workflow environment to `DIBS_CASEFOLD_GATE=ratchet`. That mode fails only when
-the unreviewed count exceeds the recorded baseline (equal or lower passes).
+After those 14 days, verify the audit logs and job summaries from `main` and
+open a follow-up PR changing the workflow environment to
+`DIBS_CASEFOLD_GATE=ratchet`. Include links to the first visible successful run
+and the observations reviewed, so the elapsed window is checkable. That mode
+fails only when the unreviewed count exceeds the recorded baseline (equal or
+lower passes).
 It does not change the local advisory default. `strict` continues to fail on
 any unreviewed site, independently of the baseline. Verify the visible CI
 observations before enabling enforcement; the old two-week period without
 diagnostics is not evidence for that switch.
+
+Only an unset/empty value, `ratchet-warning`, `ratchet`, and `strict` are valid
+for `DIBS_CASEFOLD_GATE`. Unknown values fail the test with a configuration
+error, even when there are no unreviewed sites.
