@@ -36,6 +36,10 @@ func CapMatches(ms []store.Match) []store.Match {
 	return out
 }
 
+// cncfMatchCacheVersion invalidates persisted results when matching semantics
+// change. v2 excludes zero-BM25 fillers, including old LLM-scored fillers.
+const cncfMatchCacheVersion = "v2:"
+
 // MaxCNCFCandidates caps how many BM25-ranked CNCF projects reach the LLM.
 const MaxCNCFCandidates = 15
 
@@ -303,10 +307,10 @@ func (e *Engine) cncfMatchesForIdea(ctx context.Context, idea *store.Idea, persi
 		return []CNCFMatch{}, nil
 	}
 	// Edits to title/body clear the persisted set in Store.Update, so a hash
-	// match means neither the idea nor the catalog changed.
-	catalogHash := e.Catalog.Fingerprint()
-	if persist && len(idea.CNCFMatches) > 0 && idea.CNCFCatalogHash == catalogHash {
-		return append([]CNCFMatch(nil), idea.CNCFMatches...), nil
+	// match means neither the idea, catalog, nor matching semantics changed.
+	catalogHash := e.CatalogFingerprint()
+	if persist && idea.CNCFCatalogHash == catalogHash {
+		return append([]CNCFMatch{}, idea.CNCFMatches...), nil
 	}
 	expected := idea.UpdatedAt
 	scanned := len(e.Catalog.List())
@@ -319,9 +323,6 @@ func (e *Engine) cncfMatchesForIdea(ctx context.Context, idea *store.Idea, persi
 		}
 	}
 	candidates = kept
-	if len(candidates) == 0 {
-		return []CNCFMatch{}, nil
-	}
 	if progress != nil {
 		progress(ProgressEvent{Phase: "cncf_bm25_start", Note: fmt.Sprintf("%d projects scanned via BM25", scanned), Done: len(candidates), Total: scanned})
 		for i, c := range candidates {
@@ -335,7 +336,10 @@ func (e *Engine) cncfMatchesForIdea(ctx context.Context, idea *store.Idea, persi
 			})
 		}
 	}
-	topScore := candidates[0].Score
+	topScore := 0.0
+	if len(candidates) > 0 {
+		topScore = candidates[0].Score
+	}
 	out := make([]CNCFMatch, 0, len(candidates))
 	for i, c := range candidates {
 		m := CNCFMatch{
@@ -624,13 +628,13 @@ func (e *Engine) notifyMatches(idea *store.Idea, pending []pendingMatch) {
 	}
 }
 
-// CatalogFingerprint returns the current CNCF catalog fingerprint, or "" when
-// no catalog is configured.
+// CatalogFingerprint returns the current CNCF match-cache fingerprint, combining
+// the matching version and catalog contents, or "" when no catalog is configured.
 func (e *Engine) CatalogFingerprint() string {
 	if e == nil || e.Catalog == nil {
 		return ""
 	}
-	return e.Catalog.Fingerprint()
+	return cncfMatchCacheVersion + e.Catalog.Fingerprint()
 }
 
 // PersistRematchResults commits a previously computed rematch result if the
@@ -647,7 +651,7 @@ func (e *Engine) PersistRematchResults(ideaID string, expectedUpdatedAt time.Tim
 			}
 		}
 	}
-	if e.Catalog != nil && e.Catalog.Fingerprint() != catalogHash {
+	if e.Catalog != nil && e.CatalogFingerprint() != catalogHash {
 		return ErrCatalogChanged
 	}
 	updated, committed, err := e.commitIfFresh(ideaID, expectedUpdatedAt, func(i *store.Idea) {

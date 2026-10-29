@@ -160,8 +160,8 @@ type Idea struct {
 	UpdatedAt      time.Time   `json:"updatedAt"`
 	Matches        []Match     `json:"matches"`
 	CNCFMatches    []CNCFMatch `json:"cncfMatches,omitempty"`
-	// CNCFCatalogHash fingerprints the catalog CNCFMatches were computed
-	// against; a missing or different value means the cache is stale.
+	// CNCFCatalogHash fingerprints the catalog and matching version used for
+	// CNCFMatches; a missing or different value means the cache is stale.
 	CNCFCatalogHash string `json:"cncfCatalogHash,omitempty"`
 	// MatchesUpdatedAt is bumped whenever stored hive/CNCF suggestions change.
 	MatchesUpdatedAt time.Time `json:"matchesUpdatedAt,omitempty"`
