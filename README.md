@@ -6,7 +6,7 @@
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-Marketplace of ideas for connecting ideators with hive-managed repositories.
+A place to offer software ideas to projects and retain credit for them.
 
 > **Your idea, your credit, their code.**
 >
@@ -14,16 +14,18 @@ Marketplace of ideas for connecting ideators with hive-managed repositories.
 
 Dibs is a two-sided marketplace that connects **ideators** — people who call
 dibs on ideas: great insight, but no time, tooling, or inclination to write
-code — with **hive-managed repositories** whose AI agent swarms are hungry
-for well-formed work.
+code — with **hive-managed repositories**: projects that use Hive to run
+coding agents under maintainer-chosen rules.
 
 1. **Ideators post ideas** — public or private — in plain language / markdown.
 2. **Repos opt in** to receive ideas, declaring topics and appetite.
-3. **An LLM matches** ideas to repos that want them; both sides must say yes.
+3. **A language model (LLM) matches** ideas to repos that want them; both the
+   idea contributor and the receiving project must accept the match.
 4. On **mutual acceptance**, Dibs hands the ideator a **prefilled GitHub
    issue** — they file it themselves, under their own GitHub account, so the
-   issue is natively attributed to them (label `ideated`). The hive's AI
-   agents implement it. Dibs is just the matchmaker: it never files the
+   issue is natively attributed to them (label `ideated`). The receiving project
+   can then have its agents work on it under its own review rules. In this
+   default flow Dibs is just the matchmaker: it never files the
    issue for you.
 
 ## Ideators are first-class contributors
@@ -41,7 +43,35 @@ public.
 Every implemented idea traces back to its ideator: the GitHub issue credits
 the idea's author, the resulting work carries that provenance, and the public
 **credit wall** (`/api/credits`, "Credit wall" in the UI) lists every ideator
-whose idea shipped. An idea is a contribution.
+with a settled idea: a GitHub issue URL has been recorded. This credits the
+proposal, not proof that its implementation shipped or its issue was closed.
+Settled ideas appear regardless of their visibility setting: settling a private
+idea makes its credit facts (author, title/TLDR, target, issue URL, and time)
+public, but not its body or private detail endpoint.
+
+## Try Dibs in your browser
+
+No local installation or Go toolchain is needed. Open
+[dibs.hivecommons.dev](https://dibs.hivecommons.dev) to browse the public
+surface; posting needs a Hive Hub sign-in and filing the issue needs a GitHub account.
+
+1. Sign in and describe your idea in plain language. Choose public or private
+   deliberately; unsettled private ideas are not included in the public wall.
+2. Review suggested repositories and offer the idea to a suitable project.
+   For Hive-managed targets, both sides accept before issue filing.
+3. Open the prefilled GitHub issue, review it, and file it yourself.
+4. Confirm the resulting issue URL in Dibs. This step is **settlement**:
+   it records the handoff, not completion of the proposed work. Confirming also
+   publishes the credit facts above, even for an idea marked private.
+
+Non-Hive GitHub targets can skip the receiving-project acceptance step.
+For settlement and privacy details, see the [consumer API](docs/credit-wall-api.md).
+To submit from a coding agent instead, see [MCP setup](#submit-ideas-from-your-agent).
+
+## Maintainer and developer reference
+
+The following sections cover running Dibs, its API, and local development,
+not prerequisites for using the hosted site.
 
 ## Architecture
 
@@ -294,6 +324,12 @@ still call `prompts/get` directly.
 - [Idea intake trust and abuse controls](docs/idea-intake-trust.md): a proposed design, not yet implemented.
 
 ## Development
+
+Requires Git and Go 1.27 or newer. Clone
+`https://github.com/hivecommons/dibs.git`, then run these commands from the
+checkout's top-level `dibs` folder. For authenticated local use, follow
+[Running locally with sign-in](#running-locally-with-sign-in); fakehub is
+for development only, not a production authentication service.
 
 ```sh
 go test -race -count=1 ./...

@@ -1,5 +1,16 @@
 # Publishing Dibs to the MCP Registry
 
+This is an operator procedure for publishing Dibs' listing in the Model
+Context Protocol (MCP) registry, where agent clients discover the service.
+To use Dibs from an agent, follow [client setup](../README.md#submit-ideas-from-your-agent)
+instead; publishing a listing is not required.
+
+Before starting, have an up-to-date Dibs checkout, Git, GitHub CLI (`gh`),
+`curl`, and `jq`; authenticate `gh` with an account allowed to run repository
+workflows. DNS (Domain Name System) authentication also requires permission
+to manage `hivecommons.dev` DNS records and the repository's Actions secrets.
+Run checkout-relative commands from the repository root.
+
 The root [`server.json`](../server.json) prepares the remote-only listing
 `dev.hivecommons/dibs`, using the namespace approved in
 [issue #375](https://github.com/hivecommons/dibs/issues/375#issuecomment-6215095421).
@@ -41,11 +52,14 @@ gh workflow run mcp-registry-publish.yml --repo hivecommons/dibs
 
 ### DNS authentication key
 
-Authentication is DNS-based: the apex TXT record on `hivecommons.dev`
+Authentication is DNS-based: the apex TXT record (a text record on the bare
+domain, not a subdomain) on `hivecommons.dev`
 (`v=MCPv1; k=ed25519; p=<public key>`) must match the Ed25519 private key
 (64 hex chars, as produced by the registry's
 [DNS authentication instructions](https://github.com/modelcontextprotocol/registry/blob/main/docs/modelcontextprotocol-io/authentication.mdx#dns-authentication))
-stored in the `MCP_REGISTRY_PRIVATE_KEY` secret. To rotate, generate a new
+stored in the `MCP_REGISTRY_PRIVATE_KEY` secret. Ed25519 is the signing-key
+type; the public key goes in DNS, while the private key stays secret.
+To rotate, generate a new
 key pair, replace the TXT record (remove the old one — a stale record is tried
 first and breaks verification), then update the secret.
 
