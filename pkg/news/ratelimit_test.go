@@ -30,6 +30,7 @@ func TestRefreshAsyncSkipsWhileFetcherRateLimited(t *testing.T) {
 	f := &limitedFetcher{}
 	f.limited.Store(true)
 	g := NewGenerator(st, f, nil)
+	t.Cleanup(g.waitIdle)
 	g.Logf = t.Logf
 	repos := []registry.RepoProfile{{RepoID: "org/repo"}}
 
