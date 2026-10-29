@@ -157,6 +157,7 @@ func TestRefreshAsyncLogsFetchError(t *testing.T) {
 			}
 		},
 	}
+	t.Cleanup(g.waitIdle)
 	g.RefreshAsync([]registry.RepoProfile{{RepoID: "org/repo"}})
 	select {
 	case msg := <-logged:

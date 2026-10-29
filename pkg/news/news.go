@@ -192,6 +192,7 @@ type Generator struct {
 	sem    chan struct{}
 	mu     sync.Mutex
 	active map[string]bool
+	wg     sync.WaitGroup
 }
 
 // NewGenerator returns a production generator.
@@ -213,7 +214,9 @@ func (g *Generator) RefreshAsync(repos []registry.RepoProfile) {
 		if !g.markActive(repoID) {
 			continue
 		}
+		g.wg.Add(1)
 		go func() {
+			defer g.wg.Done()
 			defer g.clearActive(repoID)
 			if err := g.Refresh(context.Background(), repoID); err != nil && g.Logf != nil {
 				g.Logf("news refresh %s: %v", repoID, err)
@@ -221,6 +224,9 @@ func (g *Generator) RefreshAsync(repos []registry.RepoProfile) {
 		}()
 	}
 }
+
+// waitIdle blocks until every goroutine started by RefreshAsync has returned.
+func (g *Generator) waitIdle() { g.wg.Wait() }
 
 func (g *Generator) rateLimited() bool {
 	rl, ok := g.Fetcher.(rateLimitedFetcher)
