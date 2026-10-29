@@ -1,7 +1,7 @@
 // Branch coverage for the rematch pipeline's cheaper arms: camel-case
 // splitting in the hive corpus name, the cached-TLDR progress event, the
-// passed/offered candidate skip, and the MaxMatches cap on persisted CNCF
-// matches.
+// passed/offered candidate skip, the MaxMatches cap on persisted CNCF
+// matches, and the RematchCNCFKeep cap on surfaced CNCF matches.
 package match
 
 import (
@@ -164,5 +164,61 @@ func TestCNCFMatchesPersistCapsAtMaxMatches(t *testing.T) {
 		if got.CNCFMatches[i].RepoID != ms[i].RepoID {
 			t.Fatalf("persisted[%d] = %s, want top-ranked %s", i, got.CNCFMatches[i].RepoID, ms[i].RepoID)
 		}
+	}
+}
+
+// TestRematchIdeaCapsCNCFAtKeep: RematchIdea surfaces at most RematchCNCFKeep
+// CNCF suggestions — the best-ranked ones, in rank order — even when BM25
+// yields more positive-score candidates, and final_selection reports the
+// capped count.
+func TestRematchIdeaCapsCNCFAtKeep(t *testing.T) {
+	n := RematchCNCFKeep + 2
+	if n > MaxCNCFCandidates {
+		t.Fatalf("test needs RematchCNCFKeep+2 (%d) <= MaxCNCFCandidates (%d)", n, MaxCNCFCandidates)
+	}
+	projects := make([]catalog.Project, 0, n)
+	for i := 0; i < n; i++ {
+		projects = append(projects, catalog.Project{
+			Name:        fmt.Sprintf("Mesh%d", i),
+			RepoID:      fmt.Sprintf("cncf/mesh-%d", i),
+			RepoURL:     fmt.Sprintf("https://github.com/cncf/mesh-%d", i),
+			Maturity:    "sandbox",
+			Category:    "Service Mesh",
+			Description: strings.Repeat("service mesh sidecar proxy ", i+1),
+		})
+	}
+	st, reg := newFixtures(t)
+	e := &Engine{Catalog: cncfTestCatalog(t, projects), Store: st, Registry: reg}
+	idea := createIdea(t, st, "Service mesh sidecar proxy", "Route traffic through sidecars.")
+
+	all, err := e.cncfMatchesForIdea(context.Background(), idea, false, nil)
+	if err != nil {
+		t.Fatalf("cncfMatchesForIdea: %v", err)
+	}
+	if len(all) != n {
+		t.Fatalf("precondition: %d CNCF candidates, want %d so the cap is exercised", len(all), n)
+	}
+
+	var final *ProgressEvent
+	_, hive, cncf, err := e.RematchIdea(context.Background(), idea, false, func(ev ProgressEvent) {
+		if ev.Phase == "final_selection" {
+			cp := ev
+			final = &cp
+		}
+	})
+	if err != nil {
+		t.Fatalf("RematchIdea: %v", err)
+	}
+	if len(cncf) != RematchCNCFKeep {
+		t.Fatalf("returned %d CNCF matches, want RematchCNCFKeep=%d", len(cncf), RematchCNCFKeep)
+	}
+	for i := range cncf {
+		if cncf[i].RepoID != all[i].RepoID {
+			t.Fatalf("cncf[%d] = %s, want top-ranked %s", i, cncf[i].RepoID, all[i].RepoID)
+		}
+	}
+	wantNote := fmt.Sprintf("%d hive, %d CNCF selected", len(hive), RematchCNCFKeep)
+	if final == nil || final.Note != wantNote {
+		t.Fatalf("final_selection = %+v, want Note %q", final, wantNote)
 	}
 }
