@@ -311,6 +311,14 @@ func (e *Engine) cncfMatchesForIdea(ctx context.Context, idea *store.Idea, persi
 	expected := idea.UpdatedAt
 	scanned := len(e.Catalog.List())
 	candidates := e.Catalog.TopK(idea.Title+" "+idea.Body, MaxCNCFCandidates)
+	// TopK pads with zero-score fillers; a filler is not a keyword fit and must not reach the LLM or the ideator.
+	kept := candidates[:0]
+	for _, c := range candidates {
+		if c.Score > 0 {
+			kept = append(kept, c)
+		}
+	}
+	candidates = kept
 	if len(candidates) == 0 {
 		return []CNCFMatch{}, nil
 	}

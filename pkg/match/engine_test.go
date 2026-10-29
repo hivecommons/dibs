@@ -313,12 +313,10 @@ func TestMatchesExcludePassedAndOffered(t *testing.T) {
 func boolPtr(b bool) *bool    { return &b }
 func strPtr(s string) *string { return &s }
 
-func TestCNCFMatchesFallbackTopK(t *testing.T) {
+// newTestCatalog writes projects to a temp cncf-catalog.json and loads it.
+func newTestCatalog(t *testing.T, projects []catalog.Project) *catalog.Store {
+	t.Helper()
 	dir := t.TempDir()
-	projects := []catalog.Project{
-		{Name: "Istio", RepoID: "istio/istio", RepoURL: "https://github.com/istio/istio", Maturity: "graduated", Category: "Service Proxy", Description: "Service mesh sidecar proxy", Topics: []string{"service-mesh"}},
-		{Name: "Vitess", RepoID: "vitessio/vitess", RepoURL: "https://github.com/vitessio/vitess", Maturity: "incubating", Category: "Database", Description: "MySQL clustering database"},
-	}
 	raw, err := json.Marshal(projects)
 	if err != nil {
 		t.Fatalf("Marshal: %v", err)
@@ -330,36 +328,32 @@ func TestCNCFMatchesFallbackTopK(t *testing.T) {
 	if err != nil {
 		t.Fatalf("catalog.New: %v", err)
 	}
-	e := &Engine{Catalog: catStore}
+	return catStore
+}
+
+func TestCNCFMatchesFallbackTopK(t *testing.T) {
+	projects := []catalog.Project{
+		{Name: "Istio", RepoID: "istio/istio", RepoURL: "https://github.com/istio/istio", Maturity: "graduated", Category: "Service Proxy", Description: "Service mesh sidecar proxy", Topics: []string{"service-mesh"}},
+		{Name: "Vitess", RepoID: "vitessio/vitess", RepoURL: "https://github.com/vitessio/vitess", Maturity: "incubating", Category: "Database", Description: "MySQL clustering database"},
+	}
+	e := &Engine{Catalog: newTestCatalog(t, projects)}
 	idea := &store.Idea{Title: "Service mesh sidecar proxy", Body: "Route traffic through sidecars."}
 	ms, err := e.CNCFMatchesForIdea(context.Background(), idea)
 	if err != nil {
 		t.Fatalf("CNCFMatchesForIdea: %v", err)
 	}
-	if len(ms) != 2 || ms[0].RepoID != "istio/istio" || ms[0].Maturity != "graduated" || ms[0].ByLLM {
+	if len(ms) != 1 || ms[0].RepoID != "istio/istio" || ms[0].Maturity != "graduated" || ms[0].ByLLM {
 		t.Fatalf("cncf matches = %+v", ms)
 	}
 }
 
 func TestCNCFMatchesLLMCappedAtTop15(t *testing.T) {
-	dir := t.TempDir()
 	projects := make([]catalog.Project, 20)
 	for i := range projects {
 		projects[i] = catalog.Project{Name: fmt.Sprintf("Project %02d", i), RepoID: fmt.Sprintf("org/repo%02d", i), RepoURL: fmt.Sprintf("https://github.com/org/repo%02d", i), Description: "service mesh proxy"}
 	}
-	raw, err := json.Marshal(projects)
-	if err != nil {
-		t.Fatalf("Marshal: %v", err)
-	}
-	if err := os.WriteFile(dir+"/cncf-catalog.json", raw, 0o644); err != nil {
-		t.Fatalf("WriteFile: %v", err)
-	}
-	catStore, err := catalog.New(dir, "")
-	if err != nil {
-		t.Fatalf("catalog.New: %v", err)
-	}
 	srv, calls := fakeGateway(t, func(string) string { return `{"score": 42, "reason": "fits"}` })
-	e := &Engine{Catalog: catStore, LLM: &LLM{BaseURL: srv.URL + "/v1", Model: "test"}}
+	e := &Engine{Catalog: newTestCatalog(t, projects), LLM: &LLM{BaseURL: srv.URL + "/v1", Model: "test"}}
 	idea := &store.Idea{ID: "idea", Title: "service mesh proxy", Body: "sidecars"}
 	ms, err := e.CNCFMatchesForIdea(context.Background(), idea)
 	if err != nil {
@@ -368,4 +362,37 @@ func TestCNCFMatchesLLMCappedAtTop15(t *testing.T) {
 	if len(ms) != MaxCNCFCandidates || calls.Load() != int64(MaxCNCFCandidates) {
 		t.Fatalf("matches=%d calls=%d, want %d", len(ms), calls.Load(), MaxCNCFCandidates)
 	}
+}
+
+func TestCNCFMatchesDropZeroScoreCandidates(t *testing.T) {
+	projects := []catalog.Project{
+		{Name: "Istio", RepoID: "istio/istio", RepoURL: "https://github.com/istio/istio", Description: "Service mesh sidecar proxy"},
+		{Name: "Vitess", RepoID: "vitessio/vitess", RepoURL: "https://github.com/vitessio/vitess", Description: "MySQL clustering database"},
+		{Name: "Argo", RepoID: "argoproj/argo", RepoURL: "https://github.com/argoproj/argo", Description: "Workflow orchestration engine"},
+	}
+
+	t.Run("no overlap without LLM", func(t *testing.T) {
+		e := &Engine{Catalog: newTestCatalog(t, projects)}
+		idea := &store.Idea{Title: "Weekly payroll ledger export", Body: "Accountants download spreadsheets."}
+		ms, err := e.CNCFMatchesForIdea(context.Background(), idea)
+		if err != nil {
+			t.Fatalf("CNCFMatchesForIdea: %v", err)
+		}
+		if ms == nil || len(ms) != 0 {
+			t.Fatalf("want empty non-nil slice, got %#v", ms)
+		}
+	})
+
+	t.Run("fillers never reach the LLM", func(t *testing.T) {
+		srv, calls := fakeGateway(t, func(string) string { return `{"score": 42, "reason": "fits"}` })
+		e := &Engine{Catalog: newTestCatalog(t, projects), LLM: &LLM{BaseURL: srv.URL + "/v1", Model: "test"}}
+		idea := &store.Idea{ID: "idea", Title: "Service mesh sidecar proxy", Body: "Route traffic through sidecars."}
+		ms, err := e.CNCFMatchesForIdea(context.Background(), idea)
+		if err != nil {
+			t.Fatalf("CNCFMatchesForIdea: %v", err)
+		}
+		if len(ms) != 1 || ms[0].RepoID != "istio/istio" || calls.Load() != 1 {
+			t.Fatalf("matches=%+v calls=%d, want 1 match and 1 call", ms, calls.Load())
+		}
+	})
 }
