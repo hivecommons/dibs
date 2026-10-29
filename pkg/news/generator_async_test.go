@@ -65,6 +65,7 @@ func TestRefreshAsyncGuardsAndDedup(t *testing.T) {
 		prs:     []history.MergedPullRequest{pr("merged work", "2026-08-19T09:00:00Z", "alice")},
 	}
 	g := NewGenerator(st, f, nil)
+	t.Cleanup(g.waitIdle)
 	g.Now = newsNow
 	g.Logf = nil
 
@@ -133,6 +134,7 @@ func TestRefreshAsyncStalenessGate(t *testing.T) {
 	}
 	f := &fakeFetcher{}
 	g := NewGenerator(st, f, nil)
+	t.Cleanup(g.waitIdle)
 	g.Now = func() time.Time { return now }
 	g.Logf = nil
 
@@ -147,5 +149,48 @@ func TestRefreshAsyncStalenessGate(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	if n := f.calls; n != 0 {
 		t.Fatalf("fresh repo fetched %d times, want 0", n)
+	}
+}
+
+func TestWaitIdleBlocksUntilRefreshGoroutineFinishes(t *testing.T) {
+	st, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	f := &blockingFetcher{
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+		prs:     []history.MergedPullRequest{pr("merged work", "2026-08-19T09:00:00Z", "alice")},
+	}
+	g := NewGenerator(st, f, nil)
+	t.Cleanup(g.waitIdle)
+	g.Now = newsNow
+	g.Logf = nil
+
+	g.RefreshAsync([]registry.RepoProfile{{RepoID: "org/repo"}})
+	<-f.started
+
+	idle := make(chan struct{})
+	go func() {
+		g.waitIdle()
+		close(idle)
+	}()
+	select {
+	case <-idle:
+		t.Fatal("waitIdle returned while the refresh was still blocked")
+	case <-time.After(20 * time.Millisecond):
+	}
+
+	close(f.release)
+	select {
+	case <-idle:
+	case <-time.After(5 * time.Second):
+		t.Fatal("waitIdle never returned after the refresh was released")
+	}
+	if _, ok := st.fetchedAt("org/repo"); !ok {
+		t.Fatal("waitIdle returned before the refresh persisted")
+	}
+	if g.active["org/repo"] {
+		t.Fatal("repo still marked active after waitIdle")
 	}
 }

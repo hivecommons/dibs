@@ -30,6 +30,7 @@ func TestRefreshAsyncSkipsWhileFetcherRateLimited(t *testing.T) {
 	f := &limitedFetcher{}
 	f.limited.Store(true)
 	g := NewGenerator(st, f, nil)
+	t.Cleanup(g.waitIdle)
 	g.Logf = t.Logf
 	repos := []registry.RepoProfile{{RepoID: "org/repo"}}
 
@@ -41,11 +42,20 @@ func TestRefreshAsyncSkipsWhileFetcherRateLimited(t *testing.T) {
 
 	f.limited.Store(false)
 	g.RefreshAsync(repos)
+	// Wait for the refresh to persist, not merely to fetch: the goroutine still
+	// writes under t.TempDir after the fetch, and returning early races its
+	// cleanup ("TempDir RemoveAll cleanup: ... directory not empty").
 	deadline := time.Now().Add(5 * time.Second)
-	for f.calls.Load() == 0 && time.Now().Before(deadline) {
+	for time.Now().Before(deadline) {
+		if _, ok := st.fetchedAt("org/repo"); ok {
+			break
+		}
 		time.Sleep(10 * time.Millisecond)
 	}
 	if f.calls.Load() == 0 {
 		t.Fatal("no fetch after limit lifted")
+	}
+	if _, ok := st.fetchedAt("org/repo"); !ok {
+		t.Fatal("refresh never persisted after limit lifted")
 	}
 }
