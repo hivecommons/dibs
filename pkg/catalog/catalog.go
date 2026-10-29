@@ -530,7 +530,10 @@ func projectText(p Project) string {
 	return p.Name + " " + p.Description + " " + strings.Join(p.Topics, " ") + " " + p.Language + " " + p.Readme
 }
 
-// TopK returns the highest-scoring projects. Zero-score projects are omitted.
+// TopK returns the k highest-scoring projects. Every project is scored and
+// returned (zero-score projects rank last) so callers that need a full ranking,
+// such as the hive-repo matcher, keep it; callers that want keyword hits only
+// must drop zero scores themselves.
 func (b *BM25) TopK(query string, k int) []Candidate {
 	q := Tokenize(query)
 	if len(q) == 0 || k <= 0 || len(b.projects) == 0 {

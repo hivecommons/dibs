@@ -336,7 +336,7 @@ func TestCNCFMatchesFallbackTopK(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CNCFMatchesForIdea: %v", err)
 	}
-	if len(ms) != 2 || ms[0].RepoID != "istio/istio" || ms[0].Maturity != "graduated" || ms[0].ByLLM {
+	if len(ms) != 1 || ms[0].RepoID != "istio/istio" || ms[0].Maturity != "graduated" || ms[0].ByLLM {
 		t.Fatalf("cncf matches = %+v", ms)
 	}
 }
@@ -368,4 +368,53 @@ func TestCNCFMatchesLLMCappedAtTop15(t *testing.T) {
 	if len(ms) != MaxCNCFCandidates || calls.Load() != int64(MaxCNCFCandidates) {
 		t.Fatalf("matches=%d calls=%d, want %d", len(ms), calls.Load(), MaxCNCFCandidates)
 	}
+}
+
+func TestCNCFMatchesDropZeroScoreCandidates(t *testing.T) {
+	newCatalog := func(t *testing.T) *catalog.Store {
+		t.Helper()
+		dir := t.TempDir()
+		projects := []catalog.Project{
+			{Name: "Istio", RepoID: "istio/istio", RepoURL: "https://github.com/istio/istio", Description: "Service mesh sidecar proxy"},
+			{Name: "Vitess", RepoID: "vitessio/vitess", RepoURL: "https://github.com/vitessio/vitess", Description: "MySQL clustering database"},
+			{Name: "Argo", RepoID: "argoproj/argo", RepoURL: "https://github.com/argoproj/argo", Description: "Workflow orchestration engine"},
+		}
+		raw, err := json.Marshal(projects)
+		if err != nil {
+			t.Fatalf("Marshal: %v", err)
+		}
+		if err := os.WriteFile(dir+"/cncf-catalog.json", raw, 0o644); err != nil {
+			t.Fatalf("WriteFile: %v", err)
+		}
+		catStore, err := catalog.New(dir, "")
+		if err != nil {
+			t.Fatalf("catalog.New: %v", err)
+		}
+		return catStore
+	}
+
+	t.Run("no overlap without LLM", func(t *testing.T) {
+		e := &Engine{Catalog: newCatalog(t)}
+		idea := &store.Idea{Title: "Weekly payroll ledger export", Body: "Accountants download spreadsheets."}
+		ms, err := e.CNCFMatchesForIdea(context.Background(), idea)
+		if err != nil {
+			t.Fatalf("CNCFMatchesForIdea: %v", err)
+		}
+		if ms == nil || len(ms) != 0 {
+			t.Fatalf("want empty non-nil slice, got %#v", ms)
+		}
+	})
+
+	t.Run("fillers never reach the LLM", func(t *testing.T) {
+		srv, calls := fakeGateway(t, func(string) string { return `{"score": 42, "reason": "fits"}` })
+		e := &Engine{Catalog: newCatalog(t), LLM: &LLM{BaseURL: srv.URL + "/v1", Model: "test"}}
+		idea := &store.Idea{ID: "idea", Title: "Service mesh sidecar proxy", Body: "Route traffic through sidecars."}
+		ms, err := e.CNCFMatchesForIdea(context.Background(), idea)
+		if err != nil {
+			t.Fatalf("CNCFMatchesForIdea: %v", err)
+		}
+		if len(ms) != 1 || ms[0].RepoID != "istio/istio" || calls.Load() != 1 {
+			t.Fatalf("matches=%+v calls=%d, want 1 match and 1 call", ms, calls.Load())
+		}
+	})
 }
