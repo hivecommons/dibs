@@ -65,6 +65,18 @@ jobs:
             -coverpkg=./... \
             -coverprofile=coverage.out \
             ./...
+      - name: Casefold audit (advisory ratchet)
+        # Warning-only for 14 days of visible main observations, then switch to ratchet; see docs/casefold-gate.md.
+        # Keep -v and -count=1: passing/cached test logs otherwise hide observations.
+        env:
+          DIBS_CASEFOLD_GATE: ratchet-warning
+        run: |
+          set -euo pipefail
+          echo '### Casefold audit' >> "$GITHUB_STEP_SUMMARY"
+          echo '```text' >> "$GITHUB_STEP_SUMMARY"
+          go test -count=1 -v -run '^TestRepoIDCasefoldGate$' ./pkg/store 2>&1 \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
       - name: Coverage summary
         run: |
           total=$(go tool cover -func=coverage.out | awk '/^total:/ {sub("%","",$3); print $3}')
