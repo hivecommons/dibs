@@ -296,15 +296,15 @@ func TestPersistRematchResultsStoresCatalogHash(t *testing.T) {
 	e := &Engine{Catalog: cs, Store: st, LLM: &LLM{BaseURL: srv.URL + "/v1", Model: "test"}}
 	cncf := []CNCFMatch{{Name: "Istio", RepoID: "istio/istio", Score: 80}}
 
-	if err := e.PersistRematchResults(idea.ID, idea.UpdatedAt, "tldr", nil, cncf, cs.Fingerprint()); err != nil {
+	if err := e.PersistRematchResults(idea.ID, idea.UpdatedAt, "tldr", nil, cncf, e.CatalogFingerprint()); err != nil {
 		t.Fatalf("PersistRematchResults: %v", err)
 	}
 	got, err := st.Get(idea.ID)
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	if got.CNCFCatalogHash != cs.Fingerprint() {
-		t.Fatalf("CNCFCatalogHash = %q, want %q", got.CNCFCatalogHash, cs.Fingerprint())
+	if got.CNCFCatalogHash != e.CatalogFingerprint() {
+		t.Fatalf("CNCFCatalogHash = %q, want %q", got.CNCFCatalogHash, e.CatalogFingerprint())
 	}
 	ms, err := e.CNCFMatchesForIdea(context.Background(), got)
 	if err != nil {
