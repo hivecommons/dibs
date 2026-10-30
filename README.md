@@ -173,8 +173,9 @@ Gemini CLI, Codex, and other MCP clients can submit ideas without leaving the ag
 
 Dibs is listed in the official MCP Registry as `dev.hivecommons/dibs`
 ([registry entry](https://registry.modelcontextprotocol.io/v0.1/servers?search=dev.hivecommons%2Fdibs)).
-Search for that full name: a plain `dibs` search also returns the unrelated
-1stDibs marketplace. How the listing is published is covered in
+Search for that full name: a plain `dibs` search also returns unrelated
+servers with the same name, including the 1stDibs marketplace and other
+coding-agent tools called dibs. How the listing is published is covered in
 [MCP Registry publishing](docs/mcp-registry.md).
 
 Available tools:
