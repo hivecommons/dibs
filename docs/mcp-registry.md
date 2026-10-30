@@ -17,9 +17,11 @@ The root [`server.json`](../server.json) prepares the remote-only listing
 Committing this file does not publish it; publication happens through the
 `MCP Registry` workflow described below.
 
-The listing is titled **Dibs (Hive Commons)** to distinguish it from the
-unrelated 1stDibs marketplace. Version `0.1.0` corresponds to the MCP
-implementation's `v0.1.0` in `pkg/mcpserver/server.go`. The endpoint uses
+The listing is titled **Dibs (Hive Commons)** to distinguish it from
+unrelated registry entries with the same name, such as the 1stDibs
+marketplace and other coding-agent tools called dibs. Version `0.1.0`
+corresponds to the MCP implementation's `v0.1.0` in
+`pkg/mcpserver/server.go`. The endpoint uses
 Streamable HTTP; no installable package is needed. Its optional, secret
 `Authorization` header takes the complete `Bearer <token>` value described
 in the [README](../README.md#token). Public ideas and repo venues can be read
