@@ -373,8 +373,6 @@ func (s *Store) enrich(ctx context.Context, p *Project) error {
 	readme, err := s.getReadme(ctx, p.RepoID)
 	if err == nil {
 		p.Readme = readme
-	} else if errors.Is(err, errRateLimited) {
-		return err
 	}
 	return nil
 }
