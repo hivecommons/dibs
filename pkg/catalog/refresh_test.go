@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -223,14 +224,15 @@ func TestGetReadmeDecodesJSONContentFallback(t *testing.T) {
 
 func TestGetJSONRateLimitAndErrorStatuses(t *testing.T) {
 	cases := []struct {
-		name    string
-		status  int
-		headers map[string]string
-		wantErr string // "" means errSkip
+		name        string
+		status      int
+		headers     map[string]string
+		wantErr     string // "" means errSkip
+		rateLimited bool   // skip must also be errRateLimited
 	}{
-		{name: "429 skips", status: http.StatusTooManyRequests},
-		{name: "403 with Retry-After skips", status: http.StatusForbidden, headers: map[string]string{"Retry-After": "60"}},
-		{name: "403 exhausted quota skips", status: http.StatusForbidden, headers: map[string]string{"X-RateLimit-Remaining": "0"}},
+		{name: "429 skips", status: http.StatusTooManyRequests, rateLimited: true},
+		{name: "403 with Retry-After skips", status: http.StatusForbidden, headers: map[string]string{"Retry-After": "60"}, rateLimited: true},
+		{name: "403 exhausted quota skips", status: http.StatusForbidden, headers: map[string]string{"X-RateLimit-Remaining": "0"}, rateLimited: true},
 		{name: "404 skips", status: http.StatusNotFound},
 		{name: "plain 403 is an error", status: http.StatusForbidden, wantErr: "status 403"},
 		{name: "500 is an error", status: http.StatusInternalServerError, wantErr: "status 500"},
@@ -249,8 +251,11 @@ func TestGetJSONRateLimitAndErrorStatuses(t *testing.T) {
 			var out struct{}
 			err := s.getJSON(context.Background(), "/repos/cncf/alpha", &out)
 			if tc.wantErr == "" {
-				if err != errSkip {
+				if !errors.Is(err, errSkip) {
 					t.Fatalf("err = %v, want errSkip", err)
+				}
+				if got := errors.Is(err, errRateLimited); got != tc.rateLimited {
+					t.Fatalf("errors.Is(err, errRateLimited) = %v, want %v (err = %v)", got, tc.rateLimited, err)
 				}
 			} else if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
 				t.Fatalf("err = %v, want containing %q", err, tc.wantErr)
