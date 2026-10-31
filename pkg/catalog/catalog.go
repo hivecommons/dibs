@@ -132,8 +132,10 @@ func (s *Store) TopK(query string, k int) []Candidate {
 }
 
 // RefreshAsync refreshes the cache in the background when missing or stale.
+// While a GitHub rate limit is in effect it is a no-op: a pass could not
+// enrich anything, so re-downloading the landscape would only churn the cache.
 func (s *Store) RefreshAsync() {
-	if s == nil || !s.needsRefresh() || !s.markActive() {
+	if s == nil || s.limiter.WaitAt(s.now()) || !s.needsRefresh() || !s.markActive() {
 		return
 	}
 	go func() {
@@ -371,8 +373,13 @@ func (s *Store) enrich(ctx context.Context, p *Project) error {
 	p.Topics = repo.Topics
 	p.Language = strings.TrimSpace(repo.Language)
 	readme, err := s.getReadme(ctx, p.RepoID)
-	if err == nil {
+	switch {
+	case err == nil:
 		p.Readme = readme
+	case errors.Is(err, errRateLimited):
+		// Let Refresh carry the prior enrichment forward and retry next pass
+		// instead of stamping the project fresh with an empty readme.
+		return err
 	}
 	return nil
 }
