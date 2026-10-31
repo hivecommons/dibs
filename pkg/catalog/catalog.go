@@ -157,13 +157,14 @@ func (s *Store) needsRefresh() bool {
 		return true
 	}
 	oldest := s.projects[0].FetchedAt
-	for _, p := range s.projects[1:] {
-		if !p.FetchedAt.IsZero() && (oldest.IsZero() || p.FetchedAt.Before(oldest)) {
+	for _, p := range s.projects {
+		// A never-enriched project (rate-limited pass) must trigger a retry.
+		if p.FetchedAt.IsZero() {
+			return true
+		}
+		if p.FetchedAt.Before(oldest) {
 			oldest = p.FetchedAt
 		}
-	}
-	if oldest.IsZero() {
-		return true
 	}
 	return s.now().Sub(oldest) >= RefreshInterval
 }
@@ -187,15 +188,40 @@ func (s *Store) Refresh(ctx context.Context) error {
 		return err
 	}
 	fetchedAt := s.now().UTC()
-	for i := range projects {
-		projects[i].FetchedAt = fetchedAt
-		// Once GitHub rate-limits us, keep the landscape data we have rather
-		// than hammering the API until the reset.
-		if s.limiter.WaitAt(s.now()) {
+	prev := make(map[string]Project)
+	for _, p := range s.List() {
+		prev[p.RepoID] = p
+	}
+	// Enrich never-fetched and oldest projects first so each rate-limited
+	// pass makes forward progress; the persisted slice stays sorted by RepoID.
+	order := make([]int, len(projects))
+	for i := range order {
+		order[i] = i
+	}
+	sort.SliceStable(order, func(a, b int) bool {
+		return prev[projects[order[a]].RepoID].FetchedAt.Before(prev[projects[order[b]].RepoID].FetchedAt)
+	})
+	for _, i := range order {
+		p := &projects[i]
+		// Once GitHub rate-limits us, keep what we already had rather than
+		// hammering the API until the reset.
+		limited := s.limiter.WaitAt(s.now())
+		if !limited {
+			err := s.enrich(ctx, p)
+			if err != nil && s.Logf != nil {
+				s.Logf("catalog enrich %s: %v", p.RepoID, err)
+			}
+			limited = errors.Is(err, errRateLimited)
+		}
+		if !limited {
+			p.FetchedAt = fetchedAt
 			continue
 		}
-		if err := s.enrich(ctx, &projects[i]); err != nil && s.Logf != nil {
-			s.Logf("catalog enrich %s: %v", projects[i].RepoID, err)
+		if old, ok := prev[p.RepoID]; ok {
+			if strings.TrimSpace(old.Description) != "" {
+				p.Description = old.Description
+			}
+			p.Topics, p.Language, p.Readme, p.FetchedAt = old.Topics, old.Language, old.Readme, old.FetchedAt
 		}
 	}
 	s.mu.Lock()
@@ -321,6 +347,9 @@ func repoIDFromURL(raw string) (string, bool) {
 
 var errSkip = errors.New("github enrichment skipped")
 
+// errRateLimited is an errSkip caused by a GitHub rate limit (not a 404).
+var errRateLimited = fmt.Errorf("%w: rate limited", errSkip)
+
 func (s *Store) enrich(ctx context.Context, p *Project) error {
 	var repo struct {
 		Description string   `json:"description"`
@@ -328,6 +357,9 @@ func (s *Store) enrich(ctx context.Context, p *Project) error {
 		Language    string   `json:"language"`
 	}
 	if err := s.getJSON(ctx, "/repos/"+p.RepoID, &repo); err != nil {
+		if errors.Is(err, errRateLimited) {
+			return err
+		}
 		if errors.Is(err, errSkip) {
 			return nil
 		}
@@ -341,8 +373,8 @@ func (s *Store) enrich(ctx context.Context, p *Project) error {
 	readme, err := s.getReadme(ctx, p.RepoID)
 	if err == nil {
 		p.Readme = readme
-	} else if errors.Is(err, errSkip) {
-		return nil
+	} else if errors.Is(err, errRateLimited) {
+		return err
 	}
 	return nil
 }
@@ -362,7 +394,7 @@ func (s *Store) getJSON(ctx context.Context, path string, out any) error {
 	defer resp.Body.Close()
 	if shouldSkip(resp) {
 		s.limiter.ObserveAt(resp, s.now())
-		return errSkip
+		return errRateLimited
 	}
 	if resp.StatusCode == http.StatusNotFound {
 		return errSkip
@@ -388,7 +420,7 @@ func (s *Store) getReadme(ctx context.Context, repoID string) (string, error) {
 	defer resp.Body.Close()
 	if shouldSkip(resp) {
 		s.limiter.ObserveAt(resp, s.now())
-		return "", errSkip
+		return "", errRateLimited
 	}
 	if resp.StatusCode == http.StatusNotFound {
 		return "", errSkip
