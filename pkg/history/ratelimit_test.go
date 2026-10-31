@@ -60,3 +60,21 @@ func TestRateLimitResetStopsFurtherRequests(t *testing.T) {
 		t.Fatalf("no request after reset: %d", got)
 	}
 }
+
+// A nil *Backfiller stored in an interface passes callers' `!= nil` checks
+// (news.Generator.rateLimited asserts to rateLimitedFetcher), so the nil
+// receiver must report "not limited" instead of dereferencing b.limiter.
+func TestRateLimitedNilReceiverReportsNotLimited(t *testing.T) {
+	var nilB *Backfiller
+	if nilB.RateLimited() {
+		t.Fatal("nil receiver: RateLimited() = true, want false")
+	}
+	var fetcher interface{ RateLimited() bool } = nilB
+	if fetcher.RateLimited() {
+		t.Fatal("nil receiver via interface: RateLimited() = true, want false")
+	}
+	b := &Backfiller{}
+	if b.RateLimited() {
+		t.Fatal("zero-value limiter: RateLimited() = true, want false")
+	}
+}
