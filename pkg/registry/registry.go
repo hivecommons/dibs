@@ -199,7 +199,7 @@ func (c *HTTPHubClient) enrichDescriptions(ctx context.Context, repos []RepoProf
 		if err != nil {
 			continue
 		}
-		if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusTooManyRequests {
+		if ghrate.IsLimited(resp) {
 			resp.Body.Close()
 			slog.Warn("registry: GitHub refused description lookup; skipping enrichment this sync", "status", resp.StatusCode)
 			c.enrichMu.Lock()
