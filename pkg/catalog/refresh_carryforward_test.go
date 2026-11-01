@@ -233,7 +233,8 @@ func TestRefreshEnrichesNeverFetchedAndOldestFirst(t *testing.T) {
 		got[p.RepoID] = p
 	}
 	for _, id := range []string{"cncf/beta", "cncf/gamma"} {
-		if p := got[id]; p.Readme != "fresh readme for "+id+"\n" || !p.FetchedAt.Equal(now) {
+		// readmeIntro trims the trailing newline the fake GitHub server writes.
+		if p := got[id]; p.Readme != "fresh readme for "+id || !p.FetchedAt.Equal(now) {
 			t.Fatalf("%s = %+v, want enriched this pass and stamped now", id, p)
 		}
 	}
