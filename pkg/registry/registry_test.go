@@ -99,6 +99,7 @@ func TestEnrichmentStopsOnRateLimit(t *testing.T) {
 	var hits atomic.Int32
 	gh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hits.Add(1)
+		w.Header().Set("X-RateLimit-Remaining", "0")
 		w.WriteHeader(http.StatusForbidden)
 	}))
 	defer gh.Close()
@@ -109,6 +110,43 @@ func TestEnrichmentStopsOnRateLimit(t *testing.T) {
 	}
 	if got := hits.Load(); got != 1 {
 		t.Fatalf("GitHub hits = %d, want 1 (loop must stop at first 403)", got)
+	}
+}
+
+func TestEnrichmentPermanent403DoesNotStopLoop(t *testing.T) {
+	hub := enrichHubServer(t, []RepoProfile{
+		{RepoID: "o/a", HiveID: "h", Owner: "alice"},
+		{RepoID: "o/b", HiveID: "h", Owner: "alice"},
+	})
+	defer hub.Close()
+	var hits atomic.Int32
+	gh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		if strings.HasSuffix(r.URL.Path, "/o/a") {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]string{"description": "from github"})
+	}))
+	defer gh.Close()
+	c := &HTTPHubClient{BaseURL: hub.URL, GitHubAPI: gh.URL}
+	reg, _ := newTestRegistry(t)
+	if err := reg.Sync(context.Background(), c); err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	if got := hits.Load(); got != 2 {
+		t.Fatalf("GitHub hits = %d, want 2 (bare 403 must not stop the loop)", got)
+	}
+	if p, _ := reg.Get("o/b"); p == nil || p.Description != "from github" {
+		t.Fatalf("o/b not enriched: %+v", p)
+	}
+	c.enrichMu.Lock()
+	defer c.enrichMu.Unlock()
+	if !c.notBefore.IsZero() {
+		t.Fatalf("notBefore = %v, want zero (no back-off)", c.notBefore)
+	}
+	if !c.looked["o/a"] {
+		t.Fatal("o/a not marked looked")
 	}
 }
 
@@ -619,6 +657,7 @@ func TestEnrichmentRateLimitWithoutResetHeaderFallsBackToCooldown(t *testing.T) 
 	var hits atomic.Int32
 	gh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hits.Add(1)
+		w.Header().Set("X-RateLimit-Remaining", "0")
 		w.Header().Set("X-RateLimit-Reset", "soon")
 		w.WriteHeader(http.StatusForbidden)
 	}))
