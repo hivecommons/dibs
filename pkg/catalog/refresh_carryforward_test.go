@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -296,5 +297,63 @@ func TestRefreshEnrichFailureKeepsPriorEnrichmentAndStaleStamp(t *testing.T) {
 				t.Fatal("needsRefresh() = false after enrich failure, want true")
 			}
 		})
+	}
+}
+
+func TestRefreshPermanentClientErrorStampsButServerErrorDoesNot(t *testing.T) {
+	now := time.Date(2026, 9, 23, 12, 0, 0, 0, time.UTC)
+	for name, tc := range map[string]struct {
+		status    int
+		wantStamp bool
+	}{
+		"403 no rate-limit headers": {http.StatusForbidden, true},
+		"451":                       {http.StatusUnavailableForLegalReasons, true},
+		"500":                       {http.StatusInternalServerError, false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tc.status)
+			}))
+			defer gh.Close()
+			s := newRefreshStore(t, gh, func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = w.Write([]byte(rateLimitLandscapeYAML))
+			})
+			s.Now = func() time.Time { return now }
+			if err := s.Refresh(t.Context()); err != nil {
+				t.Fatalf("Refresh: %v", err)
+			}
+			if got := s.needsRefresh(); got == tc.wantStamp {
+				t.Fatalf("needsRefresh() = %v, want %v", got, !tc.wantStamp)
+			}
+		})
+	}
+}
+
+func TestRefreshSkipsEnrichAfterDeadline(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	var mu sync.Mutex
+	calls := 0
+	gh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		mu.Lock()
+		calls++
+		mu.Unlock()
+		cancel() // the deadline expires during the first project
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer gh.Close()
+	s := newRefreshStore(t, gh, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(rateLimitLandscapeYAML))
+	})
+	logs := 0
+	s.Logf = func(string, ...any) { logs++ }
+	if err := s.Refresh(ctx); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	if calls != 1 || logs > 1 {
+		t.Fatalf("enrich calls = %d, log lines = %d, want 1 call and at most 1 line after the deadline", calls, logs)
+	}
+	if got := len(s.List()); got < 2 {
+		t.Fatalf("List() = %d projects, want all persisted", got)
 	}
 }
