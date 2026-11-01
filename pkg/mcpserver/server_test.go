@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -38,7 +39,7 @@ func newTestTools(t *testing.T) *tools {
 }
 
 func callReq(token string) *mcpsdk.CallToolRequest {
-	header := http.Header{"Host": []string{"dibs.example.test"}}
+	header := http.Header{forwardedHost: []string{"dibs.example.test"}}
 	if token != "" {
 		header.Set(authorizationHeader, bearerPrefix+token)
 	}
@@ -202,5 +203,69 @@ func TestInstructionsPageHonorsForwardedProto(t *testing.T) {
 	h.ServeHTTP(rec, req)
 	if !strings.Contains(rec.Body.String(), "http://dibs.hivecommons.dev/mcp") {
 		t.Fatal("instructions page ignored a legitimate X-Forwarded-Proto: http")
+	}
+}
+
+type headerTransport struct {
+	base    http.RoundTripper
+	headers map[string]string
+}
+
+func (h headerTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	r = r.Clone(r.Context())
+	for k, v := range h.headers {
+		r.Header.Set(k, v)
+	}
+	return h.base.RoundTrip(r)
+}
+
+func submitIdeaURLOverHTTP(t *testing.T, extra map[string]string) (string, string) {
+	t.Helper()
+	tls := newTestTools(t)
+	srv := httptest.NewServer(NewHandler(tls.cfg))
+	t.Cleanup(srv.Close)
+
+	headers := map[string]string{authorizationHeader: bearerPrefix + "github-token"}
+	for k, v := range extra {
+		headers[k] = v
+	}
+	client := mcpsdk.NewClient(&mcpsdk.Implementation{Name: "test", Version: "v0"}, nil)
+	session, err := client.Connect(context.Background(), &mcpsdk.StreamableClientTransport{
+		Endpoint:   srv.URL,
+		HTTPClient: &http.Client{Transport: headerTransport{base: http.DefaultTransport, headers: headers}},
+	}, nil)
+	if err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+	defer session.Close()
+	res, err := session.CallTool(context.Background(), &mcpsdk.CallToolParams{
+		Name:      "submit_idea",
+		Arguments: map[string]any{"title": "Over HTTP", "description": "Real request host"},
+	})
+	if err != nil || res.IsError {
+		t.Fatalf("CallTool: err=%v res=%+v", err, res)
+	}
+	raw, err := json.Marshal(res.StructuredContent)
+	if err != nil {
+		t.Fatalf("marshal structured content: %v", err)
+	}
+	var out submitIdeaOutput
+	if err := json.Unmarshal(raw, &out); err != nil {
+		t.Fatalf("decode output %s: %v", raw, err)
+	}
+	return out.URL, strings.TrimPrefix(srv.URL, "http://")
+}
+
+func TestSubmitIdeaURLUsesRequestHostWithoutForwardedHost(t *testing.T) {
+	got, host := submitIdeaURLOverHTTP(t, nil)
+	if !strings.HasPrefix(got, "https://"+host+"/api/ideas/") {
+		t.Fatalf("URL = %q, want host %q", got, host)
+	}
+}
+
+func TestSubmitIdeaURLPrefersForwardedHostOverRequestHost(t *testing.T) {
+	got, _ := submitIdeaURLOverHTTP(t, map[string]string{forwardedHost: "edge.example.test, inner.example.test"})
+	if !strings.HasPrefix(got, "https://edge.example.test/api/ideas/") {
+		t.Fatalf("URL = %q, want forwarded host", got)
 	}
 }
