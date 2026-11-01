@@ -65,17 +65,12 @@ func TestIdeaURLHonorsForwardedHeadersAndBasePath(t *testing.T) {
 		t.Fatalf("nil Extra URL with base path = %q", got)
 	}
 
-	hdr := http.Header{"Host": []string{"origin.example.test"}}
+	hdr := http.Header{}
 	hdr.Set(forwardedProto, " http, https ")
 	hdr.Set(forwardedHost, " edge.example.test, inner.example.test ")
 	req := &mcpsdk.CallToolRequest{Extra: &mcpsdk.RequestExtra{Header: hdr}}
 	if got := ideaURL(req, "", "abc"); got != "http://edge.example.test/api/ideas/abc" {
 		t.Fatalf("forwarded URL = %q, want first proto/host of the comma lists", got)
-	}
-
-	hostOnly := &mcpsdk.CallToolRequest{Extra: &mcpsdk.RequestExtra{Header: http.Header{"Host": []string{"origin.example.test"}}}}
-	if got := ideaURL(hostOnly, "", "abc"); got != "https://origin.example.test/api/ideas/abc" {
-		t.Fatalf("Host fallback URL = %q", got)
 	}
 }
 

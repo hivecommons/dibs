@@ -60,6 +60,11 @@ func NewHandler(cfg Config) http.Handler {
 			serveInstructions(w, r, cfg.BasePath)
 			return
 		}
+		// net/http moves Host out of the header map into r.Host, and the SDK
+		// only exposes the map to tools, so surface it as X-Forwarded-Host.
+		if r.Header.Get(forwardedHost) == "" && r.Host != "" {
+			r.Header.Set(forwardedHost, r.Host)
+		}
 		mcp.ServeHTTP(w, r)
 	})
 }
@@ -383,6 +388,9 @@ func bearerToken(req *mcpsdk.CallToolRequest) string {
 	return strings.TrimSpace(strings.TrimPrefix(authz, bearerPrefix))
 }
 
+// ideaURL builds the public idea URL from X-Forwarded-Proto/Host. NewHandler
+// fills X-Forwarded-Host from the request Host when absent; the defaults apply
+// only when there is no request at all.
 func ideaURL(req *mcpsdk.CallToolRequest, basePath, id string) string {
 	scheme, host := defaultIdeaScheme, "dibs.hivecommons.dev"
 	if req != nil && req.Extra != nil {
@@ -391,8 +399,6 @@ func ideaURL(req *mcpsdk.CallToolRequest, basePath, id string) string {
 		}
 		if v := strings.TrimSpace(req.Extra.Header.Get(forwardedHost)); v != "" {
 			host = strings.Split(v, ",")[0]
-		} else if v := strings.TrimSpace(req.Extra.Header.Get("Host")); v != "" {
-			host = v
 		}
 	}
 	base := strings.TrimRight(basePath, "/")
