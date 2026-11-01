@@ -257,6 +257,9 @@ func TestHandleUploadBadBoundary(t *testing.T) {
 	}
 }
 
+// TestStripRTFUnicodeAndCodepage covers the \uN decode path (ANSI fallback
+// skipping, \ucN, negative values, surrogate pairs) and Windows-1252 decoding
+// of \'xx bytes >= 0x80.
 func TestStripRTFUnicodeAndCodepage(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -269,6 +272,7 @@ func TestStripRTFUnicodeAndCodepage(t *testing.T) {
 		{"cp1252 accent", `caf\'e9`, "café"},
 		{"cp1252 quotes", `\'93quoted\'94`, "“quoted”"},
 		{"surrogate pair", `\u-10179\u-9089?`, "\U0001F47F"},
+		{"dangling high surrogate does not pair across text", `\u-10179?x\u-9089?`, "x\uFFFD"},
 		{"ascii hex", `\'41`, "A"},
 	}
 	for _, tc := range cases {

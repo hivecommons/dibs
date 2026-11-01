@@ -313,9 +313,12 @@ var htmlSkippedElements = []string{"script", "style", "noscript", "template"}
 
 func StripRTF(s string) string {
 	var b strings.Builder
-	// Word, WordPad and LibreOffice always emit exactly one fallback unit
-	// after \uN, so group-scoped \uc tracking is unnecessary.
+	// \uc is tracked once for the whole document rather than per group;
+	// Word, WordPad and LibreOffice never vary it mid-file.
 	ucSkip := 1
+	// highSurrogate is only meaningful between the two \u halves of a pair;
+	// any other emitted output resets it so a dangling high half cannot
+	// pair with an unrelated low half much later in the document.
 	var highSurrogate rune
 	for i := 0; i < len(s); {
 		c := s[i]
@@ -334,11 +337,13 @@ func StripRTF(s string) string {
 				break
 			}
 			if s[i] == '\\' || s[i] == '{' || s[i] == '}' {
+				highSurrogate = 0
 				b.WriteByte(s[i])
 				i++
 				continue
 			}
 			if s[i] == '\'' && i+2 < len(s) {
+				highSurrogate = 0
 				if v, ok := parseHexByte(s[i+1], s[i+2]); ok {
 					if v >= 0x80 {
 						b.WriteRune(windows1252Rune(v))
@@ -410,11 +415,14 @@ func StripRTF(s string) string {
 					}
 				}
 			case "par", "line", "sect", "page":
+				highSurrogate = 0
 				b.WriteByte('\n')
 			default:
+				highSurrogate = 0
 				b.WriteByte(' ')
 			}
 		default:
+			highSurrogate = 0
 			r, size := utf8.DecodeRuneInString(s[i:])
 			b.WriteRune(r)
 			i += size
@@ -423,6 +431,10 @@ func StripRTF(s string) string {
 	return b.String()
 }
 
+// windows1252High maps bytes 0x80-0x9F to their Windows-1252 code points.
+// The five slots Windows-1252 leaves undefined (0x81, 0x8D, 0x8F, 0x90,
+// 0x9D) keep their byte value as a C1 control, matching what Windows
+// itself produces; real RTF never emits them and cleanText leaves them as-is.
 var windows1252High = [32]rune{
 	0x20AC, 0x81, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021,
 	0x02C6, 0x2030, 0x0160, 0x2039, 0x0152, 0x8D, 0x017D, 0x8F,
