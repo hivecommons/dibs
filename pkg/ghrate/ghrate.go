@@ -3,6 +3,7 @@
 package ghrate
 
 import (
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -64,6 +65,8 @@ func (l *Limiter) ObserveAt(resp *http.Response, now time.Time) {
 func Deadline(resp *http.Response, now time.Time) time.Time {
 	ra := strings.TrimSpace(resp.Header.Get("Retry-After"))
 	if secs, err := strconv.ParseInt(ra, 10, 64); err == nil && secs >= 0 {
+		// Clamp so the Duration multiplication cannot wrap negative.
+		secs = min(secs, math.MaxInt64/int64(time.Second))
 		return now.Add(time.Duration(secs) * time.Second)
 	}
 	if t, err := http.ParseTime(ra); err == nil {
