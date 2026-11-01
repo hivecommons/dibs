@@ -207,7 +207,10 @@ func (s *Store) Refresh(ctx context.Context) error {
 		p := &projects[i]
 		// Once GitHub rate-limits us, keep what we already had rather than
 		// hammering the API until the reset.
-		skipped := s.limiter.WaitAt(s.now())
+		// After the deadline every call would fail instantly, so carry the
+		// project forward without calling or logging per project.
+		skipped := s.limiter.WaitAt(s.now()) || ctx.Err() != nil
+		stamp := false
 		if !skipped {
 			err := s.enrich(ctx, p)
 			if err != nil && s.Logf != nil {
@@ -215,6 +218,9 @@ func (s *Store) Refresh(ctx context.Context) error {
 			}
 			// Any failure (deadline, 5xx, transport) is "not enriched".
 			skipped = err != nil
+			// A permanent client error will not heal by retrying every pass;
+			// stamp it so it does not keep the whole catalog stale.
+			stamp = permanentClientError(err)
 		}
 		if !skipped {
 			p.FetchedAt = fetchedAt
@@ -225,6 +231,9 @@ func (s *Store) Refresh(ctx context.Context) error {
 				p.Description = old.Description
 			}
 			p.Topics, p.Language, p.Readme, p.FetchedAt = old.Topics, old.Language, old.Readme, old.FetchedAt
+		}
+		if stamp {
+			p.FetchedAt = fetchedAt
 		}
 	}
 	s.mu.Lock()
@@ -348,6 +357,22 @@ func repoIDFromURL(raw string) (string, bool) {
 	return parts[0] + "/" + repo, true
 }
 
+// statusError is a non-OK GitHub response that is not a 404 or rate limit.
+type statusError struct {
+	code int
+	msg  string
+}
+
+func (e *statusError) Error() string { return fmt.Sprintf("%s status %d", e.msg, e.code) }
+
+// permanentClientError reports a 4xx (other than timeout/rate-limit) that
+// retrying on the next pass will not fix.
+func permanentClientError(err error) bool {
+	var se *statusError
+	return errors.As(err, &se) && se.code >= 400 && se.code < 500 &&
+		se.code != http.StatusRequestTimeout && se.code != http.StatusTooManyRequests
+}
+
 var errSkip = errors.New("github enrichment skipped")
 
 // errRateLimited is an errSkip caused by a GitHub rate limit (not a 404).
@@ -408,7 +433,7 @@ func (s *Store) getJSON(ctx context.Context, path string, out any) error {
 		return errSkip
 	}
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("github returned status %d", resp.StatusCode)
+		return &statusError{resp.StatusCode, "github returned"}
 	}
 	return json.NewDecoder(io.LimitReader(resp.Body, maxGitHubBody)).Decode(out)
 }
@@ -434,7 +459,7 @@ func (s *Store) getReadme(ctx context.Context, repoID string) (string, error) {
 		return "", errSkip
 	}
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("github readme returned status %d", resp.StatusCode)
+		return "", &statusError{resp.StatusCode, "github readme returned"}
 	}
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxGitHubBody))
 	if err != nil {
