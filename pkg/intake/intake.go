@@ -313,6 +313,10 @@ var htmlSkippedElements = []string{"script", "style", "noscript", "template"}
 
 func StripRTF(s string) string {
 	var b strings.Builder
+	// Word, WordPad and LibreOffice always emit exactly one fallback unit
+	// after \uN, so group-scoped \uc tracking is unnecessary.
+	ucSkip := 1
+	var highSurrogate rune
 	for i := 0; i < len(s); {
 		c := s[i]
 		switch c {
@@ -336,7 +340,11 @@ func StripRTF(s string) string {
 			}
 			if s[i] == '\'' && i+2 < len(s) {
 				if v, ok := parseHexByte(s[i+1], s[i+2]); ok {
-					b.WriteByte(v)
+					if v >= 0x80 {
+						b.WriteRune(windows1252Rune(v))
+					} else {
+						b.WriteByte(v)
+					}
 				}
 				i += 3
 				continue
@@ -346,16 +354,61 @@ func StripRTF(s string) string {
 				i++
 			}
 			word := s[wordStart:i]
+			hasParam, neg, n := false, false, 0
 			if i < len(s) && (s[i] == '-' || (s[i] >= '0' && s[i] <= '9')) {
+				if s[i] == '-' {
+					neg = true
+				} else {
+					hasParam, n = true, int(s[i]-'0')
+				}
 				i++
 				for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+					hasParam = true
+					if n < 1<<20 {
+						n = n*10 + int(s[i]-'0')
+					}
 					i++
 				}
+			}
+			if neg {
+				n = -n
 			}
 			if i < len(s) && s[i] == ' ' {
 				i++
 			}
 			switch word {
+			case "uc":
+				if hasParam && n >= 0 {
+					ucSkip = n
+				}
+			case "u":
+				if !hasParam {
+					b.WriteByte(' ')
+					break
+				}
+				if n < 0 {
+					n += 65536
+				}
+				r := rune(n)
+				switch {
+				case r >= 0xD800 && r <= 0xDBFF:
+					highSurrogate = r
+				case r >= 0xDC00 && r <= 0xDFFF && highSurrogate != 0:
+					b.WriteRune(0x10000 + (highSurrogate-0xD800)<<10 + (r - 0xDC00))
+					highSurrogate = 0
+				default:
+					highSurrogate = 0
+					b.WriteRune(r)
+				}
+				for k := 0; k < ucSkip && i < len(s); k++ {
+					if s[i] == '\\' && i+3 < len(s) && s[i+1] == '\'' {
+						i += 4
+					} else if s[i] != '\\' && s[i] != '{' && s[i] != '}' {
+						i++
+					} else {
+						break
+					}
+				}
 			case "par", "line", "sect", "page":
 				b.WriteByte('\n')
 			default:
@@ -368,6 +421,21 @@ func StripRTF(s string) string {
 		}
 	}
 	return b.String()
+}
+
+var windows1252High = [32]rune{
+	0x20AC, 0x81, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021,
+	0x02C6, 0x2030, 0x0160, 0x2039, 0x0152, 0x8D, 0x017D, 0x8F,
+	0x90, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014,
+	0x02DC, 0x2122, 0x0161, 0x203A, 0x0153, 0x9D, 0x017E, 0x0178,
+}
+
+// windows1252Rune decodes a byte >= 0x80 from Windows-1252.
+func windows1252Rune(v byte) rune {
+	if v < 0xA0 {
+		return windows1252High[v-0x80]
+	}
+	return rune(v)
 }
 
 var rtfSkippedDestinations = map[string]bool{

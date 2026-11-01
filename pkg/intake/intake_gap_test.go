@@ -256,3 +256,27 @@ func TestHandleUploadBadBoundary(t *testing.T) {
 		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestStripRTFUnicodeAndCodepage(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name, in, want string
+	}{
+		{"curly apostrophe", `\u8217\'92`, "’"},
+		{"em dash question fallback", `\u8212?`, "—"},
+		{"uc0 no fallback", `\uc0\u1055`, "П"},
+		{"uc1 fallback", `\uc1\u1055?`, "П"},
+		{"cp1252 accent", `caf\'e9`, "café"},
+		{"cp1252 quotes", `\'93quoted\'94`, "“quoted”"},
+		{"surrogate pair", `\u-10179\u-9089?`, "\U0001F47F"},
+		{"ascii hex", `\'41`, "A"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := strings.TrimSpace(StripRTF(tc.in)); got != tc.want {
+				t.Errorf("StripRTF(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
