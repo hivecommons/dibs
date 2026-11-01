@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -173,5 +176,75 @@ func TestRefreshAsyncSkipsWhileRateLimited(t *testing.T) {
 	case <-refreshed:
 	case <-time.After(5 * time.Second):
 		t.Fatal("resumed refresh never completed")
+	}
+}
+
+func TestRefreshEnrichesNeverFetchedAndOldestFirst(t *testing.T) {
+	now := time.Date(2026, 9, 23, 12, 0, 0, 0, time.UTC)
+	var (
+		mu      sync.Mutex
+		visited []string
+	)
+	// GitHub has quota for two projects this pass; everything after is 429.
+	gh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		repoID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/repos/"), "/readme")
+		mu.Lock()
+		if !slices.Contains(visited, repoID) {
+			visited = append(visited, repoID)
+		}
+		over := len(visited) > 2
+		mu.Unlock()
+		switch {
+		case over:
+			w.WriteHeader(http.StatusTooManyRequests)
+		case strings.HasSuffix(r.URL.Path, "/readme"):
+			_, _ = w.Write([]byte("fresh readme for " + repoID + "\n"))
+		default:
+			_ = json.NewEncoder(w).Encode(map[string]any{"description": "fresh " + repoID, "language": "Go"})
+		}
+	}))
+	defer gh.Close()
+
+	s := newRefreshStore(t, gh, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(rateLimitLandscapeYAML))
+	})
+	s.Now = func() time.Time { return now }
+	// Landscape order is alpha, beta, gamma; staleness order is the reverse of
+	// what alpha's position suggests: beta was never enriched, gamma is three
+	// days old and alpha is the freshest.
+	alphaAt, gammaAt := now.Add(-time.Hour), now.Add(-3*24*time.Hour)
+	s.setProjects([]Project{
+		{Name: "alpha", RepoID: "cncf/alpha", Description: "cached alpha", Readme: "cached alpha readme", FetchedAt: alphaAt},
+		{Name: "beta", RepoID: "cncf/beta"},
+		{Name: "gamma", RepoID: "cncf/gamma", Description: "cached gamma", Readme: "cached gamma readme", FetchedAt: gammaAt},
+	})
+
+	if err := s.Refresh(t.Context()); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	mu.Lock()
+	order := append([]string(nil), visited...)
+	mu.Unlock()
+	if want := []string{"cncf/beta", "cncf/gamma", "cncf/alpha"}; !slices.Equal(order, want) {
+		t.Fatalf("enrichment order = %v, want never-fetched then oldest first %v", order, want)
+	}
+	got := map[string]Project{}
+	for _, p := range s.List() {
+		got[p.RepoID] = p
+	}
+	for _, id := range []string{"cncf/beta", "cncf/gamma"} {
+		if p := got[id]; p.Readme != "fresh readme for "+id+"\n" || !p.FetchedAt.Equal(now) {
+			t.Fatalf("%s = %+v, want enriched this pass and stamped now", id, p)
+		}
+	}
+	if a := got["cncf/alpha"]; a.Readme != "cached alpha readme" || !a.FetchedAt.Equal(alphaAt) {
+		t.Fatalf("alpha = %+v, want prior enrichment and stamp carried forward", a)
+	}
+	ids := make([]string, 0, 3)
+	for _, p := range s.List() {
+		ids = append(ids, p.RepoID)
+	}
+	if want := []string{"cncf/alpha", "cncf/beta", "cncf/gamma"}; !slices.Equal(ids, want) {
+		t.Fatalf("persisted order = %v, want sorted by RepoID %v", ids, want)
 	}
 }
