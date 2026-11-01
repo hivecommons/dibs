@@ -586,7 +586,7 @@ func TestEnrichmentResumesAfterRateLimitReset(t *testing.T) {
 	gh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if hits.Add(1) == 1 {
 			w.Header().Set("X-RateLimit-Remaining", "0")
-			w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(time.Now().Add(-time.Minute).Unix(), 10))
+			w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(time.Now().Add(time.Hour).Unix(), 10))
 			w.WriteHeader(http.StatusForbidden)
 			return
 		}
@@ -595,13 +595,18 @@ func TestEnrichmentResumesAfterRateLimitReset(t *testing.T) {
 	defer gh.Close()
 	c := &HTTPHubClient{BaseURL: hub.URL, GitHubAPI: gh.URL}
 	reg, _ := newTestRegistry(t)
-	for i := 0; i < 2; i++ {
-		if err := reg.Sync(context.Background(), c); err != nil {
-			t.Fatalf("Sync #%d: %v", i+1, err)
-		}
+	if err := reg.Sync(context.Background(), c); err != nil {
+		t.Fatalf("Sync #1: %v", err)
+	}
+	// Let the observed reset elapse.
+	c.enrichMu.Lock()
+	c.notBefore = time.Now().Add(-time.Second)
+	c.enrichMu.Unlock()
+	if err := reg.Sync(context.Background(), c); err != nil {
+		t.Fatalf("Sync #2: %v", err)
 	}
 	if got := hits.Load(); got != 2 {
-		t.Fatalf("GitHub hits = %d, want 2 (a reset in the past must not block the next sync)", got)
+		t.Fatalf("GitHub hits = %d, want 2 (an elapsed reset must not block the next sync)", got)
 	}
 	if p, _ := reg.Get("o/a"); p == nil || p.Description != "after reset" {
 		t.Fatalf("description not enriched after reset: %+v", p)
