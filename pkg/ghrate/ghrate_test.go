@@ -64,6 +64,15 @@ func TestLimiter(t *testing.T) {
 	}
 }
 
+func TestHugeRetryAfterStillBacksOff(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	l := &Limiter{Now: func() time.Time { return now }}
+	l.Observe(resp(429, "Retry-After", "10000000000"))
+	if !l.Wait() {
+		t.Fatal("a huge Retry-After must back off, not overflow into the past")
+	}
+}
+
 func TestObserveNil(t *testing.T) {
 	var l Limiter
 	l.Observe(nil)
