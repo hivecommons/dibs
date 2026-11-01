@@ -207,15 +207,16 @@ func (s *Store) Refresh(ctx context.Context) error {
 		p := &projects[i]
 		// Once GitHub rate-limits us, keep what we already had rather than
 		// hammering the API until the reset.
-		limited := s.limiter.WaitAt(s.now())
-		if !limited {
+		skipped := s.limiter.WaitAt(s.now())
+		if !skipped {
 			err := s.enrich(ctx, p)
 			if err != nil && s.Logf != nil {
 				s.Logf("catalog enrich %s: %v", p.RepoID, err)
 			}
-			limited = errors.Is(err, errRateLimited)
+			// Any failure (deadline, 5xx, transport) is "not enriched".
+			skipped = err != nil
 		}
-		if !limited {
+		if !skipped {
 			p.FetchedAt = fetchedAt
 			continue
 		}
@@ -376,7 +377,9 @@ func (s *Store) enrich(ctx context.Context, p *Project) error {
 	switch {
 	case err == nil:
 		p.Readme = readme
-	case errors.Is(err, errRateLimited):
+	case errors.Is(err, errSkip) && !errors.Is(err, errRateLimited):
+		// A 404 readme is a genuine "nothing to fetch".
+	default:
 		// Let Refresh carry the prior enrichment forward and retry next pass
 		// instead of stamping the project fresh with an empty readme.
 		return err

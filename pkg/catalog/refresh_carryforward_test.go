@@ -249,3 +249,52 @@ func TestRefreshEnrichesNeverFetchedAndOldestFirst(t *testing.T) {
 		t.Fatalf("persisted order = %v, want sorted by RepoID %v", ids, want)
 	}
 }
+
+func TestRefreshEnrichFailureKeepsPriorEnrichmentAndStaleStamp(t *testing.T) {
+	now := time.Date(2026, 9, 23, 12, 0, 0, 0, time.UTC)
+	cachedAt := now.Add(-3 * 24 * time.Hour)
+	cases := map[string]http.HandlerFunc{
+		"repo 500": func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		},
+		"readme 500": func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/readme") {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"description": "fresh beta", "language": "Go"})
+		},
+	}
+	for name, handler := range cases {
+		t.Run(name, func(t *testing.T) {
+			gh := httptest.NewServer(handler)
+			defer gh.Close()
+			s := newRefreshStore(t, gh, func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = w.Write([]byte(rateLimitLandscapeYAML))
+			})
+			s.Now = func() time.Time { return now }
+			s.setProjects([]Project{{
+				Name: "beta", RepoID: "cncf/beta", Description: "cached beta",
+				Topics: []string{"cached"}, Language: "Rust", Readme: "cached readme", FetchedAt: cachedAt,
+			}})
+			if err := s.Refresh(t.Context()); err != nil {
+				t.Fatalf("Refresh: %v", err)
+			}
+			var b Project
+			for _, p := range s.List() {
+				if p.RepoID == "cncf/beta" {
+					b = p
+				}
+			}
+			if b.Readme != "cached readme" || b.Language != "Rust" || len(b.Topics) != 1 || b.Description != "cached beta" {
+				t.Fatalf("beta lost prior enrichment: %+v", b)
+			}
+			if !b.FetchedAt.Equal(cachedAt) {
+				t.Fatalf("beta FetchedAt = %v, want stale %v", b.FetchedAt, cachedAt)
+			}
+			if !s.needsRefresh() {
+				t.Fatal("needsRefresh() = false after enrich failure, want true")
+			}
+		})
+	}
+}

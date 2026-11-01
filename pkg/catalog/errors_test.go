@@ -274,14 +274,21 @@ func TestEnrichToleratesReadmeFailures(t *testing.T) {
 			s := &Store{BaseURL: github.URL, Client: github.Client()}
 			p := Project{RepoID: "o/r", Description: "from landscape"}
 			err := s.enrich(context.Background(), &p)
-			// A readme rate limit is surfaced so Refresh can carry the prior
-			// enrichment forward and retry; 404/5xx are tolerated silently.
-			if status == http.StatusTooManyRequests {
+			// A readme rate limit or 5xx is surfaced so Refresh can carry the
+			// prior enrichment forward and retry; a 404 is tolerated silently.
+			switch status {
+			case http.StatusTooManyRequests:
 				if !errors.Is(err, errRateLimited) {
 					t.Fatalf("enrich err = %v, want errRateLimited", err)
 				}
-			} else if err != nil {
-				t.Fatalf("enrich: %v", err)
+			case http.StatusInternalServerError:
+				if err == nil || errors.Is(err, errSkip) {
+					t.Fatalf("enrich err = %v, want non-skip readme error", err)
+				}
+			default:
+				if err != nil {
+					t.Fatalf("enrich: %v", err)
+				}
 			}
 			if p.Readme != "" {
 				t.Fatalf("Readme = %q, want empty when readme fetch fails", p.Readme)
