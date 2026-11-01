@@ -258,8 +258,8 @@ func submitIdeaURLOverHTTP(t *testing.T, extra map[string]string) (string, strin
 
 func TestSubmitIdeaURLUsesRequestHostWithoutForwardedHost(t *testing.T) {
 	got, host := submitIdeaURLOverHTTP(t, nil)
-	if !strings.HasPrefix(got, "https://"+host+"/api/ideas/") {
-		t.Fatalf("URL = %q, want host %q", got, host)
+	if !strings.HasPrefix(got, "http://"+host+"/api/ideas/") {
+		t.Fatalf("URL = %q, want http scheme and host %q", got, host)
 	}
 }
 
@@ -267,5 +267,19 @@ func TestSubmitIdeaURLPrefersForwardedHostOverRequestHost(t *testing.T) {
 	got, _ := submitIdeaURLOverHTTP(t, map[string]string{forwardedHost: "edge.example.test, inner.example.test"})
 	if !strings.HasPrefix(got, "https://edge.example.test/api/ideas/") {
 		t.Fatalf("URL = %q, want forwarded host", got)
+	}
+}
+
+func TestSubmitIdeaURLRejectsForgedForwardedHeaders(t *testing.T) {
+	got, host := submitIdeaURLOverHTTP(t, map[string]string{forwardedProto: "javascript", forwardedHost: "evil.test/x@y"})
+	if !strings.HasPrefix(got, "http://"+host+"/api/ideas/") {
+		t.Fatalf("URL = %q, want request-derived scheme and host %q", got, host)
+	}
+}
+
+func TestSubmitIdeaURLHonorsForwardedProto(t *testing.T) {
+	got, host := submitIdeaURLOverHTTP(t, map[string]string{forwardedProto: " HTTPS, http"})
+	if !strings.HasPrefix(got, "https://"+host+"/api/ideas/") {
+		t.Fatalf("URL = %q, want https scheme and host %q", got, host)
 	}
 }
