@@ -64,22 +64,25 @@ func NewHandler(cfg Config) http.Handler {
 		// net/http moves Host out of the header map into r.Host, and the SDK
 		// only exposes the map to tools, so surface it as X-Forwarded-Host.
 		// Forwarded values are client-controlled: keep only a valid scheme and
-		// host, falling back to what the request itself says.
+		// host, falling back to what the request itself says. A valid forwarded
+		// host means a proxy (which normally terminates TLS) is in front of us,
+		// so the scheme defaults to https there and to the request scheme otherwise.
 		scheme := "http"
 		if r.TLS != nil {
 			scheme = "https"
 		}
-		if p := forwardedScheme(r.Header.Get(forwardedProto)); p != "" {
-			scheme = p
-		}
-		r.Header.Set(forwardedProto, scheme)
 		if h := forwardedHostValue(r.Header.Get(forwardedHost)); h != "" {
 			r.Header.Set(forwardedHost, h)
+			scheme = defaultIdeaScheme
 		} else if r.Host != "" {
 			r.Header.Set(forwardedHost, r.Host)
 		} else {
 			r.Header.Del(forwardedHost)
 		}
+		if p := forwardedScheme(r.Header.Get(forwardedProto)); p != "" {
+			scheme = p
+		}
+		r.Header.Set(forwardedProto, scheme)
 		mcp.ServeHTTP(w, r)
 	})
 }
