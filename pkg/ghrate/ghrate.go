@@ -67,11 +67,16 @@ func (l *Limiter) ObserveAt(resp *http.Response, now time.Time) {
 // wins (GitHub sends it with secondary limits alongside the primary
 // X-RateLimit-Reset); the reset time applies only when the primary quota is
 // exhausted. Otherwise it falls back to now+Cooldown. The result never lies
-// more than MaxBackoff after now.
+// more than MaxBackoff after now, and a header instant before now (a stale
+// Retry-After date, or an X-RateLimit-Reset that time.Unix wraps negative)
+// also falls back to now+Cooldown so a limited response always backs off.
 func Deadline(resp *http.Response, now time.Time) time.Time {
 	until, limit := resumeAt(resp, now), now.Add(MaxBackoff)
 	if until.After(limit) {
 		return limit
+	}
+	if until.Before(now) {
+		return now.Add(Cooldown)
 	}
 	return until
 }
