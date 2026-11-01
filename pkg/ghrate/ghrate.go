@@ -3,7 +3,6 @@
 package ghrate
 
 import (
-	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -14,6 +13,12 @@ import (
 // Cooldown is the back-off used when a limited response carries no parseable
 // X-RateLimit-Reset or Retry-After header.
 const Cooldown = 15 * time.Minute
+
+// MaxBackoff caps every back-off Deadline returns, whichever header it came
+// from, so one bad or hostile limited response cannot halt the pollers until
+// process restart (#550). GitHub's primary window is one hour; the slack
+// absorbs clock skew between this host and GitHub.
+const MaxBackoff = 6 * time.Hour
 
 // Limiter holds the time before which GitHub must not be polled. The zero
 // value is ready to use.
@@ -61,12 +66,22 @@ func (l *Limiter) ObserveAt(resp *http.Response, now time.Time) {
 // Deadline returns when a rate-limited resp lets requests resume. Retry-After
 // wins (GitHub sends it with secondary limits alongside the primary
 // X-RateLimit-Reset); the reset time applies only when the primary quota is
-// exhausted. Otherwise it falls back to now+Cooldown.
+// exhausted. Otherwise it falls back to now+Cooldown. The result never lies
+// more than MaxBackoff after now.
 func Deadline(resp *http.Response, now time.Time) time.Time {
+	until, limit := resumeAt(resp, now), now.Add(MaxBackoff)
+	if until.After(limit) {
+		return limit
+	}
+	return until
+}
+
+// resumeAt is Deadline before the MaxBackoff ceiling is applied.
+func resumeAt(resp *http.Response, now time.Time) time.Time {
 	ra := strings.TrimSpace(resp.Header.Get("Retry-After"))
 	if secs, err := strconv.ParseInt(ra, 10, 64); err == nil && secs >= 0 {
-		// Clamp so the Duration multiplication cannot wrap negative.
-		secs = min(secs, math.MaxInt64/int64(time.Second))
+		// Cap before multiplying so the Duration cannot wrap negative.
+		secs = min(secs, int64(MaxBackoff/time.Second))
 		return now.Add(time.Duration(secs) * time.Second)
 	}
 	if t, err := http.ParseTime(ra); err == nil {
