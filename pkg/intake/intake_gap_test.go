@@ -270,6 +270,14 @@ func TestStripRTFUnicodeAndCodepage(t *testing.T) {
 		{"cp1252 quotes", `\'93quoted\'94`, "“quoted”"},
 		{"surrogate pair", `\u-10179\u-9089?`, "\U0001F47F"},
 		{"ascii hex", `\'41`, "A"},
+		{"bare u without parameter", `\u x`, "x"},
+		{"uc2 skips two fallback units", `\uc2\u1055??x`, "Пx"},
+		{"negative uc leaves skip count unchanged", `\uc-1\u1055?x`, "Пx"},
+		{"fallback skip stops at control word", `\u1055\par x`, "П\nx"},
+		{"fallback skip stops at group close", `\u1055}x`, "Пx"},
+		{"fallback skip stops at group open", `\u1055{x}`, "Пx"},
+		{"hex fallback consumed as one unit", `\u1055\'92x`, "Пx"},
+		{"lone low surrogate is replaced", `\u-9089?x`, "\uFFFDx"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
