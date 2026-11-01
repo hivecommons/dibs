@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/hivecommons/dibs/pkg/auth"
 	"github.com/hivecommons/dibs/pkg/deps"
@@ -62,8 +63,22 @@ func NewHandler(cfg Config) http.Handler {
 		}
 		// net/http moves Host out of the header map into r.Host, and the SDK
 		// only exposes the map to tools, so surface it as X-Forwarded-Host.
-		if r.Header.Get(forwardedHost) == "" && r.Host != "" {
+		// Forwarded values are client-controlled: keep only a valid scheme and
+		// host, falling back to what the request itself says.
+		scheme := "http"
+		if r.TLS != nil {
+			scheme = "https"
+		}
+		if p := forwardedScheme(r.Header.Get(forwardedProto)); p != "" {
+			scheme = p
+		}
+		r.Header.Set(forwardedProto, scheme)
+		if h := forwardedHostValue(r.Header.Get(forwardedHost)); h != "" {
+			r.Header.Set(forwardedHost, h)
+		} else if r.Host != "" {
 			r.Header.Set(forwardedHost, r.Host)
+		} else {
+			r.Header.Del(forwardedHost)
 		}
 		mcp.ServeHTTP(w, r)
 	})
@@ -388,17 +403,37 @@ func bearerToken(req *mcpsdk.CallToolRequest) string {
 	return strings.TrimSpace(strings.TrimPrefix(authz, bearerPrefix))
 }
 
+// forwardedScheme returns the first X-Forwarded-Proto value if it is http or
+// https, else "".
+func forwardedScheme(v string) string {
+	p := strings.ToLower(strings.TrimSpace(strings.Split(v, ",")[0]))
+	if p == "http" || p == "https" {
+		return p
+	}
+	return ""
+}
+
+// forwardedHostValue returns the first X-Forwarded-Host value if it looks like
+// a plain host[:port], else "".
+func forwardedHostValue(v string) string {
+	h := strings.TrimSpace(strings.Split(v, ",")[0])
+	if h == "" || strings.ContainsAny(h, "/@\\?#") || strings.IndexFunc(h, unicode.IsSpace) >= 0 {
+		return ""
+	}
+	return h
+}
+
 // ideaURL builds the public idea URL from X-Forwarded-Proto/Host. NewHandler
 // fills X-Forwarded-Host from the request Host when absent; the defaults apply
 // only when there is no request at all.
 func ideaURL(req *mcpsdk.CallToolRequest, basePath, id string) string {
 	scheme, host := defaultIdeaScheme, "dibs.hivecommons.dev"
 	if req != nil && req.Extra != nil {
-		if v := strings.TrimSpace(req.Extra.Header.Get(forwardedProto)); v != "" {
-			scheme = strings.Split(v, ",")[0]
+		if p := forwardedScheme(req.Extra.Header.Get(forwardedProto)); p != "" {
+			scheme = p
 		}
-		if v := strings.TrimSpace(req.Extra.Header.Get(forwardedHost)); v != "" {
-			host = strings.Split(v, ",")[0]
+		if h := forwardedHostValue(req.Extra.Header.Get(forwardedHost)); h != "" {
+			host = h
 		}
 	}
 	base := strings.TrimRight(basePath, "/")
