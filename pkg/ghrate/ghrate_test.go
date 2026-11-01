@@ -37,6 +37,10 @@ func TestLimiter(t *testing.T) {
 		{"unparseable falls back", resp(429, "X-RateLimit-Reset", "soon"), Cooldown},
 		{"plain 403 ignored", resp(403), 0},
 		{"200 ignored", resp(200, "X-RateLimit-Remaining", "0"), 0},
+		{"retry-after at the ceiling", resp(429, "Retry-After", strconv.FormatInt(int64(MaxBackoff/time.Second), 10)), MaxBackoff},
+		{"huge retry-after capped, not overflowed", resp(429, "Retry-After", "10000000000"), MaxBackoff},
+		{"far-future retry-after http-date capped", resp(429, "Retry-After", base.AddDate(100, 0, 0).UTC().Format(http.TimeFormat)), MaxBackoff},
+		{"far-future reset capped", resp(403, "X-RateLimit-Remaining", "0", "X-RateLimit-Reset", "9223372036"), MaxBackoff},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -61,15 +65,6 @@ func TestLimiter(t *testing.T) {
 				t.Fatal("must stop waiting at reset")
 			}
 		})
-	}
-}
-
-func TestHugeRetryAfterStillBacksOff(t *testing.T) {
-	now := time.Unix(1_700_000_000, 0)
-	l := &Limiter{Now: func() time.Time { return now }}
-	l.Observe(resp(429, "Retry-After", "10000000000"))
-	if !l.Wait() {
-		t.Fatal("a huge Retry-After must back off, not overflow into the past")
 	}
 }
 
