@@ -626,6 +626,11 @@ func (s *pdfScanner) literalString() {
 		}
 		s.pos++
 	}
+	// A trailing backslash skips past the end of input; clamp so scan()'s
+	// slice stays in bounds.
+	if s.pos > len(s.data) {
+		s.pos = len(s.data)
+	}
 }
 
 // hexString consumes a <...> string the way readHexString does: everything

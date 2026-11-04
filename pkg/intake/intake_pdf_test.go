@@ -199,6 +199,8 @@ func TestPDFDeclaredObjectsExceeds(t *testing.T) {
 		{"w without dictionary", []byte("/Type /XRef /W [1 2000000000000 1]"), false},
 		{"w after non-name key ignored", []byte("<< /Type /XRef 5 /W [1 2000000000000 1] >>"), false},
 		{"w in string ignored", []byte("<< /Type /XRef /ID (/W [1 2000000000000 1]) >>"), false},
+		{"unterminated escape at eof", []byte("<< /Type /XRef /ID (\\"), false},
+		{"bare unterminated escape at eof", []byte("(\\"), false},
 		{"overlapping candidate sections exhaust budget", pdfOverlappingXrefs(), true},
 	}
 	for _, tc := range cases {
