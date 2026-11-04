@@ -47,7 +47,12 @@ const (
 	// gigabytes. 1,048,576 objects (~40 MB of table) is far above what an upload
 	// under the default 25 MB cap (DIBS_INTAKE_MAX_MB) can legitimately contain.
 	maxPDFObjects = 1 << 20
-	sttTimeout    = 60 * time.Second
+	// maxPDFXrefFieldWidth bounds the xref stream /W array, both per entry
+	// and in sum. The reader allocates a buffer of the summed widths before
+	// reading any entry, so /W [1 2000000000000 1] demands terabytes. Real
+	// files use widths of a few bytes.
+	maxPDFXrefFieldWidth = 64
+	sttTimeout           = 60 * time.Second
 )
 
 var (
@@ -304,7 +309,8 @@ const (
 // object number of limit or more in any of the forms pdf.NewReader sizes its
 // object table from: a classic xref subsection header "<start> <count>", an
 // xref stream /Index array of start/count pairs, or /Size (the bound used
-// when an xref stream has no /Index). It does not call the PDF library, so
+// when an xref stream has no /Index), or an xref stream /W array whose field
+// widths (each, or in sum) exceed maxPDFXrefFieldWidth. It does not call the PDF library, so
 // it is safe to run on input the reader has not yet accepted.
 //
 // The bytes are tokenized the way the reader's own lexer does it (same
@@ -347,6 +353,10 @@ func pdfDeclaredObjectsExceeds(data []byte, limit int64) bool {
 			}
 		case "/Index":
 			if pdfXrefIndexExceeds(s, limit) {
+				return true
+			}
+		case "/W":
+			if pdfXrefWidthExceeds(s, maxPDFXrefFieldWidth) {
 				return true
 			}
 		}
@@ -403,6 +413,30 @@ func pdfXrefIndexExceeds(s *pdfScanner, limit int64) bool {
 			return false
 		}
 		if pdfBoundExceeds(start, count, limit) {
+			return true
+		}
+	}
+}
+
+// pdfXrefWidthExceeds consumes the array following a /W name as integers,
+// stopping at the first token that is not one. It reports whether any entry
+// is negative or above limit, or the entries sum to more than limit.
+// Digit strings too long for an int64 count as exceeding.
+func pdfXrefWidthExceeds(s *pdfScanner, limit int64) bool {
+	if string(s.next()) != "[" {
+		return false
+	}
+	var sum int64
+	for {
+		tok := s.next()
+		if !pdfInteger(tok) {
+			return false
+		}
+		w, err := strconv.ParseInt(string(tok), 10, 64)
+		if err != nil || w < 0 || w > limit {
+			return true
+		}
+		if sum += w; sum > limit {
 			return true
 		}
 	}

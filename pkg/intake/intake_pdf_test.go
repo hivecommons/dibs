@@ -179,6 +179,12 @@ func TestPDFDeclaredObjectsExceeds(t *testing.T) {
 		{"index with escaped name", []byte("/Ind#65x [1000000000 2]"), true},
 		{"index pair after non-integer ignored", []byte("/Index [0 2 /Foo 1 1000000000 2]"), false},
 		{"index not an array ignored", []byte("/Index 1000000000 2"), false},
+		{"w entry huge", []byte("/Type /XRef /W [1 2000000000000 1]"), true},
+		{"w small", []byte("/W [1 2 1]"), false},
+		{"w sum exceeds", []byte("/W [40 40 40]"), true},
+		{"w overflow digits", []byte("/W [1 99999999999999999999 1]"), true},
+		{"w negative", []byte("/W [1 -2 1]"), true},
+		{"w not an array ignored", []byte("/W 2000000000000"), false},
 		{"overlapping candidate sections exhaust budget", pdfOverlappingXrefs(), true},
 	}
 	for _, tc := range cases {
