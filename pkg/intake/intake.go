@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/textproto"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -40,7 +41,14 @@ const (
 	// rationale as maxDOCXXMLBytes: far above any real page that yields
 	// MaxReturnedRunes of text, far below the pod memory limit.
 	maxPDFPageContentBytes = 16 << 20
-	sttTimeout             = 60 * time.Second
+	// maxPDFObjects is the highest object number a PDF may declare in its
+	// cross-reference data before ExtractPDF refuses it. The reader sizes its
+	// object table to that number (40 bytes per entry) before reading a single
+	// page, so an upload of a few hundred bytes could otherwise demand
+	// gigabytes. 1,048,576 objects (~40 MB of table) is far above what a 25 MB
+	// upload can legitimately contain.
+	maxPDFObjects = 1 << 20
+	sttTimeout    = 60 * time.Second
 )
 
 var (
@@ -177,13 +185,20 @@ func ExtractDocument(ext string, data []byte) (string, error) {
 // decodes it in full, one token at a time, with no size limit), so it is
 // budgeted the same way before the font is registered. The parser also
 // panics on malformed input (reader-level entry points have no recover),
-// so panics are converted to ordinary errors here.
+// so panics are converted to ordinary errors here. Before any of that, the
+// highest object number the file declares in its cross-reference data is
+// bounded: pdf.NewReader sizes its object table to that number up front, and
+// an allocation failure is not a recoverable panic, so the check has to run
+// before NewReader rather than rely on the budgets below.
 func ExtractPDF(data []byte) (text string, err error) {
 	defer func() {
 		if rec := recover(); rec != nil {
 			text, err = "", fmt.Errorf("malformed PDF: %v", rec)
 		}
 	}()
+	if pdfDeclaredObjectsExceed(data, maxPDFObjects) {
+		return "", fmt.Errorf("malformed PDF: declares more than %d objects", maxPDFObjects)
+	}
 	r, err := pdf.NewReader(bytes.NewReader(data), int64(len(data)))
 	if err != nil {
 		return "", err
@@ -808,4 +823,67 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
+}
+
+var (
+	pdfSizeRe      = regexp.MustCompile(`/Size\s+(\d+)`)
+	pdfIndexRe     = regexp.MustCompile(`/Index\s*\[([\d\s]+)\]`)
+	pdfSubsectRe   = regexp.MustCompile(`(?m)^[ \t]*(\d+)[ \t]+(\d+)[ \t]*\r?$`)
+	pdfXrefKeyword = []byte("xref")
+	pdfTrailerWord = []byte("trailer")
+)
+
+// pdfDeclaredObjectsExceed reports whether the raw PDF bytes declare an
+// object number of limit or more in any of the forms pdf.NewReader sizes its
+// object table from: a classic xref subsection header "<start> <count>", an
+// xref stream /Index array of start/count pairs, or /Size (the bound used when
+// an xref stream has no /Index). It does not call the PDF library, so it is
+// safe to run on input the reader has not yet accepted.
+func pdfDeclaredObjectsExceed(data []byte, limit int64) bool {
+	for _, m := range pdfSizeRe.FindAllSubmatchIndex(data, -1) {
+		if pdfBoundExceeds(data[m[2]:m[3]], nil, limit) {
+			return true
+		}
+	}
+	for _, m := range pdfIndexRe.FindAllSubmatchIndex(data, -1) {
+		f := bytes.Fields(data[m[2]:m[3]])
+		for i := 0; i+1 < len(f); i += 2 {
+			if pdfBoundExceeds(f[i], f[i+1], limit) {
+				return true
+			}
+		}
+	}
+	// Subsection headers only count between an xref keyword and the next
+	// trailer keyword; entry lines have three tokens and never match.
+	for off := 0; ; {
+		i := bytes.Index(data[off:], pdfXrefKeyword)
+		if i < 0 {
+			return false
+		}
+		start := off + i + len(pdfXrefKeyword)
+		end := len(data)
+		if j := bytes.Index(data[start:], pdfTrailerWord); j >= 0 {
+			end = start + j
+		}
+		for _, m := range pdfSubsectRe.FindAllSubmatchIndex(data[start:end], -1) {
+			if pdfBoundExceeds(data[start+m[2]:start+m[3]], data[start+m[4]:start+m[5]], limit) {
+				return true
+			}
+		}
+		off = start
+	}
+}
+
+// pdfBoundExceeds reports whether start+count (count may be nil) reaches
+// limit. Digit strings too long for an int64 are themselves beyond the limit.
+func pdfBoundExceeds(start, count []byte, limit int64) bool {
+	s, err := strconv.ParseInt(string(start), 10, 64)
+	if err != nil || s >= limit {
+		return true
+	}
+	if count == nil {
+		return false
+	}
+	c, err := strconv.ParseInt(string(count), 10, 64)
+	return err != nil || c >= limit || s+c >= limit
 }

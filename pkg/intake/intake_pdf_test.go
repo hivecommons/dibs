@@ -2,7 +2,10 @@ package intake
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -114,5 +117,70 @@ func TestPDFPageContentExceedsUndecodableStream(t *testing.T) {
 	}
 	if pdfPageContentExceeds(r.Page(1), 1) {
 		t.Fatal("pdfPageContentExceeds = true for an undecodable stream, want false so the page error is reported")
+	}
+}
+
+func TestPDFDeclaredObjectsExceed(t *testing.T) {
+	t.Parallel()
+	valid := assemblePDF(pdfPageObjects("hi", ""))
+	huge := bytes.Replace(valid, []byte("xref\n0 6\n"), []byte("xref\n1000000000 5\n"), 1)
+	if bytes.Equal(huge, valid) {
+		t.Fatal("fixture did not rewrite the subsection header")
+	}
+	cases := []struct {
+		name string
+		data []byte
+		want bool
+	}{
+		{"valid document", valid, false},
+		{"huge subsection start", huge, true},
+		{"huge subsection count", []byte("xref\n0 1000000000\ntrailer\n"), true},
+		{"subsection count overflows int64", []byte("xref\n0 99999999999999999999999999\ntrailer\n"), true},
+		{"subsection start plus count reaches limit", []byte("xref\n600000 600000\ntrailer\n"), true},
+		{"second xref section is huge", []byte("xref\n0 1\ntrailer\nxref\n1000000000 1\ntrailer\n"), true},
+		{"subsection without trailer", []byte("xref\n0 5\n0000000000 65535 f \n"), false},
+		{"huge subsection without trailer", []byte("xref\n1000000000 5\n"), true},
+		{"xref word in text", []byte("(see the xref table) 7"), false},
+		{"xref keyword at end", []byte("startxref"), false},
+		{"index start huge", []byte("/Type /XRef /Index [1000000000 2] /W [1 2 1]"), true},
+		{"index second pair huge", []byte("/Index [0 2 1000000000 2]"), true},
+		{"index small", []byte("/Index [0 2 10 3]"), false},
+		{"index odd trailing value ignored", []byte("/Index [0 2 99999999]"), false},
+		{"size huge no index", []byte("/Type /XRef /Size 2000000000 /W [1 2 1]"), true},
+		{"size small", []byte("/Type /XRef /Size 10"), false},
+		{"size overflows int64", []byte("/Size 1234567890123456789012345"), true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := pdfDeclaredObjectsExceed(tc.data, maxPDFObjects); got != tc.want {
+				t.Fatalf("pdfDeclaredObjectsExceed = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestExtractPDFValidStillExtracts(t *testing.T) {
+	t.Parallel()
+	got, err := ExtractPDF(assemblePDF(pdfPageObjects("hello", "")))
+	if err != nil || !strings.Contains(got, "hello") {
+		t.Fatalf("ExtractPDF = %q, %v; want text containing hello", got, err)
+	}
+}
+
+func TestExtractPDFRejectsHugeDeclaredObjectCount(t *testing.T) {
+	t.Parallel()
+	doc := bytes.Replace(assemblePDF(pdfPageObjects("hi", "")), []byte("xref\n0 6\n"), []byte("xref\n1000000000 5\n"), 1)
+	_, err := ExtractPDF(doc)
+	if err == nil || !strings.Contains(err.Error(), "declares more than") {
+		t.Fatalf("err = %v, want declares more than", err)
+	}
+	_, err = ProcessWithContext(context.Background(), "idea.pdf", "application/pdf", doc)
+	var ie *Error
+	if !errors.As(err, &ie) {
+		t.Fatalf("err = %#v, want *Error", err)
+	}
+	if ie.Status != http.StatusBadRequest || ie.Msg != "could not extract text from document" {
+		t.Fatalf("error = %d %q, want 400 could not extract text from document", ie.Status, ie.Msg)
 	}
 }
