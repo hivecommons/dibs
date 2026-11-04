@@ -223,7 +223,17 @@ func ExtractPDF(data []byte) (text string, err error) {
 // content stream(s) exceeds budget. It reads through an io.LimitedReader so
 // a bomb is detected without inflating the whole stream into memory: at most
 // budget+1 decompressed bytes are ever pulled.
-func pdfPageContentExceeds(p pdf.Page, budget int64) bool {
+//
+// Value.Reader panics on streams it cannot decode (unknown filter, bad
+// zlib header). Those are not bombs: the function reports false and lets
+// GetPlainText, which recovers the same panic into an ordinary error,
+// surface them to the caller as before.
+func pdfPageContentExceeds(p pdf.Page, budget int64) (exceeds bool) {
+	defer func() {
+		if recover() != nil {
+			exceeds = false
+		}
+	}()
 	c := p.V.Key("Contents")
 	var total int64
 	measure := func(v pdf.Value) bool {
