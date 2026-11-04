@@ -546,10 +546,13 @@ func pdfDelim(b byte) bool {
 }
 
 // pdfScanner splits raw PDF bytes into tokens the way the reader's lexer
-// does. Strings are deliberately not parsed: "(" and a lone "<" are returned
-// as single-byte tokens, so an unbalanced string delimiter in stream data
-// (which the reader never tokenizes) cannot hide a later cross-reference
-// section from the scan. Every scanner draws on a shared work budget.
+// does, including (...) and <...> strings, which are consumed as single
+// tokens exactly as readLiteralString and readHexString do. An unbalanced
+// string delimiter in stream data (which the reader never tokenizes) runs
+// the current scan to end of input, but it cannot hide a later
+// cross-reference section: pdfDeclaredObjectsExceeds starts a fresh scanner
+// at every xref keyword, every name and every <<, so the next scan begins
+// after the delimiter. Every scanner draws on a shared work budget.
 type pdfScanner struct {
 	data []byte
 	pos  int
