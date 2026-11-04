@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"net/textproto"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -45,8 +44,8 @@ const (
 	// cross-reference data before ExtractPDF refuses it. The reader sizes its
 	// object table to that number (40 bytes per entry) before reading a single
 	// page, so an upload of a few hundred bytes could otherwise demand
-	// gigabytes. 1,048,576 objects (~40 MB of table) is far above what a 25 MB
-	// upload can legitimately contain.
+	// gigabytes. 1,048,576 objects (~40 MB of table) is far above what an upload
+	// under the default 25 MB cap (DIBS_INTAKE_MAX_MB) can legitimately contain.
 	maxPDFObjects = 1 << 20
 	sttTimeout    = 60 * time.Second
 )
@@ -196,7 +195,7 @@ func ExtractPDF(data []byte) (text string, err error) {
 			text, err = "", fmt.Errorf("malformed PDF: %v", rec)
 		}
 	}()
-	if pdfDeclaredObjectsExceed(data, maxPDFObjects) {
+	if pdfDeclaredObjectsExceeds(data, maxPDFObjects) {
 		return "", fmt.Errorf("malformed PDF: declares more than %d objects", maxPDFObjects)
 	}
 	r, err := pdf.NewReader(bytes.NewReader(data), int64(len(data)))
@@ -286,6 +285,256 @@ func pdfStreamExceeds(c pdf.Value, budget int64) (exceeds bool) {
 		return measure(c)
 	}
 	return false
+}
+
+var pdfXrefKeyword = []byte("xref")
+
+const (
+	// pdfScanWorkFactor and pdfScanWorkFloor bound the bytes
+	// pdfDeclaredObjectsExceeds may tokenize, as a multiple of the input
+	// size plus a floor for tiny inputs. Every xref keyword and every name
+	// starts a fresh scan, so a file whose candidate sections overlap (which
+	// no real producer emits, but comments can be used to build) could
+	// otherwise cost quadratic time to vet.
+	pdfScanWorkFactor = 8
+	pdfScanWorkFloor  = 1 << 16
+)
+
+// pdfDeclaredObjectsExceeds reports whether the raw PDF bytes declare an
+// object number of limit or more in any of the forms pdf.NewReader sizes its
+// object table from: a classic xref subsection header "<start> <count>", an
+// xref stream /Index array of start/count pairs, or /Size (the bound used
+// when an xref stream has no /Index). It does not call the PDF library, so
+// it is safe to run on input the reader has not yet accepted.
+//
+// The bytes are tokenized the way the reader's own lexer does it (same
+// whitespace set, % comments skipped, #xx escapes in names), so a declaration
+// the reader would accept cannot be disguised with CR-only line endings, NUL
+// separators, comments or escaped names. The reader seeks straight to the
+// startxref offset and never tokenizes what precedes it, so a fresh scan is
+// started at every xref keyword and every name regardless of context.
+// Subsection entries are skipped token by token, as the reader does, so
+// entry offsets that legitimately exceed limit are never mistaken for
+// headers. Input that exhausts the scan budget is reported as exceeding.
+func pdfDeclaredObjectsExceeds(data []byte, limit int64) bool {
+	work := pdfScanWorkFactor*len(data) + pdfScanWorkFloor
+	for off := 0; ; {
+		i := bytes.Index(data[off:], pdfXrefKeyword)
+		if i < 0 {
+			break
+		}
+		off += i + len(pdfXrefKeyword)
+		if off < len(data) && !pdfSpace(data[off]) && !pdfDelim(data[off]) {
+			continue // part of a longer keyword such as startxref
+		}
+		s := &pdfScanner{data: data, pos: off, work: &work}
+		if pdfXrefTableExceeds(s, limit) || work < 0 {
+			return true
+		}
+	}
+	for off := 0; ; {
+		i := bytes.IndexByte(data[off:], '/')
+		if i < 0 {
+			break
+		}
+		s := &pdfScanner{data: data, pos: off + i, work: &work}
+		key := s.next()
+		off = s.pos
+		switch string(key) {
+		case "/Size":
+			if tok := s.next(); pdfInteger(tok) && pdfBoundExceeds(tok, nil, limit) {
+				return true
+			}
+		case "/Index":
+			if pdfXrefIndexExceeds(s, limit) {
+				return true
+			}
+		}
+		if work < 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// pdfXrefTableExceeds consumes the subsections following an xref keyword the
+// way readXrefTableData does: "<start> <count>" then count entries of
+// "<offset> <gen> f|n", until the trailer keyword. It stops at the first
+// token the reader would reject, since the reader allocates nothing past it.
+func pdfXrefTableExceeds(s *pdfScanner, limit int64) bool {
+	for {
+		start := s.next()
+		if string(start) == "trailer" || !pdfInteger(start) {
+			return false
+		}
+		count := s.next()
+		if !pdfInteger(count) {
+			return false
+		}
+		if pdfBoundExceeds(start, count, limit) {
+			return true
+		}
+		n, _ := strconv.ParseInt(string(count), 10, 64)
+		for i := int64(0); i < n; i++ {
+			if !pdfInteger(s.next()) || !pdfInteger(s.next()) {
+				return false
+			}
+			if alloc := s.next(); string(alloc) != "f" && string(alloc) != "n" {
+				return false
+			}
+		}
+	}
+}
+
+// pdfXrefIndexExceeds consumes the array following an /Index name as pairs
+// of integers, stopping at the first token that is not one (the closing
+// bracket, or a value the reader would reject).
+func pdfXrefIndexExceeds(s *pdfScanner, limit int64) bool {
+	if string(s.next()) != "[" {
+		return false
+	}
+	for {
+		start := s.next()
+		if !pdfInteger(start) {
+			return false
+		}
+		count := s.next()
+		if !pdfInteger(count) {
+			return false
+		}
+		if pdfBoundExceeds(start, count, limit) {
+			return true
+		}
+	}
+}
+
+// pdfBoundExceeds reports whether start+count (count may be nil) reaches
+// limit. Digit strings too long for an int64 are themselves beyond the limit.
+func pdfBoundExceeds(start, count []byte, limit int64) bool {
+	s, err := strconv.ParseInt(string(start), 10, 64)
+	if err != nil || s >= limit {
+		return true
+	}
+	if count == nil {
+		return false
+	}
+	c, err := strconv.ParseInt(string(count), 10, 64)
+	return err != nil || c >= limit || s+c >= limit
+}
+
+// pdfInteger reports whether tok is an integer token to the PDF reader: an
+// optional sign followed by one or more digits.
+func pdfInteger(tok []byte) bool {
+	if len(tok) > 0 && (tok[0] == '+' || tok[0] == '-') {
+		tok = tok[1:]
+	}
+	if len(tok) == 0 {
+		return false
+	}
+	for _, c := range tok {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// pdfSpace and pdfDelim mirror the reader's whitespace and delimiter sets.
+func pdfSpace(b byte) bool {
+	switch b {
+	case '\x00', '\t', '\n', '\f', '\r', ' ':
+		return true
+	}
+	return false
+}
+
+func pdfDelim(b byte) bool {
+	switch b {
+	case '<', '>', '(', ')', '[', ']', '{', '}', '/', '%':
+		return true
+	}
+	return false
+}
+
+// pdfScanner splits raw PDF bytes into tokens the way the reader's lexer
+// does. Strings are deliberately not parsed: "(" and a lone "<" are returned
+// as single-byte tokens, so an unbalanced string delimiter in stream data
+// (which the reader never tokenizes) cannot hide a later cross-reference
+// section from the scan. Every scanner draws on a shared work budget.
+type pdfScanner struct {
+	data []byte
+	pos  int
+	work *int
+}
+
+// next returns the next token, or nil at end of input or once the work
+// budget is spent. Names keep their leading slash with #xx escapes decoded.
+func (s *pdfScanner) next() []byte {
+	from := s.pos
+	tok := s.scan()
+	if *s.work -= s.pos - from; *s.work < 0 {
+		return nil
+	}
+	return tok
+}
+
+func (s *pdfScanner) scan() []byte {
+	for s.pos < len(s.data) {
+		c := s.data[s.pos]
+		if pdfSpace(c) {
+			s.pos++
+		} else if c == '%' {
+			for s.pos < len(s.data) && s.data[s.pos] != '\r' && s.data[s.pos] != '\n' {
+				s.pos++
+			}
+		} else {
+			break
+		}
+	}
+	if s.pos >= len(s.data) {
+		return nil
+	}
+	start := s.pos
+	c := s.data[start]
+	switch {
+	case (c == '<' || c == '>') && start+1 < len(s.data) && s.data[start+1] == c:
+		s.pos += 2
+	case c == '/':
+		return s.name()
+	case pdfDelim(c):
+		s.pos++
+	default:
+		for s.pos < len(s.data) && !pdfSpace(s.data[s.pos]) && !pdfDelim(s.data[s.pos]) {
+			s.pos++
+		}
+	}
+	return s.data[start:s.pos]
+}
+
+func (s *pdfScanner) name() []byte {
+	start := s.pos
+	s.pos++
+	escaped := false
+	for s.pos < len(s.data) && !pdfSpace(s.data[s.pos]) && !pdfDelim(s.data[s.pos]) {
+		escaped = escaped || s.data[s.pos] == '#'
+		s.pos++
+	}
+	raw := s.data[start:s.pos]
+	if !escaped {
+		return raw
+	}
+	tok := make([]byte, 0, len(raw))
+	for i := 0; i < len(raw); i++ {
+		if raw[i] == '#' && i+2 < len(raw) {
+			if x, err := strconv.ParseUint(string(raw[i+1:i+3]), 16, 8); err == nil {
+				tok = append(tok, byte(x))
+				i += 2
+				continue
+			}
+		}
+		tok = append(tok, raw[i])
+	}
+	return tok
 }
 
 func ExtractDOCX(data []byte) (string, error) {
@@ -823,67 +1072,4 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
-}
-
-var (
-	pdfSizeRe      = regexp.MustCompile(`/Size\s+(\d+)`)
-	pdfIndexRe     = regexp.MustCompile(`/Index\s*\[([\d\s]+)\]`)
-	pdfSubsectRe   = regexp.MustCompile(`(?m)^[ \t]*(\d+)[ \t]+(\d+)[ \t]*\r?$`)
-	pdfXrefKeyword = []byte("xref")
-	pdfTrailerWord = []byte("trailer")
-)
-
-// pdfDeclaredObjectsExceed reports whether the raw PDF bytes declare an
-// object number of limit or more in any of the forms pdf.NewReader sizes its
-// object table from: a classic xref subsection header "<start> <count>", an
-// xref stream /Index array of start/count pairs, or /Size (the bound used when
-// an xref stream has no /Index). It does not call the PDF library, so it is
-// safe to run on input the reader has not yet accepted.
-func pdfDeclaredObjectsExceed(data []byte, limit int64) bool {
-	for _, m := range pdfSizeRe.FindAllSubmatchIndex(data, -1) {
-		if pdfBoundExceeds(data[m[2]:m[3]], nil, limit) {
-			return true
-		}
-	}
-	for _, m := range pdfIndexRe.FindAllSubmatchIndex(data, -1) {
-		f := bytes.Fields(data[m[2]:m[3]])
-		for i := 0; i+1 < len(f); i += 2 {
-			if pdfBoundExceeds(f[i], f[i+1], limit) {
-				return true
-			}
-		}
-	}
-	// Subsection headers only count between an xref keyword and the next
-	// trailer keyword; entry lines have three tokens and never match.
-	for off := 0; ; {
-		i := bytes.Index(data[off:], pdfXrefKeyword)
-		if i < 0 {
-			return false
-		}
-		start := off + i + len(pdfXrefKeyword)
-		end := len(data)
-		if j := bytes.Index(data[start:], pdfTrailerWord); j >= 0 {
-			end = start + j
-		}
-		for _, m := range pdfSubsectRe.FindAllSubmatchIndex(data[start:end], -1) {
-			if pdfBoundExceeds(data[start+m[2]:start+m[3]], data[start+m[4]:start+m[5]], limit) {
-				return true
-			}
-		}
-		off = start
-	}
-}
-
-// pdfBoundExceeds reports whether start+count (count may be nil) reaches
-// limit. Digit strings too long for an int64 are themselves beyond the limit.
-func pdfBoundExceeds(start, count []byte, limit int64) bool {
-	s, err := strconv.ParseInt(string(start), 10, 64)
-	if err != nil || s >= limit {
-		return true
-	}
-	if count == nil {
-		return false
-	}
-	c, err := strconv.ParseInt(string(count), 10, 64)
-	return err != nil || c >= limit || s+c >= limit
 }
