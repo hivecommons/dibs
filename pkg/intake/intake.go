@@ -292,7 +292,10 @@ func pdfStreamExceeds(c pdf.Value, budget int64) (exceeds bool) {
 	return false
 }
 
-var pdfXrefKeyword = []byte("xref")
+var (
+	pdfXrefKeyword = []byte("xref")
+	pdfDictOpen    = []byte("<<")
+)
 
 const (
 	// pdfScanWorkFactor and pdfScanWorkFloor bound the bytes
@@ -314,14 +317,22 @@ const (
 // it is safe to run on input the reader has not yet accepted.
 //
 // The bytes are tokenized the way the reader's own lexer does it (same
-// whitespace set, % comments skipped, #xx escapes in names), so a declaration
-// the reader would accept cannot be disguised with CR-only line endings, NUL
-// separators, comments or escaped names. The reader seeks straight to the
-// startxref offset and never tokenizes what precedes it, so a fresh scan is
-// started at every xref keyword and every name regardless of context.
-// Subsection entries are skipped token by token, as the reader does, so
-// entry offsets that legitimately exceed limit are never mistaken for
-// headers. Input that exhausts the scan budget is reported as exceeding.
+// whitespace set, % comments skipped, #xx escapes in names, strings as
+// single tokens), so a declaration the reader would accept cannot be
+// disguised with CR-only line endings, NUL separators, comments or escaped
+// names. The reader seeks straight to the startxref offset and never
+// tokenizes what precedes it, so a fresh scan is started at every xref
+// keyword and every name regardless of context. Subsection entries are
+// skipped token by token, as the reader does, so entry offsets that
+// legitimately exceed limit are never mistaken for headers.
+//
+// /W is the one key that is not vetted regardless of context: CIDFont
+// dictionaries use the same name for glyph widths, which routinely exceed
+// any sane xref field width. The reader only sizes a buffer from /W after
+// checking the enclosing stream dictionary has /Type /XRef, so a fresh scan
+// is started at every << and /W is vetted only when the same dictionary
+// carries that type. Input that exhausts the scan budget is reported as
+// exceeding.
 func pdfDeclaredObjectsExceeds(data []byte, limit int64) bool {
 	work := pdfScanWorkFactor*len(data) + pdfScanWorkFloor
 	for off := 0; ; {
@@ -355,12 +366,19 @@ func pdfDeclaredObjectsExceeds(data []byte, limit int64) bool {
 			if pdfXrefIndexExceeds(s, limit) {
 				return true
 			}
-		case "/W":
-			if pdfXrefWidthExceeds(s, maxPDFXrefFieldWidth) {
-				return true
-			}
 		}
 		if work < 0 {
+			return true
+		}
+	}
+	for off := 0; ; {
+		i := bytes.Index(data[off:], pdfDictOpen)
+		if i < 0 {
+			break
+		}
+		off += i + len(pdfDictOpen)
+		s := &pdfScanner{data: data, pos: off, work: &work}
+		if pdfXrefStreamWidthExceeds(s, maxPDFXrefFieldWidth) || work < 0 {
 			return true
 		}
 	}
@@ -418,26 +436,63 @@ func pdfXrefIndexExceeds(s *pdfScanner, limit int64) bool {
 	}
 }
 
+// pdfXrefStreamWidthExceeds consumes the dictionary following a << token the
+// way readDict does, key by key, and reports whether it is an xref stream
+// dictionary (/Type /XRef) whose /W array exceeds limit. Only top-level keys
+// count, since the reader looks /Type and /W up in the stream's own
+// dictionary. It stops at the closing >>, at end of input, or at the first
+// key that is not a name, which makes the reader abandon the dictionary
+// (and keeps the scan cheap when << is found inside binary stream data).
+func pdfXrefStreamWidthExceeds(s *pdfScanner, limit int64) bool {
+	var isXRef, wide bool
+	for {
+		key := s.next()
+		if len(key) == 0 || key[0] != '/' {
+			return isXRef && wide
+		}
+		switch string(key) {
+		case "/Type":
+			tok := s.next()
+			isXRef = isXRef || string(tok) == "/XRef"
+			s.skipObject(tok)
+		case "/W":
+			wide = wide || pdfXrefWidthExceeds(s, limit)
+		default:
+			s.skipObject(s.next())
+		}
+		if isXRef && wide {
+			return true
+		}
+	}
+}
+
 // pdfXrefWidthExceeds consumes the array following a /W name as integers,
 // stopping at the first token that is not one. It reports whether any entry
 // is negative or above limit, or the entries sum to more than limit.
-// Digit strings too long for an int64 count as exceeding.
+// Digit strings too long for an int64 count as exceeding. The array is
+// consumed in full even once it has exceeded, so a caller walking the
+// enclosing dictionary stays aligned on its keys.
 func pdfXrefWidthExceeds(s *pdfScanner, limit int64) bool {
 	if string(s.next()) != "[" {
 		return false
 	}
 	var sum int64
+	exceeds := false
 	for {
 		tok := s.next()
 		if !pdfInteger(tok) {
-			return false
+			return exceeds
+		}
+		if exceeds {
+			continue
 		}
 		w, err := strconv.ParseInt(string(tok), 10, 64)
 		if err != nil || w < 0 || w > limit {
-			return true
+			exceeds = true
+			continue
 		}
 		if sum += w; sum > limit {
-			return true
+			exceeds = true
 		}
 	}
 }
@@ -535,6 +590,10 @@ func (s *pdfScanner) scan() []byte {
 		s.pos += 2
 	case c == '/':
 		return s.name()
+	case c == '(':
+		s.literalString()
+	case c == '<':
+		s.hexString()
 	case pdfDelim(c):
 		s.pos++
 	default:
@@ -543,6 +602,60 @@ func (s *pdfScanner) scan() []byte {
 		}
 	}
 	return s.data[start:s.pos]
+}
+
+// literalString consumes a (...) string the way readLiteralString does:
+// parentheses nest, a backslash escapes the byte after it, and an unbalanced
+// string runs to end of input.
+func (s *pdfScanner) literalString() {
+	depth := 0
+	for s.pos < len(s.data) {
+		switch s.data[s.pos] {
+		case '\\':
+			s.pos++
+		case '(':
+			depth++
+		case ')':
+			if depth--; depth == 0 {
+				s.pos++
+				return
+			}
+		}
+		s.pos++
+	}
+}
+
+// hexString consumes a <...> string the way readHexString does: everything
+// up to and including the next '>'.
+func (s *pdfScanner) hexString() {
+	s.pos++
+	for s.pos < len(s.data) {
+		if s.data[s.pos] == '>' {
+			s.pos++
+			return
+		}
+		s.pos++
+	}
+}
+
+// skipObject consumes the remainder of the object whose first token is tok:
+// nothing for a scalar, the balanced contents for an array or dictionary.
+func (s *pdfScanner) skipObject(tok []byte) {
+	depth := 0
+	for {
+		switch string(tok) {
+		case "[", "<<":
+			depth++
+		case "]", ">>":
+			depth--
+		}
+		if depth <= 0 {
+			return
+		}
+		if tok = s.next(); tok == nil {
+			return
+		}
+	}
 }
 
 func (s *pdfScanner) name() []byte {
