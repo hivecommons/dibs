@@ -90,7 +90,7 @@ func TestFetchPullActivityClassifiesClankerPRs(t *testing.T) {
 	defer srv.Close()
 
 	b := &Backfiller{BaseURL: srv.URL, Client: srv.Client(), Now: fixedNow}
-	got, err := b.fetchPullActivity(context.Background(), "org/repo")
+	got, _, err := b.fetchPullActivity(context.Background(), "org/repo", windowStart(fixedNow()))
 	if err != nil {
 		t.Fatalf("fetchPullActivity: %v", err)
 	}
