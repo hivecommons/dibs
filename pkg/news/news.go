@@ -302,12 +302,18 @@ func (g *Generator) Refresh(ctx context.Context, repoID string) error {
 		items = append(items, item)
 	}
 	if boundary != "" {
-		// Dates before the boundary were never fully fetched; carry cached cards forward.
+		// Dates before the boundary were never fully fetched; carry cached cards
+		// forward. The boundary day's card is carried too when none of its merged
+		// PRs were fetched (otherwise the loop above already kept it).
 		start := now.UTC().Truncate(24*time.Hour).AddDate(0, 0, -(WindowDays - 1)).Format("2006-01-02")
 		for date, old := range cached {
-			if date < boundary && date >= start {
-				items = append(items, old)
+			if date < start || date > boundary {
+				continue
 			}
+			if _, seen := grouped[date]; seen && date == boundary {
+				continue
+			}
+			items = append(items, old)
 		}
 	}
 	return g.Store.upsert(repoID, items, now)

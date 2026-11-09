@@ -282,19 +282,28 @@ func (b *Backfiller) Backfill(ctx context.Context, repoID string) error {
 	if err != nil {
 		return err
 	}
+	kept := map[string]bool{}
 	if !coveredSince.IsZero() {
-		// The page cap cut the pull fetch short; days before the boundary were
-		// never fully seen, so keep their stored PR counts instead of zeroing.
+		// The page cap cut the pull fetch short; days up to and including the
+		// boundary were never fully seen, so keep their stored PR counts instead
+		// of zeroing (or, for the boundary day itself, undercounting and then
+		// freezing that undercount on the next run).
+		boundary := coveredSince.UTC().Format("2006-01-02")
 		if prev, ok := b.Store.Get(repoID); ok {
-			boundary := coveredSince.UTC().Format("2006-01-02")
 			for _, old := range prev.Days {
-				if d, ok := days[old.Date]; ok && old.Date < boundary {
+				if d, ok := days[old.Date]; ok && old.Date <= boundary {
 					d.MergedPRs = old.MergedPRs
 					d.ClankerPRsCreated = old.ClankerPRsCreated
 					d.ClankerPRsMerged = old.ClankerPRsMerged
 					d.PRsClanker = old.PRsClanker
 					days[old.Date] = d
+					kept[old.Date] = true
 				}
+			}
+		}
+		for date := range days {
+			if date < boundary {
+				kept[date] = true
 			}
 		}
 	}
@@ -307,10 +316,7 @@ func (b *Backfiller) Backfill(ctx context.Context, repoID string) error {
 		}
 	}
 	for date, counts := range prs {
-		if d, ok := days[date]; ok {
-			if !coveredSince.IsZero() && date < coveredSince.UTC().Format("2006-01-02") {
-				continue
-			}
+		if d, ok := days[date]; ok && !kept[date] {
 			d.MergedPRs += counts.RegularPRsMerged
 			d.ClankerPRsCreated += counts.ClankerPRsCreated
 			d.ClankerPRsMerged += counts.ClankerPRsMerged

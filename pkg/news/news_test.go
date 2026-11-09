@@ -362,3 +362,40 @@ func TestRefreshKeepsCachedCardsBeforeTruncationBoundary(t *testing.T) {
 		t.Fatalf("covered card missing: %+v", byDate)
 	}
 }
+
+func TestRefreshCarriesCachedBoundaryCardWhenNoBoundaryMergeFetched(t *testing.T) {
+	st, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	tf := &truncatedFetcher{}
+	tf.prs = []history.MergedPullRequest{
+		pr("boundary merge", "2026-08-17T10:00:00Z", "alice"),
+		pr("new merge", "2026-08-19T10:00:00Z", "alice"),
+	}
+	g := &Generator{Store: st, Fetcher: tf, Now: newsNow}
+	if err := g.Refresh(context.Background(), "org/repo"); err != nil {
+		t.Fatalf("first Refresh: %v", err)
+	}
+
+	// The boundary PR was closed-unmerged, so the truncated fetch yields no
+	// merged PR on the boundary day at all.
+	tf.coveredSince = time.Date(2026, 8, 17, 6, 0, 0, 0, time.UTC)
+	tf.prs = []history.MergedPullRequest{
+		pr("new merge", "2026-08-19T10:00:00Z", "alice"),
+	}
+	if err := g.Refresh(context.Background(), "org/repo"); err != nil {
+		t.Fatalf("second Refresh: %v", err)
+	}
+	items := st.Get("org/repo")
+	byDate := map[string]int{}
+	for _, it := range items {
+		byDate[it.Date]++
+	}
+	if byDate["2026-08-17"] != 1 {
+		t.Fatalf("cached boundary card count = %d, want 1: %+v", byDate["2026-08-17"], items)
+	}
+	if byDate["2026-08-19"] != 1 {
+		t.Fatalf("covered card count = %d, want 1: %+v", byDate["2026-08-19"], items)
+	}
+}
