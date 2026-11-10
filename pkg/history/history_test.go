@@ -126,7 +126,8 @@ func TestClankerMarkersAreConfigurableAndConservative(t *testing.T) {
 
 func TestDefaultClankerMarkersIncludeBothBots(t *testing.T) {
 	markers := clankerMarkers()
-	pr := pullActivity{User: struct{ Login string }{Login: "hivecommons-hive[bot]"}}
+	var pr pullActivity
+	pr.User.Login = "hivecommons-hive[bot]"
 	if !isClankerPR(pr, markers) {
 		t.Fatalf("hivecommons-hive[bot] login must be classified as clanker with default markers")
 	}
