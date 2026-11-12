@@ -268,6 +268,7 @@ func TestPDFDeclaredObjectsExceeds(t *testing.T) {
 		{"unterminated escape at eof", []byte("<< /Type /XRef /ID (\\"), false},
 		{"bare unterminated escape at eof", []byte("(\\"), false},
 		{"overlapping candidate sections exhaust budget", pdfOverlappingXrefs(), true},
+		{"overlapping index arrays exhaust budget", pdfOverlappingIndexes(), true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -292,6 +293,23 @@ func pdfOverlappingXrefs() []byte {
 		b.WriteString("0000000000 65535 f \n")
 	}
 	b.WriteString("trailer\n")
+	return b.Bytes()
+}
+
+// pdfOverlappingIndexes builds input with no xref keyword whose every
+// /Index name (each on its own comment line, so the scan started at it
+// skips the comment lines that follow) parses the same long array of valid
+// subsections, so only the name loop's budget check can stop the scan.
+func pdfOverlappingIndexes() []byte {
+	var b bytes.Buffer
+	for range 2000 {
+		b.WriteString("%/Index\n")
+	}
+	b.WriteString("[")
+	for range 4000 {
+		b.WriteString(" 0 1")
+	}
+	b.WriteString(" ]\n")
 	return b.Bytes()
 }
 
