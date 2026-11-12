@@ -118,6 +118,12 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == intake.WorkerCommand {
 		os.Exit(intake.WorkerMain(os.Args[2:], os.Stdin, os.Stdout, os.Stderr))
 	}
+	if len(os.Args) > 1 && os.Args[1] == ingestCommand {
+		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
+		code := ingest(ctx, os.Args[2:], os.Stderr)
+		stop()
+		os.Exit(code)
+	}
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, nil)))
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
 	defer stop()
