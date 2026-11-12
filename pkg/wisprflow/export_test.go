@@ -168,3 +168,49 @@ func TestTimeFromName(t *testing.T) {
 		t.Fatalf("date only = %v, %v", got, ok)
 	}
 }
+
+func TestReadExportFileRejectsOversizeFile(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "huge.json")
+	// A sparse file reports the size without writing 64 MiB to disk.
+	if err := os.WriteFile(p, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Truncate(p, maxExportFileBytes+1); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := readExportFile(dir, p)
+	if err == nil || !strings.Contains(err.Error(), "file larger than") {
+		t.Fatalf("err = %v, want the size cap", err)
+	}
+	if rows != nil {
+		t.Fatalf("rows = %+v, want none", rows)
+	}
+	_, err = readExportDir(dir, time.Time{})
+	if err == nil || !strings.Contains(err.Error(), "1 export file(s) skipped: huge.json: file larger than") {
+		t.Fatalf("readExportDir err = %v, want the oversize file reported", err)
+	}
+}
+
+func TestReadExportDirReportsUnreadableSubdir(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{
+		"good.json":         `[{"id":"g","text":"good","at":"2026-11-11T09:00:00Z"}]`,
+		"locked/inner.json": `[{"id":"l","text":"locked","at":"2026-11-11T09:00:00Z"}]`,
+	})
+	locked := filepath.Join(dir, "locked")
+	if err := os.Chmod(locked, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(locked, 0o700) })
+	rows, err := readExportDir(dir, time.Time{})
+	if err == nil || !strings.Contains(err.Error(), "1 export file(s) skipped: "+locked+":") {
+		t.Fatalf("err = %v, want the unreadable directory reported", err)
+	}
+	if len(rows) != 1 || rows[0].ID != "g" {
+		t.Fatalf("rows = %+v, want only the readable file", rows)
+	}
+}

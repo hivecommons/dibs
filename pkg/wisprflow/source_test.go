@@ -330,3 +330,13 @@ func dibsServer(t *testing.T) (*httptest.Server, *store.Store) {
 	t.Cleanup(srv.Close)
 	return srv, st
 }
+
+func TestLogDefaultsToSlogDefault(t *testing.T) {
+	if got := (&Source{}).log(); got != slog.Default() {
+		t.Fatalf("log() = %p, want slog.Default()", got)
+	}
+	own := slog.New(slog.NewTextHandler(io.Discard, nil))
+	if got := (&Source{Log: own}).log(); got != own {
+		t.Fatalf("log() = %p, want the configured logger", got)
+	}
+}
