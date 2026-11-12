@@ -36,7 +36,7 @@ func TestClientCallToolErrors(t *testing.T) {
 
 func TestDialSpawnsStdioServer(t *testing.T) {
 	t.Setenv(fakeEnv, "1")
-	c, err := Dial(context.Background(), os.Args[0], io.Discard)
+	c, err := Dial(context.Background(), os.Args[0], "", io.Discard)
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
@@ -51,7 +51,7 @@ func TestDialScrubsHubTokenFromChildEnv(t *testing.T) {
 	t.Setenv(fakeEnv, "1")
 	t.Setenv(EnvToken, "secret-xyz")
 	t.Setenv("PATH", "/plaud-test-path")
-	c, err := Dial(context.Background(), os.Args[0], io.Discard)
+	c, err := Dial(context.Background(), os.Args[0], "", io.Discard)
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
@@ -68,11 +68,28 @@ func TestDialScrubsHubTokenFromChildEnv(t *testing.T) {
 	}
 }
 
+func TestDialOverridesChildHome(t *testing.T) {
+	t.Setenv(fakeEnv, "1")
+	t.Setenv("HOME", "/caller-home")
+	c, err := Dial(context.Background(), os.Args[0], "/plaud-home", io.Discard)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer c.Close()
+	got, err := c.CallTool(context.Background(), "env", nil)
+	if err != nil {
+		t.Fatalf("env: %v", err)
+	}
+	if !strings.Contains(got, "HOME=/plaud-home") || strings.Contains(got, "/caller-home") {
+		t.Fatalf("child HOME not overridden: %q", got)
+	}
+}
+
 func TestDialErrors(t *testing.T) {
-	if _, err := Dial(context.Background(), "   ", io.Discard); err == nil {
+	if _, err := Dial(context.Background(), "   ", "", io.Discard); err == nil {
 		t.Fatal("empty command: want error")
 	}
-	if _, err := Dial(context.Background(), "/nonexistent/plaud-mcp --flag", io.Discard); err == nil {
+	if _, err := Dial(context.Background(), "/nonexistent/plaud-mcp --flag", "", io.Discard); err == nil {
 		t.Fatal("missing binary: want error")
 	}
 }

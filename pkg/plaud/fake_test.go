@@ -121,7 +121,7 @@ func (f *fakePlaud) server() *mcpsdk.Server {
 		return textResult(wrapUntrusted(transcriptPage(id, utterances, i))), nil
 	})
 	s.AddTool(&mcpsdk.Tool{Name: "env", InputSchema: schema}, func(context.Context, *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
-		return textResult(EnvToken + "=" + os.Getenv(EnvToken) + "\nPATH=" + os.Getenv("PATH")), nil
+		return textResult(EnvToken + "=" + os.Getenv(EnvToken) + "\nPATH=" + os.Getenv("PATH") + "\nHOME=" + os.Getenv("HOME")), nil
 	})
 	s.AddTool(&mcpsdk.Tool{Name: "multi", InputSchema: schema}, func(context.Context, *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
 		return &mcpsdk.CallToolResult{Content: []mcpsdk.Content{

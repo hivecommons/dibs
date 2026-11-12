@@ -45,16 +45,23 @@ func Connect(ctx context.Context, t mcpsdk.Transport) (*Client, error) {
 }
 
 // Dial spawns command (split on whitespace; no shell quoting) and connects
-// to it over stdin/stdout. The server's stderr is forwarded to stderr. The
-// hub bearer token is removed from the child's environment: the server is a
-// third-party package that has no use for it.
-func Dial(ctx context.Context, command string, stderr io.Writer) (*Client, error) {
+// to it over stdin/stdout. The server's stderr is forwarded to stderr, which
+// is how Plaud's sign-in URL reaches the user on the first run. The hub
+// bearer token is removed from the child's environment: the server is a
+// third-party package that has no use for it. A non-empty home becomes the
+// child's $HOME, so the Plaud MCP server keeps its OAuth token store
+// (~/.plaud) under that directory instead of the caller's home.
+func Dial(ctx context.Context, command, home string, stderr io.Writer) (*Client, error) {
 	argv := strings.Fields(command)
 	if len(argv) == 0 {
 		return nil, errors.New("plaud: empty MCP command")
 	}
 	cmd := exec.Command(argv[0], argv[1:]...)
-	cmd.Env = envWithout(os.Environ(), EnvToken)
+	env := envWithout(os.Environ(), EnvToken)
+	if home != "" {
+		env = append(envWithout(env, "HOME"), "HOME="+home)
+	}
+	cmd.Env = env
 	cmd.Stderr = stderr
 	return Connect(ctx, &mcpsdk.CommandTransport{Command: cmd})
 }

@@ -140,6 +140,40 @@ func TestRunOnceStopsAtLocalBudget(t *testing.T) {
 	}
 }
 
+func TestRunOnceStopsAtPerRunCap(t *testing.T) {
+	sink := &fakeSink{}
+	in := newIngester(t, threeRecordings(t), sink)
+	in.MaxPerRun = 1
+	res, err := in.RunOnce(context.Background())
+	if err != nil || res.Submitted != 1 || !res.BudgetExhausted || titles(sink.ideas) != "First" {
+		t.Fatalf("res=%+v ideas=%s err=%v; want 1 submitted then cap stop", res, titles(sink.ideas), err)
+	}
+	res, err = in.RunOnce(context.Background())
+	if err != nil || res.Submitted != 1 || titles(sink.ideas) != "First,Second" {
+		t.Fatalf("second run res=%+v ideas=%s err=%v", res, titles(sink.ideas), err)
+	}
+}
+
+func TestRunOnceDryRunSubmitsNothing(t *testing.T) {
+	sink := &fakeSink{}
+	in := newIngester(t, threeRecordings(t), sink)
+	in.DryRun = true
+	in.MaxPerRun = 2
+	res, err := in.RunOnce(context.Background())
+	if err != nil || res.Planned != 2 || res.Submitted != 0 || !res.BudgetExhausted || len(sink.ideas) != 0 {
+		t.Fatalf("res=%+v ideas=%d err=%v; want 2 planned, none submitted", res, len(sink.ideas), err)
+	}
+	cur, err := LoadCursor(in.CursorPath)
+	if err != nil || len(cur.Seen) != 0 || !cur.Newest.IsZero() {
+		t.Fatalf("dry run advanced the cursor: %+v %v", cur, err)
+	}
+	in.DryRun = false
+	in.MaxPerRun = 0
+	if res, err = in.RunOnce(context.Background()); err != nil || res.Submitted != 3 {
+		t.Fatalf("real run after dry run res=%+v err=%v", res, err)
+	}
+}
+
 func TestRunOnceStopsOn429(t *testing.T) {
 	sink := &fakeSink{failOn: 2, failWith: ErrRateLimited}
 	in := newIngester(t, threeRecordings(t), sink)
