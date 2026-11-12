@@ -19,6 +19,11 @@ the project is headed next.
   MCP Registry as `dev.hivecommons/dibs`; see
   [Submit ideas from your agent](README.md#submit-ideas-from-your-agent) and
   [MCP Registry publishing](docs/mcp-registry.md).
+- Voice capture: `dibs ingest plaud` turns Plaud recordings into private
+  draft ideas, and `dibs ingest wisprflow` imports the Wispr Flow dictations
+  marked as ideas by a trigger phrase or app allow-list; see
+  [Capture voice notes from a Plaud recorder](README.md#capture-voice-notes-from-a-plaud-recorder)
+  and [Capture ideas dictated with Wispr Flow](README.md#capture-ideas-dictated-with-wispr-flow).
 
 ## Near term
 
