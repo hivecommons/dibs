@@ -147,6 +147,9 @@ func TestTimeFieldNumeric(t *testing.T) {
 	}{
 		{"epoch millis", map[string]any{"start_at": float64(want.UnixMilli())}, want},
 		{"epoch seconds", map[string]any{"start_at": float64(want.Unix())}, want},
+		// Pin the boundary itself: exactly 1e12 is still seconds, one more is millis.
+		{"boundary is seconds", map[string]any{"start_at": float64(1e12)}, time.Unix(1e12, 0).UTC()},
+		{"boundary+1 is millis", map[string]any{"start_at": float64(1e12 + 1)}, time.UnixMilli(1e12 + 1).UTC()},
 		{"zero", map[string]any{"start_at": float64(0)}, time.Time{}},
 		{"negative", map[string]any{"start_at": float64(-5)}, time.Time{}},
 		{"unsupported type", map[string]any{"start_at": true}, time.Time{}},
