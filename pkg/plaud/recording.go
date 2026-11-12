@@ -51,13 +51,6 @@ func (r Recording) When() time.Time {
 	return r.CreatedAt
 }
 
-// Idea is what gets submitted to Dibs for one recording.
-type Idea struct {
-	Title       string
-	Description string
-	Tags        []string
-}
-
 // listRecordings pages through list_files from since until a page is short,
 // adds nothing new, or limit recordings are collected. Recordings older than
 // since are dropped client-side too, in case the server ignores date_from.

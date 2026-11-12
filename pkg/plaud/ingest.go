@@ -2,15 +2,10 @@ package plaud
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"log/slog"
-	"net/http"
-	"sort"
-	"sync/atomic"
 	"time"
 
-	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/hivecommons/dibs/pkg/ingest"
 )
 
 const (
@@ -18,26 +13,37 @@ const (
 	// transcript finished late are still picked up.
 	relistOverlap = 24 * time.Hour
 	// DefaultSinceDays bounds how far back the first run looks.
-	DefaultSinceDays = 7
+	DefaultSinceDays = ingest.DefaultSinceDays
 	// DefaultMaxPerHour and DefaultMaxPerDay match the intake budget per
 	// identity (10/h, 30/24h).
-	DefaultMaxPerHour = 10
-	DefaultMaxPerDay  = 30
+	DefaultMaxPerHour = ingest.DefaultMaxPerHour
+	DefaultMaxPerDay  = ingest.DefaultMaxPerDay
 	// maxFilesPerRun caps recordings listed per run.
 	maxFilesPerRun = 200
-	submitTimeout  = time.Minute
 )
 
 // ErrRateLimited reports that Dibs (or a proxy in front of it) answered
 // 429; the batch stops and resumes on the next run.
-var ErrRateLimited = errors.New("dibs: rate limited (HTTP 429)")
+var ErrRateLimited = ingest.ErrRateLimited
 
-// Sink submits one idea to Dibs.
-type Sink interface {
-	Submit(ctx context.Context, idea Idea) error
-}
+type (
+	// Idea is what gets submitted to Dibs for one recording.
+	Idea = ingest.Idea
+	// Sink submits one idea to Dibs.
+	Sink = ingest.Sink
+	// DibsSink submits ideas with the Dibs MCP submit_idea tool.
+	DibsSink = ingest.DibsSink
+	// Result summarizes one run.
+	Result = ingest.Result
+	// Cursor is the persisted ingest state (see ingest.Cursor).
+	Cursor = ingest.Cursor
+)
 
-// Ingester moves new Plaud recordings into Dibs.
+// LoadCursor reads path; a missing file is an empty cursor.
+func LoadCursor(path string) (*Cursor, error) { return ingest.LoadCursor(path) }
+
+// Ingester moves new Plaud recordings into Dibs. It is ingest.Ingester
+// with a Plaud MCP session as the source.
 type Ingester struct {
 	// Dial opens a Plaud MCP session; it is called once per run.
 	Dial       func(ctx context.Context) (Tools, error)
@@ -56,200 +62,75 @@ type Ingester struct {
 	Now    func() time.Time
 }
 
-// Result summarizes one run.
-type Result struct {
-	Submitted int
-	Skipped   int
-	// Planned counts ideas that a dry run would have submitted.
-	Planned int
-	// BudgetExhausted is set when the local --max-per-hour/--max-per-day
-	// budget or the --max per-run cap stopped the batch.
-	BudgetExhausted bool
-	// RateLimited is set when Dibs answered HTTP 429.
-	RateLimited bool
-}
-
-func (in *Ingester) now() time.Time {
-	if in.Now != nil {
-		return in.Now()
+func (in *Ingester) engine() *ingest.Ingester {
+	return &ingest.Ingester{
+		Name:       "plaud",
+		Open:       openSource(in.Dial),
+		Sink:       in.Sink,
+		CursorPath: in.CursorPath,
+		Tags:       in.Tags,
+		SinceDays:  in.SinceDays,
+		Overlap:    relistOverlap,
+		MaxPerHour: in.MaxPerHour,
+		MaxPerDay:  in.MaxPerDay,
+		MaxPerRun:  in.MaxPerRun,
+		DryRun:     in.DryRun,
+		Log:        in.Log,
+		Now:        in.Now,
 	}
-	return time.Now()
-}
-
-func (in *Ingester) log() *slog.Logger {
-	if in.Log != nil {
-		return in.Log
-	}
-	return slog.Default()
 }
 
 // RunOnce lists recordings since the cursor and submits each unseen one,
-// oldest first. The cursor is saved after every submission, so a crash
-// never resubmits. A 429 or an exhausted local budget stops the batch
-// without error; the rest is picked up next run.
+// oldest first (see ingest.Ingester.RunOnce).
 func (in *Ingester) RunOnce(ctx context.Context) (Result, error) {
-	var res Result
-	cur, err := LoadCursor(in.CursorPath)
-	if err != nil {
-		return res, err
-	}
-	now := in.now()
-	cur.prune(now)
-	tools, err := in.Dial(ctx)
-	if err != nil {
-		return res, err
-	}
-	defer tools.Close()
-
-	since := cur.Newest.Add(-relistOverlap)
-	if cur.Newest.IsZero() {
-		days := in.SinceDays
-		if days <= 0 {
-			days = DefaultSinceDays
-		}
-		since = now.Add(-time.Duration(days) * 24 * time.Hour)
-	}
-	recs, err := listRecordings(ctx, tools, since, maxFilesPerRun)
-	if err != nil {
-		return res, err
-	}
-	sort.SliceStable(recs, func(i, j int) bool { return recs[i].When().Before(recs[j].When()) })
-	for _, r := range recs {
-		if _, ok := cur.Seen[r.ID]; ok {
-			continue
-		}
-		if in.MaxPerRun > 0 && res.Submitted+res.Planned >= in.MaxPerRun {
-			in.log().Info("plaud ingest per-run cap reached; resuming next run", "max", in.MaxPerRun)
-			res.BudgetExhausted = true
-			break
-		}
-		if !cur.allow(now, in.MaxPerHour, in.MaxPerDay) {
-			in.log().Info("plaud ingest budget reached; resuming next run", "per_hour", in.MaxPerHour, "per_day", in.MaxPerDay)
-			res.BudgetExhausted = true
-			break
-		}
-		idea, err := buildIdea(ctx, tools, r, in.Tags)
-		if err != nil {
-			in.log().Warn("plaud recording skipped", "file_id", r.ID, "err", err)
-			res.Skipped++
-			continue
-		}
-		if in.DryRun {
-			res.Planned++
-			in.log().Info("plaud recording would be submitted (dry run)", "file_id", r.ID, "title", idea.Title, "tags", idea.Tags, "description_bytes", len(idea.Description))
-			continue
-		}
-		if err := in.Sink.Submit(ctx, idea); err != nil {
-			if errors.Is(err, ErrRateLimited) {
-				in.log().Warn("dibs rate limited the submission; resuming next run", "file_id", r.ID)
-				res.RateLimited = true
-				break
-			}
-			return res, err
-		}
-		cur.markSubmitted(r, now)
-		if err := cur.Save(in.CursorPath); err != nil {
-			return res, err
-		}
-		res.Submitted++
-		in.log().Info("plaud recording submitted", "file_id", r.ID, "title", idea.Title)
-	}
-	return res, nil
+	return in.engine().RunOnce(ctx)
 }
 
-// Run calls RunOnce, then every interval until ctx is done. With
-// interval <= 0 it runs once and returns that run's error. In loop mode a
-// failed run is logged and retried on the next tick.
+// Run calls RunOnce, then every interval until ctx is done (see
+// ingest.Ingester.Run).
 func (in *Ingester) Run(ctx context.Context, interval time.Duration) error {
-	for {
-		res, err := in.RunOnce(ctx)
-		if interval <= 0 {
-			if err == nil {
-				in.log().Info("plaud ingest done", "submitted", res.Submitted, "planned", res.Planned, "skipped", res.Skipped, "budget_exhausted", res.BudgetExhausted, "rate_limited", res.RateLimited)
-			}
-			return err
-		}
+	return in.engine().Run(ctx, interval)
+}
+
+// openSource adapts a Plaud MCP dialer to ingest.Ingester.Open.
+func openSource(dial func(ctx context.Context) (Tools, error)) func(ctx context.Context) (ingest.Source, error) {
+	return func(ctx context.Context) (ingest.Source, error) {
+		tools, err := dial(ctx)
 		if err != nil {
-			in.log().Warn("plaud ingest run failed", "err", err)
-		} else {
-			in.log().Info("plaud ingest run done", "submitted", res.Submitted, "planned", res.Planned, "skipped", res.Skipped, "budget_exhausted", res.BudgetExhausted, "rate_limited", res.RateLimited)
+			return nil, err
 		}
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-time.After(interval):
-		}
+		return &source{tools: tools}, nil
 	}
 }
 
-// DibsSink submits ideas with the Dibs MCP submit_idea tool (private
-// draft owned by the token's identity).
-type DibsSink struct {
-	// Endpoint is the Dibs MCP URL, e.g. https://dibs.hivecommons.dev/mcp.
-	Endpoint string
-	// Token is the hub bearer token. It is only ever sent in the
-	// Authorization header, never logged.
-	Token string
-	// Transport defaults to http.DefaultTransport.
-	Transport http.RoundTripper
+// source lists Plaud recordings through one MCP session.
+type source struct {
+	tools Tools
 }
 
-// Submit implements Sink.
-func (s *DibsSink) Submit(ctx context.Context, idea Idea) error {
-	ctx, cancel := context.WithTimeout(ctx, submitTimeout)
-	defer cancel()
-	base := s.Transport
-	if base == nil {
-		base = http.DefaultTransport
-	}
-	rt := &bearerTransport{base: base, token: s.Token}
-	session, err := mcpsdk.NewClient(clientImpl, nil).Connect(ctx, &mcpsdk.StreamableClientTransport{
-		Endpoint:             s.Endpoint,
-		HTTPClient:           &http.Client{Transport: rt},
-		MaxRetries:           -1,
-		DisableStandaloneSSE: true,
-	}, nil)
+func (s *source) List(ctx context.Context, since time.Time) ([]ingest.Item, error) {
+	recs, err := listRecordings(ctx, s.tools, since, maxFilesPerRun)
 	if err != nil {
-		return rt.wrap(err)
+		return nil, err
 	}
-	defer session.Close()
-	tags := idea.Tags
-	if tags == nil {
-		tags = []string{}
+	items := make([]ingest.Item, len(recs))
+	for i, r := range recs {
+		items[i] = &item{rec: r, tools: s.tools}
 	}
-	res, err := session.CallTool(ctx, &mcpsdk.CallToolParams{
-		Name:      "submit_idea",
-		Arguments: map[string]any{"title": idea.Title, "description": idea.Description, "tags": tags},
-	})
-	if err != nil {
-		return rt.wrap(err)
-	}
-	if res.IsError {
-		return fmt.Errorf("dibs: submit_idea: %s", firstLine(resultText(res)))
-	}
-	return nil
+	return items, nil
 }
 
-// bearerTransport adds the Authorization header and remembers a 429.
-type bearerTransport struct {
-	base    http.RoundTripper
-	token   string
-	limited atomic.Bool
+func (s *source) Close() error { return s.tools.Close() }
+
+// item is one recording; its note and transcript are fetched only when the
+// recording is new.
+type item struct {
+	rec   Recording
+	tools Tools
 }
 
-func (t *bearerTransport) RoundTrip(r *http.Request) (*http.Response, error) {
-	r = r.Clone(r.Context())
-	r.Header.Set("Authorization", "Bearer "+t.token)
-	resp, err := t.base.RoundTrip(r)
-	if err == nil && resp.StatusCode == http.StatusTooManyRequests {
-		t.limited.Store(true)
-	}
-	return resp, err
-}
-
-func (t *bearerTransport) wrap(err error) error {
-	if t.limited.Load() {
-		return fmt.Errorf("%w: %v", ErrRateLimited, err)
-	}
-	return fmt.Errorf("dibs: submit_idea: %w", err)
+func (it *item) ID() string      { return it.rec.ID }
+func (it *item) When() time.Time { return it.rec.When() }
+func (it *item) Idea(ctx context.Context) (Idea, error) {
+	return buildIdea(ctx, it.tools, it.rec, nil)
 }
