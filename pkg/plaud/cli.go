@@ -25,6 +25,8 @@ const (
 	EnvServer = "DIBS_URL"
 	// EnvMCPCommand overrides the default --mcp-command.
 	EnvMCPCommand = "DIBS_PLAUD_MCP_COMMAND"
+	// EnvHome overrides the default --home.
+	EnvHome = "DIBS_PLAUD_HOME"
 )
 
 // Main is `dibs ingest plaud`: it returns a process exit code (0 ok, 1 run
@@ -45,6 +47,9 @@ func Main(ctx context.Context, args []string, getenv func(string) string, stderr
 	tags := fs.String("tags", DefaultTags, "comma-separated tags for ingested ideas")
 	perHour := fs.Int("max-per-hour", DefaultMaxPerHour, "submissions allowed per rolling hour (0 = unlimited)")
 	perDay := fs.Int("max-per-day", DefaultMaxPerDay, "submissions allowed per rolling 24h (0 = unlimited)")
+	maxRun := fs.Int("max", 0, "recordings handled per run (0 = no cap)")
+	dryRun := fs.Bool("dry-run", false, "log what would be submitted without submitting or advancing the cursor")
+	home := fs.String("home", getenv(EnvHome), "$HOME for the Plaud MCP server, i.e. the parent of its ~/.plaud token store (default: inherit); $"+EnvHome)
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
@@ -76,7 +81,7 @@ func Main(ctx context.Context, args []string, getenv func(string) string, stderr
 	}
 	in := &Ingester{
 		Dial: func(ctx context.Context) (Tools, error) {
-			c, err := Dial(ctx, *command, stderr)
+			c, err := Dial(ctx, *command, *home, stderr)
 			if err != nil {
 				return nil, err
 			}
@@ -88,6 +93,8 @@ func Main(ctx context.Context, args []string, getenv func(string) string, stderr
 		SinceDays:  *sinceDays,
 		MaxPerHour: *perHour,
 		MaxPerDay:  *perDay,
+		MaxPerRun:  *maxRun,
+		DryRun:     *dryRun,
 		Log:        slog.New(slog.NewTextHandler(stderr, nil)),
 	}
 	if err := in.Run(ctx, *interval); err != nil {

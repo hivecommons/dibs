@@ -47,16 +47,23 @@ type Ingester struct {
 	SinceDays  int
 	MaxPerHour int
 	MaxPerDay  int
-	Log        *slog.Logger
-	Now        func() time.Time
+	// MaxPerRun caps recordings handled in one run (0 = no cap).
+	MaxPerRun int
+	// DryRun builds and logs each idea without submitting it or advancing
+	// the cursor.
+	DryRun bool
+	Log    *slog.Logger
+	Now    func() time.Time
 }
 
 // Result summarizes one run.
 type Result struct {
 	Submitted int
 	Skipped   int
+	// Planned counts ideas that a dry run would have submitted.
+	Planned int
 	// BudgetExhausted is set when the local --max-per-hour/--max-per-day
-	// budget stopped the batch.
+	// budget or the --max per-run cap stopped the batch.
 	BudgetExhausted bool
 	// RateLimited is set when Dibs answered HTTP 429.
 	RateLimited bool
@@ -111,6 +118,11 @@ func (in *Ingester) RunOnce(ctx context.Context) (Result, error) {
 		if _, ok := cur.Seen[r.ID]; ok {
 			continue
 		}
+		if in.MaxPerRun > 0 && res.Submitted+res.Planned >= in.MaxPerRun {
+			in.log().Info("plaud ingest per-run cap reached; resuming next run", "max", in.MaxPerRun)
+			res.BudgetExhausted = true
+			break
+		}
 		if !cur.allow(now, in.MaxPerHour, in.MaxPerDay) {
 			in.log().Info("plaud ingest budget reached; resuming next run", "per_hour", in.MaxPerHour, "per_day", in.MaxPerDay)
 			res.BudgetExhausted = true
@@ -120,6 +132,11 @@ func (in *Ingester) RunOnce(ctx context.Context) (Result, error) {
 		if err != nil {
 			in.log().Warn("plaud recording skipped", "file_id", r.ID, "err", err)
 			res.Skipped++
+			continue
+		}
+		if in.DryRun {
+			res.Planned++
+			in.log().Info("plaud recording would be submitted (dry run)", "file_id", r.ID, "title", idea.Title, "tags", idea.Tags, "description_bytes", len(idea.Description))
 			continue
 		}
 		if err := in.Sink.Submit(ctx, idea); err != nil {
@@ -148,14 +165,14 @@ func (in *Ingester) Run(ctx context.Context, interval time.Duration) error {
 		res, err := in.RunOnce(ctx)
 		if interval <= 0 {
 			if err == nil {
-				in.log().Info("plaud ingest done", "submitted", res.Submitted, "skipped", res.Skipped, "budget_exhausted", res.BudgetExhausted, "rate_limited", res.RateLimited)
+				in.log().Info("plaud ingest done", "submitted", res.Submitted, "planned", res.Planned, "skipped", res.Skipped, "budget_exhausted", res.BudgetExhausted, "rate_limited", res.RateLimited)
 			}
 			return err
 		}
 		if err != nil {
 			in.log().Warn("plaud ingest run failed", "err", err)
 		} else {
-			in.log().Info("plaud ingest run done", "submitted", res.Submitted, "skipped", res.Skipped, "budget_exhausted", res.BudgetExhausted, "rate_limited", res.RateLimited)
+			in.log().Info("plaud ingest run done", "submitted", res.Submitted, "planned", res.Planned, "skipped", res.Skipped, "budget_exhausted", res.BudgetExhausted, "rate_limited", res.RateLimited)
 		}
 		select {
 		case <-ctx.Done():

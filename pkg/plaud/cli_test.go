@@ -107,3 +107,25 @@ func TestMainIngestsEndToEnd(t *testing.T) {
 		t.Fatalf("second run resubmitted: %d ideas", len(ideas))
 	}
 }
+
+func TestMainDryRunWithPlaudHome(t *testing.T) {
+	srv, st := dibsServer(t)
+	t.Setenv(fakeEnv, "1")
+	plaudHome := t.TempDir()
+	cursor := filepath.Join(t.TempDir(), "plaud-cursor.json")
+	env := envMap(map[string]string{EnvToken: "hub-token", EnvServer: srv.URL, EnvHome: plaudHome})
+	var stderr syncBuffer
+	args := []string{"--mcp-command", os.Args[0], "--cursor", cursor, "--since-days", "3650", "--dry-run", "--max", "1"}
+	if code := Main(context.Background(), args, env, &stderr); code != 0 {
+		t.Fatalf("code = %d, stderr=%s", code, stderr.String())
+	}
+	if ideas, _ := st.ListByAuthor("alice"); len(ideas) != 0 {
+		t.Fatalf("dry run submitted %d ideas", len(ideas))
+	}
+	if out := stderr.String(); !strings.Contains(out, "dry run") || !strings.Contains(out, "planned=1") {
+		t.Fatalf("stderr = %s", out)
+	}
+	if _, err := os.Stat(cursor); err == nil {
+		t.Fatal("dry run wrote the cursor file")
+	}
+}

@@ -326,13 +326,39 @@ official, free Plaud MCP server (`npx -y @plaud-ai/mcp@latest`, over stdio),
 lists recordings since its cursor, fetches each one's Plaud summary and
 transcript, and submits them with the `submit_idea` tool (tags `plaud,voice-note`).
 
+The flow is: record on the Plaud → the Plaud app uploads and transcribes it →
+`dibs ingest plaud` (one pass, or a poller) → a private draft idea appears in
+Dibs, tagged `plaud`, with the Plaud summary and transcript as its body.
+
 ```sh
 # Once: sign in to Plaud through its MCP server (the token stays in ~/.plaud).
 # Then, with your hub token (see "Token" above):
 export DIBS_TOKEN=...
+dibs ingest plaud --dry-run          # first time: see what would be submitted
 dibs ingest plaud                    # one pass, for cron/launchd
 dibs ingest plaud --interval 15m     # or keep polling
 ```
+
+### First run: Plaud sign-in
+
+The Plaud MCP server owns the Plaud login. On its first start it prints a
+sign-in URL on stderr (which `dibs ingest plaud` forwards) and waits for the
+browser to redirect to its callback on `http://localhost:8199`. Open the URL,
+approve, and the server writes its OAuth token to `~/.plaud/tokens-mcp.json`;
+later runs are unattended. Dibs never reads, copies, or logs that file.
+
+On a headless or remote host the callback still has to reach the machine
+running the server. Either forward the port while you sign in:
+
+```sh
+ssh -L 8199:localhost:8199 user@host   # then run dibs ingest plaud there and open the URL locally
+```
+
+or sign in once on your laptop (`npx -y @plaud-ai/mcp@latest` from any MCP
+client) and copy `~/.plaud/tokens-mcp.json` to the host, keeping it readable
+only by that user. `--home` (or `$DIBS_PLAUD_HOME`) points the server at a
+different `$HOME`, so a service account can keep its token store under, say,
+`/var/lib/dibs-plaud/.plaud/` without affecting the caller's own `~/.plaud`.
 
 | Flag | Default | Purpose |
 |---|---|---|
@@ -344,6 +370,9 @@ dibs ingest plaud --interval 15m     # or keep polling
 | `--since-days` | `7` | How far back the first run looks |
 | `--tags` | `plaud,voice-note` | Comma-separated tags |
 | `--max-per-hour` / `--max-per-day` | `10` / `30` | Submission budget per rolling hour / 24h (`0` = unlimited) |
+| `--max` | `0` | Recordings handled per run (`0` = no cap); the rest wait for the next run |
+| `--dry-run` | off | Log each idea that would be submitted; submit nothing and leave the cursor untouched |
+| `--home` | `$DIBS_PLAUD_HOME` or inherit | `$HOME` for the Plaud MCP server, i.e. the parent of its `.plaud/` token store |
 
 Each recording is submitted once: its Plaud id is recorded in the cursor file
 right after the submission succeeds. Recordings with no summary or transcript
@@ -358,6 +387,18 @@ Future recording timestamps are clamped to the submission time in the cursor,
 so they do not move the next listing window into the future. Existing cursors
 already set in the future need their `newest` field corrected manually; retain
 the `seen` entries to avoid resubmitting recordings.
+
+### Privacy
+
+Recordings leave the device only through Plaud's own app and cloud; this
+helper reads them back through Plaud's API with your Plaud login and sends
+the summary and transcript text to Dibs as a *private* draft owned by your
+hub identity. Nothing is published until you promote the draft. Audio is
+never fetched. If you would rather not run an unattended poller, export the
+transcript or summary from the Plaud app (TXT/Markdown) and upload it
+yourself with `POST /api/intake` (multipart field `file`, same hub token,
+25 MB cap, 10/h and 30/24h per identity); the same idea-shaping pipeline
+turns it into a draft.
 
 Cron (every 15 minutes):
 
