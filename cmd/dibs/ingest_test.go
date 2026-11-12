@@ -22,3 +22,10 @@ func TestIngestDispatchesPlaud(t *testing.T) {
 		t.Fatalf("ingest plaud -h = %d, stderr=%q", code, stderr.String())
 	}
 }
+
+func TestIngestDispatchesWisprFlow(t *testing.T) {
+	var stderr bytes.Buffer
+	if code := ingest(context.Background(), []string{"wisprflow", "-h"}, &stderr); code != 0 || !strings.Contains(stderr.String(), "-trigger") {
+		t.Fatalf("ingest wisprflow -h = %d, stderr=%q", code, stderr.String())
+	}
+}

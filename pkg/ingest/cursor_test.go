@@ -1,4 +1,4 @@
-package plaud
+package ingest
 
 import (
 	"os"
@@ -8,7 +8,7 @@ import (
 )
 
 func TestCursorRoundTrip(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "nested", "plaud-cursor.json")
+	path := filepath.Join(t.TempDir(), "nested", "cursor.json")
 	c, err := LoadCursor(path)
 	if err != nil {
 		t.Fatalf("LoadCursor(missing): %v", err)
@@ -18,8 +18,8 @@ func TestCursorRoundTrip(t *testing.T) {
 	}
 	now := time.Date(2026, 11, 11, 12, 0, 0, 0, time.UTC)
 	rec := now.Add(-2 * time.Hour)
-	c.markSubmitted(Recording{ID: "a", StartAt: rec}, now)
-	c.markSubmitted(Recording{ID: "b"}, now)
+	c.markSubmitted("a", rec, now)
+	c.markSubmitted("b", time.Time{}, now)
 	if err := c.Save(path); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -40,12 +40,12 @@ func TestCursorNewestNeverPassesNow(t *testing.T) {
 	now := time.Date(2026, 11, 11, 12, 0, 0, 0, time.UTC)
 	today := now.Add(-time.Hour)
 	c := &Cursor{Seen: map[string]time.Time{}}
-	c.markSubmitted(Recording{ID: "today", StartAt: today}, now)
-	c.markSubmitted(Recording{ID: "future", StartAt: now.Add(1000 * time.Hour)}, now)
+	c.markSubmitted("today", today, now)
+	c.markSubmitted("future", now.Add(1000*time.Hour), now)
 	if !c.Newest.Equal(now) {
 		t.Fatalf("newest = %v, want %v", c.Newest, now)
 	}
-	if since := c.Newest.Add(-relistOverlap); since.After(today) {
+	if since := c.Newest.Add(-24 * time.Hour); since.After(today) {
 		t.Fatalf("next listing starts at %v, after today's recording %v", since, today)
 	}
 	c.prune(now)
@@ -132,5 +132,19 @@ func TestCursorPruneAndAllow(t *testing.T) {
 		if got := c.allow(now, tc.perHour, tc.perDay); got != tc.want {
 			t.Errorf("allow(perHour=%d, perDay=%d) = %v, want %v", tc.perHour, tc.perDay, got, tc.want)
 		}
+	}
+}
+
+func TestCursorAdvance(t *testing.T) {
+	now := time.Date(2026, 11, 11, 12, 0, 0, 0, time.UTC)
+	c := &Cursor{Seen: map[string]time.Time{}, Newest: now.Add(-time.Hour)}
+	if c.advance(now.Add(-2*time.Hour), now) || !c.Newest.Equal(now.Add(-time.Hour)) {
+		t.Fatalf("advance moved backwards: %v", c.Newest)
+	}
+	if !c.advance(now.Add(time.Hour), now) || !c.Newest.Equal(now) {
+		t.Fatalf("advance past now: newest = %v, want clamped to %v", c.Newest, now)
+	}
+	if c.advance(now, now) {
+		t.Fatal("advance to the same time reported a move")
 	}
 }
