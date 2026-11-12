@@ -383,6 +383,19 @@ logs `budget_exhausted=true`; when Dibs answers HTTP 429 it logs
 wait for the next run. Descriptions are cut to the 64 KiB idea body limit. The helper never reads or
 copies Plaud's OAuth token (`~/.plaud/tokens-mcp.json`).
 
+The Plaud MCP server is third-party code that `npx` fetches from the registry
+on every start, so it is started with an allowlisted environment rather than
+the caller's: `PATH`, `HOME` (or `--home`), `USER`/`LOGNAME`, `SHELL`,
+`TMPDIR`, `TZ`, `TERM`, locale (`LANG`, `LC_*`), `XDG_*`, `NODE_*` and
+`npm_config_*` settings, proxy and CA variables (`HTTP(S)_PROXY`, `NO_PROXY`,
+`SSL_CERT_FILE`/`SSL_CERT_DIR`), `PLAUD_*`, `DIBS_PLAUD_*`, and the Windows
+basics. Anything else — `DIBS_TOKEN`, `GITHUB_TOKEN`, cloud or model-provider
+keys — never reaches it, and a name containing `TOKEN`, `SECRET`, `PASSWORD`,
+`CREDENTIAL` or `AUTH` is dropped even inside those prefixes (so
+`NODE_AUTH_TOKEN` is not forwarded). To stop `@latest` from pulling an
+unreviewed upstream release on each poll, pin it:
+`--mcp-command "npx -y @plaud-ai/mcp@<version>"` (or `$DIBS_PLAUD_MCP_COMMAND`).
+
 Future recording timestamps are clamped to the submission time in the cursor,
 so they do not move the next listing window into the future. Existing cursors
 already set in the future need their `newest` field corrected manually; retain
