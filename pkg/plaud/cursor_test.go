@@ -114,3 +114,16 @@ func TestCursorPruneAndAllow(t *testing.T) {
 		}
 	}
 }
+
+func TestCursorNewestNeverPassesNow(t *testing.T) {
+	c := &Cursor{Seen: map[string]time.Time{}}
+	now := time.Date(2026, 11, 11, 12, 0, 0, 0, time.UTC)
+	c.markSubmitted(Recording{ID: "future", StartAt: now.Add(1000 * time.Hour)}, now)
+	if !c.Newest.Equal(now) {
+		t.Fatalf("Newest = %v, want %v", c.Newest, now)
+	}
+	c.prune(now)
+	if _, ok := c.Seen["future"]; !ok {
+		t.Fatal("Seen id forgotten after prune")
+	}
+}

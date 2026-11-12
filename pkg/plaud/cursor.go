@@ -58,7 +58,10 @@ func (c *Cursor) Save(path string) error {
 // markSubmitted records r as submitted at now.
 func (c *Cursor) markSubmitted(r Recording, now time.Time) {
 	when := r.When()
-	if when.IsZero() {
+	// A far-future start_at (e.g. a mis-decoded epoch) must not push Newest
+	// past now: the list window would then be empty forever and prune would
+	// forget every Seen id.
+	if when.IsZero() || when.After(now) {
 		when = now
 	}
 	c.Seen[r.ID] = when
