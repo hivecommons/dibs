@@ -125,3 +125,16 @@ func TestDibsSinkReports429OnToolCall(t *testing.T) {
 		t.Fatalf("err = %v, want ErrRateLimited", err)
 	}
 }
+
+func TestFirstLine(t *testing.T) {
+	for in, want := range map[string]string{
+		"":                         "",
+		"  single  ":               "single",
+		"\n\nfirst\nsecond\n":      "first",
+		"title: bad\ndetail: more": "title: bad",
+	} {
+		if got := firstLine(in); got != want {
+			t.Errorf("firstLine(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
