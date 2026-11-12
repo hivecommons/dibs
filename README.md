@@ -347,9 +347,11 @@ dibs ingest plaud --interval 15m     # or keep polling
 
 Each recording is submitted once: its Plaud id is recorded in the cursor file
 right after the submission succeeds. Recordings with no summary or transcript
-yet are retried on the next run. When the budget is used up, or Dibs answers
-HTTP 429, the run stops and the remaining recordings wait for the next run.
-Descriptions are cut to the 64 KiB idea body limit. The helper never reads or
+yet are retried on the next run. Long transcripts are fetched page by page
+(following the server's `next_cursor`). When the budget is used up the run
+logs `budget_exhausted=true`; when Dibs answers HTTP 429 it logs
+`rate_limited=true`; either way the run stops and the remaining recordings
+wait for the next run. Descriptions are cut to the 64 KiB idea body limit. The helper never reads or
 copies Plaud's OAuth token (`~/.plaud/tokens-mcp.json`).
 
 Cron (every 15 minutes):

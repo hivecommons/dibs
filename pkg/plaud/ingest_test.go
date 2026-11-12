@@ -46,8 +46,8 @@ func threeRecordings(t *testing.T) *fakeTools {
 			map[string]any{"id": "r1", "name": "First", "start_at": "2026-11-11T06:00:00Z"},
 			map[string]any{"id": "r2", "name": "Second", "start_at": "2026-11-11T07:00:00Z"},
 		)},
-		notes:       map[string]string{"r1": "n1", "r2": "n2", "r3": "n3"},
-		transcripts: map[string]string{"r1": "t1", "r2": "t2", "r3": "t3"},
+		notes:       map[string]string{"r1": `[{"data_content":"n1"}]`, "r2": `[{"data_content":"n2"}]`, "r3": `[{"data_content":"n3"}]`},
+		transcripts: map[string]string{"r1": `{"segments":[{"content":"t1"}]}`, "r2": `{"segments":[{"content":"t2"}]}`, "r3": `{"segments":[{"content":"t3"}]}`},
 	}
 }
 
@@ -135,7 +135,7 @@ func TestRunOnceStopsAtLocalBudget(t *testing.T) {
 	in := newIngester(t, threeRecordings(t), sink)
 	in.MaxPerHour = 2
 	res, err := in.RunOnce(context.Background())
-	if err != nil || res.Submitted != 2 || !res.RateLimited {
+	if err != nil || res.Submitted != 2 || !res.BudgetExhausted || res.RateLimited {
 		t.Fatalf("res=%+v err=%v; want 2 submitted then budget stop", res, err)
 	}
 }
@@ -144,7 +144,7 @@ func TestRunOnceStopsOn429(t *testing.T) {
 	sink := &fakeSink{failOn: 2, failWith: ErrRateLimited}
 	in := newIngester(t, threeRecordings(t), sink)
 	res, err := in.RunOnce(context.Background())
-	if err != nil || res.Submitted != 1 || !res.RateLimited {
+	if err != nil || res.Submitted != 1 || !res.RateLimited || res.BudgetExhausted {
 		t.Fatalf("res=%+v err=%v", res, err)
 	}
 	cur, _ := LoadCursor(in.CursorPath)

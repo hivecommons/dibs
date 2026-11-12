@@ -13,14 +13,18 @@ import (
 	"github.com/hivecommons/dibs/pkg/store"
 )
 
-// fakeTools is an in-memory Plaud MCP session.
+// fakeTools is an in-memory Plaud MCP session. Payloads are bare JSON
+// unless a test wraps them; transcriptPages, when set for an id, is served
+// page by page through next_cursor instead of transcripts.
 type fakeTools struct {
-	pages       []string // list_files text per page; later pages are "[]"
-	listErr     error
-	notes       map[string]string
-	transcripts map[string]string
-	listArgs    []map[string]any
-	closed      bool
+	pages           []string // list_files text per page; later pages are "[]"
+	listErr         error
+	notes           map[string]string
+	transcripts     map[string]string
+	transcriptPages map[string][]string
+	listArgs        []map[string]any
+	transcriptArgs  []map[string]any
+	closed          bool
 }
 
 func (f *fakeTools) CallTool(_ context.Context, name string, args map[string]any) (string, error) {
@@ -38,7 +42,15 @@ func (f *fakeTools) CallTool(_ context.Context, name string, args map[string]any
 	case "get_note", "get_transcript":
 		m := f.notes
 		if name == "get_transcript" {
+			f.transcriptArgs = append(f.transcriptArgs, args)
 			m = f.transcripts
+			if pages, ok := f.transcriptPages[args["file_id"].(string)]; ok {
+				i := 0
+				if c, ok := args["cursor"].(string); ok {
+					fmt.Sscan(c, &i)
+				}
+				return wrapUntrusted(transcriptPage(args["file_id"].(string), pages, i)), nil
+			}
 		}
 		v, ok := m[args["file_id"].(string)]
 		if !ok {
@@ -63,20 +75,33 @@ func filesJSON(t *testing.T, files ...map[string]any) string {
 	return string(b)
 }
 
+func TestUnwrapUntrusted(t *testing.T) {
+	payload, wrapped := unwrapUntrusted(wrapUntrusted(`{"data":[]}`) + "\n\nNote: trailer text")
+	if !wrapped || payload != `{"data":[]}` {
+		t.Fatalf("wrapped = %v, payload = %q", wrapped, payload)
+	}
+	// A nested closing tag with a different name does not end the block.
+	inner := "{\"x\":\"</untrusted-user-data-ffff>\"}"
+	if payload, wrapped := unwrapUntrusted(wrapUntrusted(inner)); !wrapped || payload != inner {
+		t.Fatalf("nested tag: wrapped = %v, payload = %q", wrapped, payload)
+	}
+	if payload, wrapped := unwrapUntrusted("  bare  "); wrapped || payload != "bare" {
+		t.Fatalf("bare: wrapped = %v, payload = %q", wrapped, payload)
+	}
+}
+
 func TestDecodeRecordingsShapes(t *testing.T) {
-	ms := float64(time.Date(2026, 11, 1, 8, 0, 0, 0, time.UTC).UnixMilli())
-	sec := float64(time.Date(2026, 11, 2, 8, 0, 0, 0, time.UTC).Unix())
 	cases := []struct {
 		name string
 		in   string
 		ids  []string
 	}{
 		{"empty", "  ", nil},
-		{"array", `[{"id":"a"},{"file_id":"b"},"junk",{"name":"no id"}]`, []string{"a", "b"}},
-		{"wrapped", `{"data":[{"id":"c"}]}`, []string{"c"}},
-		{"single", `{"id":"d","title":"T"}`, []string{"d"}},
+		{"array", `[{"id":"a"},"junk",{"name":"no id"}]`, []string{"a"}},
+		{"api object", `{"data":[{"id":"c"}],"page":1,"has_next":false}`, []string{"c"}},
 		{"numeric id", `[{"id":42}]`, []string{"42"}},
-		{"prose prefix", "Found 1 file:\n[{\"id\":\"e\"}]", []string{"e"}},
+		{"envelope", wrapUntrusted(`{"data":[{"id":"e"}]}`), []string{"e"}},
+		{"envelope with trailer", wrapUntrusted(`{"data":[{"id":"f"}]}`) + "\n\nNote: something", []string{"f"}},
 		{"unknown object", `{"count":0}`, nil},
 	}
 	for _, tc := range cases {
@@ -92,37 +117,44 @@ func TestDecodeRecordingsShapes(t *testing.T) {
 			t.Errorf("%s: ids = %v, want %v", tc.name, ids, tc.ids)
 		}
 	}
-	recs, err := decodeRecordings(fmt.Sprintf(`[{"id":"t","filename":" f.mp3 ","created_at":%v,"start_time":%v,"duration":1500},{"id":"u","create_time":"2026-11-03 10:00:00","start_at":"2026-11-04"},{"id":"v","created_at":"2026-11-05T01:02:03.5Z","start_at":-1}]`, ms, sec))
+	recs, err := decodeRecordings(wrapUntrusted(`{"data":[{"id":"t","name":" Standup ","created_at":"2026-11-03T10:00:00","start_at":"2026-11-04","duration":1500},{"id":"v","created_at":"2026-11-05T01:02:03.5Z","start_at":-1}]}`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r := recs[0]; r.Name != "f.mp3" || r.CreatedAt.UnixMilli() != int64(ms) || r.StartAt.Unix() != int64(sec) || r.DurationMS != 1500 {
-		t.Errorf("numeric times = %+v", r)
+	if r := recs[0]; r.Name != "Standup" || r.CreatedAt.Hour() != 10 || r.StartAt.Day() != 4 || r.DurationMS != 1500 {
+		t.Errorf("zone-less times = %+v", r)
 	}
-	if r := recs[1]; r.CreatedAt.Hour() != 10 || r.StartAt.Day() != 4 {
-		t.Errorf("string times = %+v", r)
-	}
-	if r := recs[2]; r.CreatedAt.Second() != 3 || !r.StartAt.IsZero() || !r.When().Equal(r.CreatedAt) {
+	if r := recs[1]; r.CreatedAt.Second() != 3 || !r.StartAt.IsZero() || !r.When().Equal(r.CreatedAt) {
 		t.Errorf("RFC3339 time / When fallback = %+v", r)
 	}
-	if _, err := decodeRecordings("not json at all"); err == nil {
-		t.Fatal("non-JSON: want error")
+	for _, in := range []string{"not json at all", wrapUntrusted("not json either"), "Found 1 file:\n[{\"id\":\"e\"}]"} {
+		if _, err := decodeRecordings(in); err == nil {
+			t.Fatalf("%q: want error", in)
+		}
 	}
 }
 
 func TestRenderText(t *testing.T) {
 	cases := map[string]string{
-		"  plain words ":                           "plain words",
-		`"a json string"`:                          "a json string",
-		`{"summary":"Sum"}`:                        "Sum",
-		`{"markdown":"","note":{"text":"Nested"}}`: "Nested",
-		`{"segments":[{"speaker":"A","text":"hi"},{"speaker_name":"B","content":"yo"},{"other":1},"loose"]}`: "A: hi\nB: yo\nloose",
-		`{"unknown":1}`: "",
+		// Unwrapped prose is a server status message: not ready.
+		`Block "transaction" has no content for this recording yet.`:                       "",
+		`Block "transaction" not available for this recording. Available blocks: outline.`: "",
+		"  ":            "",
 		`42`:            "",
+		`{"unknown":1}`: "",
+		// get_note payload (bare, as fakes emit it, and enveloped).
+		`[{"data_type":"auto_sum_note","data_content":"Sum"},{"data_type":"high_light","data_content":""}]`: "Sum",
+		wrapUntrusted(`[{"data_type":"auto_sum_note","data_content":"# Title\n\nBody"}]`):                   "# Title\n\nBody",
+		// get_transcript page.
+		wrapUntrusted(`{"next_cursor":null,"segments":[{"speaker":"A","content":"hi","start_time":0},{"speaker":"","content":"yo"},{"other":1}]}`): "A: hi\nyo",
+		`{"marks":[{"content":"flagged"}]}`: "flagged",
+		// Wrapped non-JSON block content is used verbatim.
+		wrapUntrusted("plain block text"): "plain block text",
+		wrapUntrusted("[]"):               "",
 	}
 	for in, want := range cases {
 		if got := renderText(in); got != want {
-			t.Errorf("renderText(%s) = %q, want %q", in, got, want)
+			t.Errorf("renderText(%q) = %q, want %q", in, got, want)
 		}
 	}
 }
@@ -206,15 +238,59 @@ func TestListRecordingsErrors(t *testing.T) {
 
 func TestBuildIdea(t *testing.T) {
 	r := Recording{ID: "a", Name: "Idea"}
-	tools := &fakeTools{notes: map[string]string{"a": "note", "empty": " "}, transcripts: map[string]string{"empty": "[]"}}
+	tools := &fakeTools{notes: map[string]string{"a": `[{"data_content":"note"}]`, "empty": " "}, transcripts: map[string]string{"empty": "[]"}}
 	idea, err := buildIdea(context.Background(), tools, r, []string{"plaud"})
 	if err != nil || idea.Title != "Idea" || !strings.Contains(idea.Description, "note") || strings.Contains(idea.Description, "## Transcript") || idea.Tags[0] != "plaud" {
 		t.Fatalf("note only: %+v, %v", idea, err)
 	}
-	if _, err := buildIdea(context.Background(), tools, Recording{ID: "missing"}, nil); err == nil || errors.Is(err, errNotReady) {
-		t.Fatalf("both calls failing: err = %v, want the tool error", err)
+	_, err = buildIdea(context.Background(), tools, Recording{ID: "missing"}, nil)
+	if err == nil || errors.Is(err, errNotReady) || !strings.Contains(err.Error(), "get_note") || !strings.Contains(err.Error(), "get_transcript") {
+		t.Fatalf("both calls failing: err = %v, want both tool errors", err)
 	}
 	if _, err := buildIdea(context.Background(), tools, Recording{ID: "empty"}, nil); !errors.Is(err, errNotReady) {
 		t.Fatalf("empty note and transcript: err = %v, want errNotReady", err)
+	}
+}
+
+func TestBuildIdeaNotReadyPlaceholder(t *testing.T) {
+	// The real server answers with unwrapped prose while a block is still
+	// being produced; that must not be submitted as the transcript.
+	tools := &fakeTools{
+		notes:       map[string]string{"p": wrapUntrusted("[]")},
+		transcripts: map[string]string{"p": `Block "transaction" has no content for this recording yet.`},
+	}
+	if _, err := buildIdea(context.Background(), tools, Recording{ID: "p"}, nil); !errors.Is(err, errNotReady) {
+		t.Fatalf("placeholder: err = %v, want errNotReady", err)
+	}
+}
+
+func TestFetchTranscriptPaginates(t *testing.T) {
+	tools := &fakeTools{transcriptPages: map[string][]string{"m": {"one", "two", "three"}}}
+	got, err := fetchTranscript(context.Background(), tools, "m")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "Me: one\nMe: two\nMe: three" {
+		t.Fatalf("transcript = %q", got)
+	}
+	if len(tools.transcriptArgs) != 3 || tools.transcriptArgs[0]["cursor"] != nil || tools.transcriptArgs[1]["cursor"] != "1" || tools.transcriptArgs[2]["cursor"] != "2" {
+		t.Fatalf("transcript args = %v", tools.transcriptArgs)
+	}
+
+	// Stops once the body cap is exceeded even if pages remain.
+	var huge []string
+	for i := 0; i < 10; i++ {
+		huge = append(huge, strings.Repeat("x", store.MaxBodyBytes/4))
+	}
+	tools = &fakeTools{transcriptPages: map[string][]string{"h": huge}}
+	if _, err := fetchTranscript(context.Background(), tools, "h"); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(tools.transcriptArgs); n < 4 || n >= 10 {
+		t.Fatalf("made %d transcript calls, want to stop soon after the body cap", n)
+	}
+
+	if _, err := fetchTranscript(context.Background(), &fakeTools{}, "none"); err == nil {
+		t.Fatal("missing transcript: want error")
 	}
 }

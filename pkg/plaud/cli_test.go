@@ -94,7 +94,7 @@ func TestMainIngestsEndToEnd(t *testing.T) {
 		t.Fatalf("ideas = %d, %v; stderr=%s", len(ideas), err, stderr.String())
 	}
 	idea := ideas[0]
-	if idea.Title != "Standup idea" || !strings.Contains(idea.Body, "Build a voice inbox") || !strings.Contains(idea.Body, "Me: What if Dibs took voice notes?") || strings.Join(idea.Tags, ",") != "plaud,mine" {
+	if idea.Title != "Standup idea" || !strings.Contains(idea.Body, "Build a voice inbox") || !strings.Contains(idea.Body, "Me: What if Dibs took voice notes?\nMe: Second page utterance.") || strings.Join(idea.Tags, ",") != "plaud,mine" {
 		t.Fatalf("idea = %+v", idea)
 	}
 	if strings.Contains(stderr.String(), "hub-token") {

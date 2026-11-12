@@ -53,8 +53,12 @@ type Ingester struct {
 
 // Result summarizes one run.
 type Result struct {
-	Submitted   int
-	Skipped     int
+	Submitted int
+	Skipped   int
+	// BudgetExhausted is set when the local --max-per-hour/--max-per-day
+	// budget stopped the batch.
+	BudgetExhausted bool
+	// RateLimited is set when Dibs answered HTTP 429.
 	RateLimited bool
 }
 
@@ -109,7 +113,7 @@ func (in *Ingester) RunOnce(ctx context.Context) (Result, error) {
 		}
 		if !cur.allow(now, in.MaxPerHour, in.MaxPerDay) {
 			in.log().Info("plaud ingest budget reached; resuming next run", "per_hour", in.MaxPerHour, "per_day", in.MaxPerDay)
-			res.RateLimited = true
+			res.BudgetExhausted = true
 			break
 		}
 		idea, err := buildIdea(ctx, tools, r, in.Tags)
@@ -144,14 +148,14 @@ func (in *Ingester) Run(ctx context.Context, interval time.Duration) error {
 		res, err := in.RunOnce(ctx)
 		if interval <= 0 {
 			if err == nil {
-				in.log().Info("plaud ingest done", "submitted", res.Submitted, "skipped", res.Skipped, "rate_limited", res.RateLimited)
+				in.log().Info("plaud ingest done", "submitted", res.Submitted, "skipped", res.Skipped, "budget_exhausted", res.BudgetExhausted, "rate_limited", res.RateLimited)
 			}
 			return err
 		}
 		if err != nil {
 			in.log().Warn("plaud ingest run failed", "err", err)
 		} else {
-			in.log().Info("plaud ingest run done", "submitted", res.Submitted, "skipped", res.Skipped, "rate_limited", res.RateLimited)
+			in.log().Info("plaud ingest run done", "submitted", res.Submitted, "skipped", res.Skipped, "budget_exhausted", res.BudgetExhausted, "rate_limited", res.RateLimited)
 		}
 		select {
 		case <-ctx.Done():

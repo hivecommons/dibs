@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -18,6 +19,16 @@ const listPageSize = 50
 
 // truncatedMarker ends a description cut to fit the idea body cap.
 const truncatedMarker = "\n\n_[transcript truncated to fit the Dibs idea size limit]_\n"
+
+// maxTranscriptPages bounds the get_transcript next_cursor walk per
+// recording (50 utterances a page by default), on top of the body-size stop.
+const maxTranscriptPages = 100
+
+// untrustedOpen matches the opening tag of the @plaud-ai/mcp envelope. The
+// prose preamble names the tag too, but bare (<tag>); only the real opening
+// tag carries attributes (source="plaud-recording"). The closing tag repeats
+// the same random name.
+var untrustedOpen = regexp.MustCompile(`<(untrusted-user-data-[0-9a-fA-F]+)\s[^>]*>`)
 
 // errNotReady marks a recording with neither a note nor a transcript yet;
 // it is retried on the next run.
@@ -88,34 +99,54 @@ func listRecordings(ctx context.Context, tools Tools, since time.Time, limit int
 	return out, nil
 }
 
-// decodeRecordings accepts a JSON array of files or an object wrapping one
-// under a common key, tolerating leading prose before the JSON.
+// unwrapUntrusted strips the envelope @plaud-ai/mcp puts around every
+// successful tool payload:
+//
+//	The block delimited by <untrusted-user-data-HEX> below contains ...
+//	<untrusted-user-data-HEX source="plaud-recording">
+//	PAYLOAD
+//	</untrusted-user-data-HEX>
+//	optional trailer notes
+//
+// It returns the payload and whether an envelope was found. Text without an
+// envelope is returned trimmed, so a fake server may answer with bare JSON.
+func unwrapUntrusted(text string) (string, bool) {
+	loc := untrustedOpen.FindStringSubmatchIndex(text)
+	if loc == nil {
+		return strings.TrimSpace(text), false
+	}
+	body := text[loc[1]:]
+	closing := "</" + text[loc[2]:loc[3]] + ">"
+	if end := strings.LastIndex(body, closing); end >= 0 {
+		body = body[:end]
+	}
+	return strings.TrimSpace(body), true
+}
+
+// decodeRecordings parses a list_files result from @plaud-ai/mcp (0.3.x).
+// Inside the untrusted envelope the payload is the Plaud API response
+// GET /open/third-party/files/, i.e.
+//
+//	{"data": [{"id": "...", "name": "...", "created_at": "2026-11-10T09:00:00",
+//	           "start_at": "...", "duration": 65000, ...}, ...], ...}
+//
+// Timestamps are strings (RFC 3339, sometimes without a zone; UTC assumed);
+// duration is milliseconds. A bare array is accepted too, for fakes.
 func decodeRecordings(text string) ([]Recording, error) {
-	text = strings.TrimSpace(text)
-	if text == "" {
+	payload, _ := unwrapUntrusted(text)
+	if payload == "" {
 		return nil, nil
 	}
 	var raw any
-	if err := json.Unmarshal([]byte(text), &raw); err != nil {
-		if i := strings.IndexAny(text, "[{"); i > 0 {
-			return decodeRecordings(text[i:])
-		}
-		return nil, fmt.Errorf("plaud: list_files returned non-JSON output: %s", firstLine(text))
+	if err := json.Unmarshal([]byte(payload), &raw); err != nil {
+		return nil, fmt.Errorf("plaud: list_files returned non-JSON output: %s", firstLine(payload))
 	}
 	var items []any
 	switch v := raw.(type) {
 	case []any:
 		items = v
 	case map[string]any:
-		for _, key := range []string{"files", "items", "data", "results", "recordings"} {
-			if arr, ok := v[key].([]any); ok {
-				items = arr
-				break
-			}
-		}
-		if items == nil && v["id"] != nil {
-			items = []any{v}
-		}
+		items, _ = v["data"].([]any)
 	}
 	var out []Recording
 	for _, it := range items {
@@ -124,10 +155,10 @@ func decodeRecordings(text string) ([]Recording, error) {
 			continue
 		}
 		r := Recording{
-			ID:        stringField(m, "id", "file_id"),
-			Name:      stringField(m, "name", "title", "filename"),
-			CreatedAt: timeField(m, "created_at", "create_time"),
-			StartAt:   timeField(m, "start_at", "start_time"),
+			ID:        stringField(m, "id"),
+			Name:      stringField(m, "name"),
+			CreatedAt: timeField(m, "created_at"),
+			StartAt:   timeField(m, "start_at"),
 		}
 		if d, ok := m["duration"].(float64); ok {
 			r.DurationMS = int64(d)
@@ -157,7 +188,7 @@ func timeField(m map[string]any, keys ...string) time.Time {
 	for _, k := range keys {
 		switch v := m[k].(type) {
 		case string:
-			for _, layout := range []string{time.RFC3339Nano, "2006-01-02 15:04:05", "2006-01-02"} {
+			for _, layout := range []string{time.RFC3339Nano, "2006-01-02T15:04:05.999999999", "2006-01-02 15:04:05", "2006-01-02"} {
 				if t, err := time.Parse(layout, strings.TrimSpace(v)); err == nil {
 					return t.UTC()
 				}
@@ -174,18 +205,36 @@ func timeField(m map[string]any, keys ...string) time.Time {
 	return time.Time{}
 }
 
-// renderText turns a get_note/get_transcript payload into plain text. JSON
-// payloads are unwrapped (text-bearing fields, transcript segments); any
-// other output is used as-is.
+// renderText turns a get_note or get_transcript result into plain text.
+// The JSON inside the envelope is rendered by renderValue. A result with
+// no envelope is a server-side status message ("Block "transaction" has no
+// content for this recording yet.", "... not available ...") rather than
+// recording data, so it renders as "" (not ready), unless it is bare JSON
+// as emitted by fakes.
 func renderText(text string) string {
-	text = strings.TrimSpace(text)
+	payload, wrapped := unwrapUntrusted(text)
 	var raw any
-	if err := json.Unmarshal([]byte(text), &raw); err != nil {
-		return text
+	if err := json.Unmarshal([]byte(payload), &raw); err != nil {
+		if wrapped {
+			return payload
+		}
+		return ""
 	}
 	return strings.TrimSpace(renderValue(raw))
 }
 
+// renderValue renders the shapes @plaud-ai/mcp returns:
+//
+//   - get_note: an array of note blocks
+//     [{"data_type": "auto_sum_note", "data_content": "<markdown>", ...}, ...]
+//   - get_transcript: one page
+//     {"segments": [{"speaker": "A", "content": "...", "start_time": 0, ...}],
+//     "next_cursor": "..." | null, ...}
+//     ("marks" for the mark_memo block, which is not requested here), or a
+//     bare array of blocks when the recording has none yet.
+//
+// Blocks and segments are joined one per line; a segment is prefixed with
+// its speaker.
 func renderValue(v any) string {
 	switch v := v.(type) {
 	case string:
@@ -199,7 +248,7 @@ func renderValue(v any) string {
 		}
 		return strings.Join(lines, "\n")
 	case map[string]any:
-		for _, key := range []string{"markdown", "summary", "note", "content", "text", "transcript", "segments", "data"} {
+		for _, key := range []string{"data_content", "content", "segments", "marks"} {
 			inner, ok := v[key]
 			if !ok {
 				continue
@@ -208,7 +257,7 @@ func renderValue(v any) string {
 			if body == "" {
 				continue
 			}
-			if speaker := stringField(v, "speaker", "speaker_name"); speaker != "" {
+			if speaker := stringField(v, "speaker"); speaker != "" && key == "content" {
 				return speaker + ": " + body
 			}
 			return body
@@ -217,17 +266,58 @@ func renderValue(v any) string {
 	return ""
 }
 
+// nextCursor returns the next_cursor of a get_transcript page, or "" on the
+// last page (or for anything that is not a paged result).
+func nextCursor(text string) string {
+	payload, _ := unwrapUntrusted(text)
+	var page struct {
+		NextCursor string `json:"next_cursor"`
+	}
+	if err := json.Unmarshal([]byte(payload), &page); err != nil {
+		return ""
+	}
+	return page.NextCursor
+}
+
+// fetchTranscript walks get_transcript pages via next_cursor and joins the
+// rendered utterances. It stops early once the text already exceeds the
+// idea body cap, since ideaDescription truncates there anyway.
+func fetchTranscript(ctx context.Context, tools Tools, id string) (string, error) {
+	var b strings.Builder
+	cursor := ""
+	for page := 0; page < maxTranscriptPages; page++ {
+		args := map[string]any{"file_id": id}
+		if cursor != "" {
+			args["cursor"] = cursor
+		}
+		text, err := tools.CallTool(ctx, "get_transcript", args)
+		if err != nil {
+			return "", err
+		}
+		if part := renderText(text); part != "" {
+			if b.Len() > 0 {
+				b.WriteString("\n")
+			}
+			b.WriteString(part)
+		}
+		cursor = nextCursor(text)
+		if cursor == "" || b.Len() > store.MaxBodyBytes {
+			break
+		}
+	}
+	return b.String(), nil
+}
+
 // buildIdea fetches the note and transcript for r and renders the idea.
 // A recording whose note and transcript both fail or are empty is reported
 // as an error so it is retried later rather than marked as seen.
 func buildIdea(ctx context.Context, tools Tools, r Recording, tags []string) (Idea, error) {
-	args := map[string]any{"file_id": r.ID}
-	note, noteErr := tools.CallTool(ctx, "get_note", args)
-	transcript, trErr := tools.CallTool(ctx, "get_transcript", args)
+	note, noteErr := tools.CallTool(ctx, "get_note", map[string]any{"file_id": r.ID})
+	transcript, trErr := fetchTranscript(ctx, tools, r.ID)
 	if noteErr != nil && trErr != nil {
-		return Idea{}, trErr
+		return Idea{}, errors.Join(noteErr, trErr)
 	}
-	note, transcript = renderText(note), renderText(transcript)
+	note = renderText(note)
 	if note == "" && transcript == "" {
 		return Idea{}, errNotReady
 	}
