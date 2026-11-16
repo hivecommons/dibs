@@ -123,3 +123,33 @@ console.log(JSON.stringify(cases.map(audioFileInfo)));
 		}
 	}
 }
+
+func TestUIRecordLevelIsRMSAndLightsSegments(t *testing.T) {
+	h := newTestServer(t, "/")
+	rec := doJSON(t, h, "GET", "/", "", nil)
+	body := rec.Body.String()
+	for _, want := range []string{`id="intake-level"`, `id="intake-level-num"`, "createAnalyser", "requestAnimationFrame(tick)", "cancelAnimationFrame(recordMeterFrame)"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("UI page missing %q", want)
+		}
+	}
+	script := `var RECORD_LEVEL_BYTE_MID = 128, RECORD_LEVEL_GAIN = 3, RECORD_LEVEL_SEGMENTS = 5;
+` + uiJSFunc(t, body, "recordLevel") + "\n" + uiJSFunc(t, body, "recordLevelSegments") + `
+var silent = new Uint8Array(64).fill(128);
+var square = new Uint8Array(64); for (var i = 0; i < 64; i++) square[i] = i % 2 ? 128 + 13 : 128 - 13;
+var loud = new Uint8Array(64); for (var j = 0; j < 64; j++) loud[j] = j % 2 ? 255 : 0;
+console.log(JSON.stringify([recordLevel(silent), Math.round(recordLevel(square) * 100), recordLevel(loud), recordLevel(null),
+  recordLevelSegments(0), recordLevelSegments(0.5), recordLevelSegments(1), recordLevelSegments(2), recordLevelSegments(NaN)]));
+`
+	var got []float64
+	if err := json.Unmarshal([]byte(strings.TrimSpace(runUIJS(t, script))), &got); err != nil {
+		t.Fatal(err)
+	}
+	// square wave of amplitude 13/128 has RMS 0.1016, times gain 3 = 0.30.
+	want := []float64{0, 30, 1, 0, 0, 3, 5, 5, 0}
+	for i, w := range want {
+		if got[i] != w {
+			t.Errorf("case %d = %v, want %v (all %v)", i, got[i], w, got)
+		}
+	}
+}
