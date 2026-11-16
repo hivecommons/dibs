@@ -141,9 +141,22 @@ textarea.md { font-family: var(--font-mono); font-size: .88rem; min-height: 220p
 .intake-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 8px 0 6px; color: var(--muted); font-size: .82rem; }
 .intake-row input[type=file] { display: none; }
 .intake-status { color: var(--muted); font-size: .78rem; min-height: 1.2em; }
-.intake-level { display: inline-block; width: 60px; height: 8px; border-radius: 4px; background: var(--line, rgba(128,128,128,.25)); overflow: hidden; }
+.intake-level { display: inline-flex; align-items: flex-end; gap: 2px; height: 22px; padding: 3px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel-2); box-sizing: border-box; }
 .intake-level[hidden] { display: none; }
-.intake-level span { display: block; height: 100%; width: 0; background: var(--amber); transition: width .1s; }
+.intake-level .lvl-label { align-self: center; margin-right: 4px; font-size: .72rem; font-weight: 700; color: var(--muted); }
+.intake-level i { display: block; width: 4px; border-radius: 1px; background: var(--line); }
+.intake-level i:nth-of-type(1) { height: 4px; }
+.intake-level i:nth-of-type(2) { height: 7px; }
+.intake-level i:nth-of-type(3) { height: 10px; }
+.intake-level i:nth-of-type(4) { height: 13px; }
+.intake-level i:nth-of-type(5) { height: 16px; }
+.intake-level i.on { background: var(--amber); }
+.intake-level i:nth-of-type(5).on { background: var(--red); }
+.intake-level .lvl-num { display: none; align-self: center; min-width: 3ch; font-size: .72rem; font-variant-numeric: tabular-nums; color: var(--text); }
+@media (prefers-reduced-motion: reduce) {
+  .intake-level i { display: none; }
+  .intake-level .lvl-num { display: inline; }
+}
 .intake-status.err { color: var(--red); }
 .intake-status.warn { color: var(--amber); }
 .pill.recording { border-color: var(--amber); color: var(--amber); background: rgba(244,199,95,.08); }
@@ -1068,7 +1081,7 @@ details.how-details .how-body { padding: 16px 18px; }
       <input type="file" id="f-intake-file" accept=".txt,.md,.html,.htm,.pdf,.docx,.rtf,.mp3,.m4a,.wav,.ogg,.webm,.flac,text/plain,text/markdown,text/html,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/rtf,audio/*,video/webm">
       <button type="button" class="pill small" id="btn-intake-record" hidden>Record</button>
       <button type="button" class="pill small" id="btn-intake-pause" hidden>Pause</button>
-      <span class="intake-level" id="intake-level" hidden aria-hidden="true"><span id="intake-level-bar"></span></span>
+      <span class="intake-level" id="intake-level" hidden aria-hidden="true" title="Microphone level"><span class="lvl-label">Mic</span><i></i><i></i><i></i><i></i><i></i><span class="lvl-num" id="intake-level-num">0%</span></span>
       <span class="intake-status" id="intake-status" role="status" aria-live="polite"></span>
     </div>
     <div class="intake-status" id="intake-note" hidden>Recording? Make sure everyone being recorded knows. Keep this screen open while you record.</div>
@@ -2740,7 +2753,36 @@ hive-contribute connect https://hive.hivecommons.dev/hive/HIVE_ID</code>
   var recordPausedAt = 0;
   var recordWakeLock = null;
   var recordAudioCtx = null;
-  var recordMeterTimer = null;
+  var recordMeterFrame = 0;
+  // Live mic level meter: analyser FFT size, the gain that maps speech RMS
+  // (about 0.05 to 0.3) onto most of the meter (same as hive's Inbox
+  // recorder), the redraw interval (~20 fps, or a calm 4 Hz numeric readout
+  // under prefers-reduced-motion) and the number of bar segments.
+  var RECORD_LEVEL_FFT_SIZE = 1024;
+  var RECORD_LEVEL_GAIN = 3;
+  var RECORD_LEVEL_BYTE_MID = 128;
+  var RECORD_LEVEL_FRAME_MS = 50;
+  var RECORD_LEVEL_REDUCED_FRAME_MS = 250;
+  var RECORD_LEVEL_SEGMENTS = 5;
+  var RECORD_LEVEL_PERCENT = 100;
+  // recordLevel turns byte time-domain samples into a 0..1 RMS level.
+  function recordLevel(samples) {
+    var n = samples ? samples.length : 0;
+    if (!n) return 0;
+    var sum = 0;
+    for (var i = 0; i < n; i++) { var v = (samples[i] - RECORD_LEVEL_BYTE_MID) / RECORD_LEVEL_BYTE_MID; sum += v * v; }
+    return Math.min(1, Math.sqrt(sum / n) * RECORD_LEVEL_GAIN);
+  }
+  // recordLevelSegments maps a 0..1 level onto the lit bar count.
+  function recordLevelSegments(level) {
+    return Math.max(0, Math.min(RECORD_LEVEL_SEGMENTS, Math.round((Number(level) || 0) * RECORD_LEVEL_SEGMENTS)));
+  }
+  function drawLevel(level) {
+    var lit = recordLevelSegments(level);
+    var bars = $('intake-level').querySelectorAll('i');
+    for (var i = 0; i < bars.length; i++) bars[i].classList.toggle('on', i < lit);
+    $('intake-level-num').textContent = Math.round(level * RECORD_LEVEL_PERCENT) + '%';
+  }
   function audioFileInfo(mime) {
     var base = String(mime || '').split(';')[0].trim().toLowerCase();
     if (base === 'audio/ogg' || base === 'application/ogg' || base === 'video/ogg') return { ext: 'ogg', type: 'audio/ogg' };
@@ -2773,7 +2815,9 @@ hive-contribute connect https://hive.hivecommons.dev/hive/HIVE_ID</code>
   function stopTracks() {
     if (recordStream) recordStream.getTracks().forEach(function (t) { t.stop(); });
     recordStream = null;
-    window.clearInterval(recordMeterTimer);
+    if (recordMeterFrame) window.cancelAnimationFrame(recordMeterFrame);
+    recordMeterFrame = 0;
+    drawLevel(0);
     if (recordAudioCtx) { try { recordAudioCtx.close(); } catch (e) {} recordAudioCtx = null; }
     if (recordWakeLock) { try { recordWakeLock.release(); } catch (e) {} recordWakeLock = null; }
   }
@@ -2785,17 +2829,27 @@ hive-contribute connect https://hive.hivecommons.dev/hive/HIVE_ID</code>
     var AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
     try {
-      recordAudioCtx = new AC();
-      var an = recordAudioCtx.createAnalyser();
-      an.fftSize = 256;
-      recordAudioCtx.createMediaStreamSource(stream).connect(an);
+      var ctx = new AC();
+      recordAudioCtx = ctx;
+      // Some browsers (Safari, iOS) create the context suspended; a frozen
+      // meter looks like a dead mic, so resume it explicitly.
+      if (ctx.state === 'suspended' && ctx.resume) ctx.resume().catch(function () {});
+      var an = ctx.createAnalyser();
+      an.fftSize = RECORD_LEVEL_FFT_SIZE;
+      ctx.createMediaStreamSource(stream).connect(an);
       var buf = new Uint8Array(an.fftSize);
-      recordMeterTimer = window.setInterval(function () {
+      var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      var frameMs = reduced ? RECORD_LEVEL_REDUCED_FRAME_MS : RECORD_LEVEL_FRAME_MS;
+      var last = 0;
+      var tick = function (now) {
+        if (recordAudioCtx !== ctx) return;
+        recordMeterFrame = window.requestAnimationFrame(tick);
+        if (now - last < frameMs) return;
+        last = now;
         an.getByteTimeDomainData(buf);
-        var peak = 0;
-        for (var i = 0; i < buf.length; i++) peak = Math.max(peak, Math.abs(buf[i] - 128));
-        $('intake-level-bar').style.width = Math.min(100, Math.round(peak / 128 * 100)) + '%';
-      }, 100);
+        drawLevel(recorder && recorder.state === 'recording' ? recordLevel(buf) : 0);
+      };
+      recordMeterFrame = window.requestAnimationFrame(tick);
     } catch (e) { recordAudioCtx = null; }
   }
   function startRecordTimer() {
