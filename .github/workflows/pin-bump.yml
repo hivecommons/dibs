@@ -1,0 +1,193 @@
+name: Pin bump
+
+# After docker.yml publishes an image from main, open (or update) ONE bot PR
+# that repins deploy/deployment.yaml to that image's immutable digest. Merging
+# that PR is the release decision: once the in-cluster auto-rollout CronJob is
+# enabled (deploy/README.md, "Automatic rollouts") it deploys the new pin.
+#
+#   merge -> CI -> Docker image -> this PR (CI) -> merge -> auto-rollout
+#
+# No cluster credentials are involved here; this only edits the repository.
+on:
+  workflow_run:
+    workflows: [Docker]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pin-bump
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+  BRANCH: bot/pin-bump
+  # Paths that change what the image runs. A main commit that touches none of
+  # them since the current pin (docs, deploy/, CI, and the merged pin bump
+  # itself) gets no new pin, which also stops bump -> image -> bump loops.
+  RUNTIME_PATHS: cmd pkg go.mod go.sum Dockerfile
+  # Paths whose changes need a persistence / rollback review (deploy/README.md
+  # "Candidate gates", runbooks/data-recovery.md); flagged in the PR body.
+  PERSISTENCE_PATHS: pkg/store pkg/fsutil pkg/notify pkg/registry pkg/history pkg/news pkg/catalog
+  MAX_LOG_LINES: "60"
+
+jobs:
+  bump:
+    # Only a Docker run that was itself triggered by CI on a push to main
+    # publishes an image; PR build-checks do not.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'workflow_run' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+      # PRs and pushes made with GITHUB_TOKEN do not trigger workflows, so the
+      # required checks are dispatched on the bot branch explicitly.
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Decide whether a new pin is needed
+        id: plan
+        env:
+          CANDIDATE: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          candidate=${CANDIDATE:-$(git rev-parse HEAD)}
+          pinned=$(grep -B 1 -E '^[[:space:]]+image:' deploy/deployment.yaml |
+            sed -nE 's/^[[:space:]]*# main ([0-9a-f]{40}).*/\1/p')
+          echo "candidate=$candidate pinned=$pinned"
+          skip() { echo "skip=true" >>"$GITHUB_OUTPUT"; echo "::notice::$1"; exit 0; }
+          [ -n "$pinned" ] || { echo "::error::deploy/deployment.yaml has no '# main <sha>' line above image:"; exit 1; }
+          [ "$candidate" != "$pinned" ] || skip "already pinned to $candidate"
+          git merge-base --is-ancestor "$candidate" HEAD || skip "$candidate is not on main"
+          git merge-base --is-ancestor "$pinned" "$candidate" || skip "$candidate is not newer than the pin $pinned"
+          # shellcheck disable=SC2086 # RUNTIME_PATHS is a word list
+          if git diff --quiet "$pinned" "$candidate" -- $RUNTIME_PATHS; then
+            skip "no runtime change between $pinned and $candidate"
+          fi
+          {
+            echo "skip=false"
+            echo "candidate=$candidate"
+            echo "pinned=$pinned"
+          } >>"$GITHUB_OUTPUT"
+
+      - name: Resolve the published digest
+        if: steps.plan.outputs.skip == 'false'
+        id: digest
+        env:
+          CANDIDATE: ${{ steps.plan.outputs.candidate }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          repo=${IMAGE#ghcr.io/}
+          token=$(curl -fsS "https://ghcr.io/token?scope=repository:${repo}:pull" | jq -r .token)
+          accept='application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json'
+          if ! curl -fsS -D headers -o index.json -H "Authorization: Bearer $token" -H "Accept: $accept" \
+            "https://ghcr.io/v2/${repo}/manifests/${CANDIDATE}"; then
+            echo "skip=true" >>"$GITHUB_OUTPUT"
+            echo "::notice::no image published for $CANDIDATE (Docker publish skipped?)"
+            exit 0
+          fi
+          digest=$(tr -d '\r' <headers | sed -nE 's/^[Dd]ocker-[Cc]ontent-[Dd]igest: *(sha256:[0-9a-f]{64})$/\1/p')
+          [ "sha256:$(sha256sum index.json | cut -d' ' -f1)" = "$digest" ] || { echo "::error::digest does not match the index body"; exit 1; }
+          for p in linux/amd64 linux/arm64; do
+            jq -e --arg p "$p" '[.manifests[] | (.platform.os + "/" + .platform.architecture)] | index($p)' index.json >/dev/null ||
+              { echo "::error::$CANDIDATE index lacks $p"; exit 1; }
+          done
+          {
+            echo "skip=false"
+            echo "digest=$digest"
+            echo "amd64=$(jq -r '.manifests[] | select(.platform.os=="linux" and .platform.architecture=="amd64") | .digest' index.json)"
+            echo "arm64=$(jq -r '.manifests[] | select(.platform.os=="linux" and .platform.architecture=="arm64") | .digest' index.json)"
+          } >>"$GITHUB_OUTPUT"
+          # The Docker run for this sha must be a successful publish.
+          runs=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${CANDIDATE}&per_page=50" \
+            --jq '[.workflow_runs[] | select(.name=="Docker" and .event=="workflow_run" and .conclusion=="success")] | length')
+          [ "$runs" -ge 1 ] || { echo "::error::no successful Docker publish run for $CANDIDATE"; exit 1; }
+
+      - name: Write the pin and open or update the PR
+        if: steps.plan.outputs.skip == 'false' && steps.digest.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE: ${{ steps.plan.outputs.candidate }}
+          PINNED: ${{ steps.plan.outputs.pinned }}
+          DIGEST: ${{ steps.digest.outputs.digest }}
+          AMD64: ${{ steps.digest.outputs.amd64 }}
+          ARM64: ${{ steps.digest.outputs.arm64 }}
+        run: |
+          set -euo pipefail
+          short=${CANDIDATE:0:7}
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git checkout -B "$BRANCH" origin/main
+          sed -i -E \
+            -e "s|^([[:space:]]*)# main [0-9a-f]{40}.*|\1# main ${CANDIDATE}; automated pin bump (.github/workflows/pin-bump.yml)|" \
+            -e "s|^([[:space:]]+image:[[:space:]]*)${IMAGE}@sha256:[0-9a-f]{64}[[:space:]]*$|\1${IMAGE}@${DIGEST}|" \
+            deploy/deployment.yaml
+          grep -q "image: ${IMAGE}@${DIGEST}" deploy/deployment.yaml || { echo "::error::could not rewrite the image line"; exit 1; }
+          git diff --stat
+          git commit -s -q -m "🌱 deploy: pin main ${short}" -m "Repin deploy/deployment.yaml to ${IMAGE}@${DIGEST} (main ${CANDIDATE})."
+          git push -f origin "$BRANCH"
+
+          # shellcheck disable=SC2086 # word lists
+          {
+            echo "Automated pin bump. **Merging this PR releases it**: once auto-rollout is enabled (deploy/README.md, \"Automatic rollouts\"), the in-cluster job backs up the data, applies this pin, verifies \`/healthz\` reports \`${CANDIDATE}\`, and rolls back and files an issue if it does not."
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Source | \`main\` ${CANDIDATE} |"
+            echo "| Previous pin | \`main\` ${PINNED} |"
+            echo "| Index | \`${IMAGE}@${DIGEST}\` |"
+            echo "| linux/amd64 | \`${AMD64}\` |"
+            echo "| linux/arm64 | \`${ARM64}\` |"
+            echo
+            if git diff --quiet "$PINNED" "$CANDIDATE" -- $PERSISTENCE_PATHS; then
+              echo "No changes under the persistence paths (\`${PERSISTENCE_PATHS}\`)."
+            else
+              echo "> [!WARNING]"
+              echo "> Persistence code changed. Review the store format and rollback compatibility (runbooks/data-recovery.md) before merging:"
+              echo
+              echo '```text'
+              git diff --stat "$PINNED" "$CANDIDATE" -- $PERSISTENCE_PATHS | tail -n "$MAX_LOG_LINES"
+              echo '```'
+            fi
+            echo
+            if ! git diff --quiet "$PINNED" "$CANDIDATE" -- deploy; then
+              echo "> [!IMPORTANT]"
+              echo "> \`deploy/\` changed too. Auto-rollout applies only \`deployment.yaml\` and \`ingress.yaml\`; apply any other changed manifest (ConfigMap, Service, PVC, Secrets) by hand **before** merging:"
+              echo
+              echo '```text'
+              git diff --stat "$PINNED" "$CANDIDATE" -- deploy | tail -n "$MAX_LOG_LINES"
+              echo '```'
+              echo
+            fi
+            echo "<details><summary>Runtime commits since the previous pin</summary>"
+            echo
+            echo '```text'
+            git log --oneline "$PINNED..$CANDIDATE" -- $RUNTIME_PATHS | head -n "$MAX_LOG_LINES" | sed -E 's/@([A-Za-z0-9-]+)/\1/g'
+            echo '```'
+            echo "</details>"
+          } >body.md
+
+          title="🌱 deploy: pin main ${short}"
+          number=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$number" ]; then
+            gh pr edit "$number" --repo "$GITHUB_REPOSITORY" --title "$title" --body-file body.md
+          else
+            gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$BRANCH" --title "$title" --body-file body.md
+          fi
+          # Required checks for the bot commit (see the actions: write note).
+          for wf in ci.yml docker.yml go-security.yml; do
+            gh workflow run "$wf" --repo "$GITHUB_REPOSITORY" --ref "$BRANCH"
+          done

@@ -1,0 +1,40 @@
+# Identity for the dibs-autodeploy CronJob (cronjob.yaml). It may only read
+# and patch the dibs Deployment and Ingress in this namespace: no Secrets, no
+# pods/exec, nothing cluster-scoped. The backup reads the data volume through
+# a read-only mount, not through the API.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: dibs-autodeploy
+  namespace: dibs
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: dibs-autodeploy
+  namespace: dibs
+rules:
+  # get/patch for apply, set image and annotate; list/watch (by name) for
+  # `kubectl rollout status`.
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: ["dibs"]
+    verbs: ["get", "list", "watch", "patch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    resourceNames: ["dibs"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: dibs-autodeploy
+  namespace: dibs
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: dibs-autodeploy
+subjects:
+  - kind: ServiceAccount
+    name: dibs-autodeploy
+    namespace: dibs

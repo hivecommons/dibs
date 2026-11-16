@@ -17,6 +17,9 @@ on:
   # doesn't touch the filtered paths. The job is cheap on docs-only PRs
   # since the Go layers are fully cached via cache-from: type=gha.
   pull_request:
+  # pin-bump.yml dispatches build-check on its bot branch (GITHUB_TOKEN PRs
+  # do not trigger pull_request runs). Dispatch never publishes.
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.workflow_run.head_branch || github.ref }}
@@ -86,7 +89,7 @@ jobs:
           cache-to: type=gha,mode=max
 
   build-check:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

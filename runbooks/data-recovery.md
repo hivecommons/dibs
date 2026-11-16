@@ -38,6 +38,18 @@ taken while the pod is running is consistent per file. Keep copies outside
 the cluster, access-controlled (they contain private ideas), and never attach
 them to GitHub.
 
+### Automatic pre-rollout backups
+
+When [automatic rollouts](../deploy/README.md#automatic-rollouts) are
+enabled, every rollout first writes a verified
+`dibs-data-<UTC time>-<previous version>.tar` and its `.sha256` manifest to
+the `dibs-backups` volume, keeping the newest `BACKUP_RETENTION_COUNT`
+(default 30). That volume is separate from the data file system but still
+in the cluster: keep taking the manual, off-cluster copy above before risky
+changes. To use one of them, mount both claims in a one-off pod (as in
+`deploy/backup-pod.yaml`, with `dibs-backups` added and the data claim
+writable only for the restore), with writers stopped as in [Restore](#restore).
+
 ## Decide
 
 | Symptom | Action |
@@ -49,7 +61,9 @@ them to GitHub.
 ## Restore
 
 1. Stop writers so nothing overwrites the restore:
-   `kubectl -n dibs scale deploy/dibs --replicas=0`.
+   `kubectl -n dibs scale deploy/dibs --replicas=0`. The auto-rollout job
+   skips a Deployment scaled to zero; pause it anyway
+   (`kubectl -n dibs annotate deploy/dibs dibs.hivecommons.dev/autodeploy-pause=true --overwrite`).
 2. Keep the current state: take a backup of whatever is on the volume now.
 3. Restore from a backup tar by running a one-off pod that mounts the
    `dibs-data-rwx` claim, then extract the needed paths (or all) into `/data`
