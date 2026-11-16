@@ -1,23 +1,21 @@
-# Requires: DNS records for dibs.hivecommons.dev (canonical) and
-# dibs.kubestellar.io (legacy) → the cluster ingress LB, and a cert-manager
-# ClusterIssuer named "letsencrypt-prod" (adjust if yours differs).
+# Requires: a DNS record for dibs.hivecommons.dev -> the cluster ingress LB.
 #
-# TLS, deliberately asymmetric (see hivecommons/hive#5925):
-#   - dibs.kubestellar.io is named below and served by the per-host
-#     "hive-tls-hc" Secret in this namespace.
-#   - dibs.hivecommons.dev is intentionally absent from tls[]. It is covered
-#     by hive-hub/hive-wildcard-tls via the controller's
-#     --default-ssl-certificate, because an Ingress may only reference a
-#     Secret in its own namespace and the wildcard lives in hive-hub.
-#     Do not add a tls[] entry naming a secret that does not exist here —
-#     that yields ingress-nginx's self-signed cert, not a failure.
+# TLS: dibs.hivecommons.dev is intentionally absent from tls[]. It is covered
+# by hive-hub/hive-wildcard-tls via the controller's
+# --default-ssl-certificate, because an Ingress may only reference a Secret in
+# its own namespace and the wildcard lives in hive-hub (hivecommons/hive#5925).
+# Do not add a tls[] entry naming a secret that does not exist here; that
+# yields ingress-nginx's self-signed cert, not a failure.
+#
+# The legacy dibs.kubestellar.io host is NOT routed here: it is a permanent
+# redirect served by a separate Ingress (legacy-redirect.yaml). Listing it in
+# this Ingress too would claim the same host/path twice.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: dibs
   namespace: dibs
   annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-prod
     # The /mcp Streamable HTTP endpoint may return SSE responses; avoid
     # buffering streaming tool responses behind ingress-nginx.
     nginx.ingress.kubernetes.io/proxy-buffering: "off"
@@ -32,21 +30,7 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-read-timeout: "330"
 spec:
   ingressClassName: nginx
-  tls:
-    - hosts:
-        - dibs.kubestellar.io
-      secretName: hive-tls-hc
   rules:
-    - host: dibs.kubestellar.io
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: dibs
-                port:
-                  name: http
     - host: dibs.hivecommons.dev
       http:
         paths:

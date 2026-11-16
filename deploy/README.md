@@ -16,7 +16,11 @@ kubectl apply -f deploy/secret.yaml      # fill in real values first (see below)
 kubectl apply -f deploy/deployment.yaml
 kubectl apply -f deploy/service.yaml
 kubectl apply -f deploy/ingress.yaml
+kubectl apply -f deploy/legacy-redirect.yaml  # only where dibs.kubestellar.io redirects via the hub
 ```
+
+`deploy/backup-pod.yaml` is the manual backup helper from
+[data recovery](../runbooks/data-recovery.md), not part of the apply list.
 
 ## Prerequisites
 
@@ -127,7 +131,8 @@ kubectl -n dibs create secret generic dibs-secrets \
 ## Notes
 
 - The container runs as non-root (distroless `nonroot`, uid 65532) with a
-  read-only root filesystem; only `/data` (the PVC) is writable.
+  read-only root filesystem; only `/data` (the PVC) and `/tmp` (an
+  `emptyDir`, for in-progress voice recordings) are writable.
 - Single replica: the JSON file store is single-writer by design. The PVC is
   `ReadWriteMany` (OCI FSS) so `RollingUpdate` (maxSurge=1, maxUnavailable=0)
   can overlap the old and new pods — rollouts are zero-downtime.

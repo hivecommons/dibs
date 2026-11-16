@@ -1,0 +1,40 @@
+# Legacy host dibs.kubestellar.io: a permanent redirect to
+# dibs.hivecommons.dev (hivecommons/hive#5925). The redirect itself is served
+# by the hub's legacy-redirect Service in hive-hub; this ExternalName Service
+# lets an Ingress in the dibs namespace route to it. The per-host certificate
+# lives in the hive-tls-hc Secret in this namespace.
+apiVersion: v1
+kind: Service
+metadata:
+  name: legacy-redirect
+  namespace: dibs
+spec:
+  type: ExternalName
+  externalName: legacy-redirect.hive-hub.svc.cluster.local
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dibs-kubestellar-redirect
+  namespace: dibs
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - dibs.kubestellar.io
+      secretName: hive-tls-hc
+  rules:
+    - host: dibs.kubestellar.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: legacy-redirect
+                port:
+                  number: 80

@@ -39,8 +39,8 @@ spec:
           type: RuntimeDefault
       containers:
         - name: dibs
-          # main d411cb967f802c0515327fe302de3c1de5fe8409; reviewed rollout: deploy/rollout-558.md
-          image: ghcr.io/hivecommons/dibs@sha256:30db26fa8f5c7f870e61892d81f6abe4b3b2ecdb2a455a51f3fe0eedc8995f68
+          # main 70a2db52dcc3878f66d11f34e5f5d3dccfd3e900; reviewed rollout: deploy/rollout-558.md
+          image: ghcr.io/hivecommons/dibs@sha256:b65c4f332415c1c68c4812e0948d9356180e5f48c6ae2f7443346698c6745079
           ports:
             - name: http
               containerPort: 8080
@@ -55,6 +55,12 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /data
+            # The root filesystem is read-only, so os.TempDir() needs a
+            # writable volume: chunked voice recordings are assembled in
+            # /tmp (pkg/intake/chunks.go) and multipart parsing may spill
+            # there. Audio is deleted on finish, abort or idle expiry.
+            - name: tmp
+              mountPath: /tmp
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -76,9 +82,18 @@ spec:
             requests:
               cpu: 50m
               memory: 64Mi
+            # Room for the parent holding an upload (DIBS_INTAKE_MAX_MB,
+            # default 25 MB, plus copies) while the document extraction
+            # worker child runs with its own ~160 MiB data budget
+            # (pkg/intake/worker.go); both count against this one limit.
             limits:
-              memory: 256Mi
+              memory: 512Mi
       volumes:
         - name: data
           persistentVolumeClaim:
             claimName: dibs-data-rwx
+        - name: tmp
+          emptyDir:
+            # 16 concurrent recording sessions (maxChunkSessions) at the
+            # 25 MB upload cap is 400 MB; the rest is multipart slack.
+            sizeLimit: 512Mi

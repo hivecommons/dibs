@@ -9,15 +9,34 @@ delete the data, but nothing protects against bad writes or deleted files.
 
 ## Take a backup
 
-Before any risky change (migration, manual edit, release with store changes):
+Before any risky change (migration, manual edit, release with store changes).
+The Dibs image is distroless (no shell, no `tar`), so `kubectl exec deploy/dibs
+-- tar` fails. Mount the claim **read-only** in a short-lived helper pod and
+stream a tar out of it:
 
 ```sh
-kubectl -n dibs exec deploy/dibs -- tar -C /data -cf - . > dibs-data-$(date +%Y%m%dT%H%M%S).tar
-tar -tf dibs-data-*.tar | head   # confirm it lists ideas/index.json
+kubectl apply -f deploy/backup-pod.yaml
+kubectl -n dibs wait --for=condition=Ready pod/dibs-backup-manual --timeout=120s
+TS=$(date -u +%Y%m%dT%H%M%SZ)
+kubectl -n dibs exec dibs-backup-manual -- sh -c 'cd /data && find . -type f -exec sha256sum {} + | sort -k2' > dibs-data-$TS.sha256
+kubectl -n dibs exec dibs-backup-manual -- tar -C /data -cf - . > dibs-data-$TS.tar
+kubectl -n dibs delete pod dibs-backup-manual
 ```
 
-Writes are atomic (temp file then rename), so a copy taken while the pod is
-running is consistent per file. Keep copies outside the cluster.
+Verify before relying on it:
+
+```sh
+tar -tf dibs-data-$TS.tar | grep -x './ideas/index.json'
+tar -tvf dibs-data-$TS.tar | awk '{print $3":"$4}' | sort -u   # 65532:65532
+mkdir v && tar -C v -xf dibs-data-$TS.tar && (cd v && find . -type f -exec shasum -a 256 {} + | sort -k2) | diff dibs-data-$TS.sha256 -
+```
+
+Every file must match. `repo-news.json` is a derived cache the running pod
+rewrites often, so it alone may differ between the two passes; rerun if
+anything else differs. Writes are atomic (temp file then rename), so a copy
+taken while the pod is running is consistent per file. Keep copies outside
+the cluster, access-controlled (they contain private ideas), and never attach
+them to GitHub.
 
 ## Decide
 
