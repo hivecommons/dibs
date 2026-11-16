@@ -122,6 +122,8 @@ deployments also work.
 | `DIBS_STT_KEY` | (unset) | API key for the STT gateway |
 | `DIBS_STT_MODEL` | (unset) | Model name routed by the STT gateway |
 
+Voice recording: the browser records at 32 kbps (`audioBitsPerSecond`) and uploads 10 s slices as it goes; the file name and type follow the recorder's real container (webm, ogg or m4a). At 32 kbps the default 25 MB cap (`DIBS_INTAKE_MAX_MB`, which is also the STT request limit for OpenAI-style backends) holds roughly 100 minutes; 30 to 60 minutes is about 7 to 14 MB. A recording that outgrows the cap is refused. Audio is held in a temp file only until transcription and is never kept.
+
 Legacy `IDEATE_*` names (the pre-rename prefix) are still honored as
 fallbacks for every `DIBS_*` variable.
 

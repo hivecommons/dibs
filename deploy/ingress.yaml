@@ -27,6 +27,9 @@ metadata:
     # those uploads before dibs sees them; keep this a little above the app
     # cap and raise it together with DIBS_INTAKE_MAX_MB.
     nginx.ingress.kubernetes.io/proxy-body-size: "30m"
+    # Finishing a voice recording blocks on the STT call (up to the 5 minute
+    # sttTimeout in pkg/intake); nginx's default 60s read timeout would 504 it.
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "330"
 spec:
   ingressClassName: nginx
   tls:
