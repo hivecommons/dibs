@@ -45,8 +45,10 @@ kubectl apply -f deploy/legacy-redirect.yaml  # only where dibs.kubestellar.io r
 
 ## Weekly production image review
 
-Production image updates are a reviewed, operator-executed handoff, not
-automatic deployment. Nothing in this repository deploys to the cluster.
+Until [automatic rollouts](#automatic-rollouts) are enabled, production
+image updates are a reviewed, operator-executed handoff. Once enabled, the
+review below happens on the bot pin-bump PR instead, and merging it is the
+deployment decision.
 
 - **Cadence:** review every Monday (UTC). Important fixes may be reviewed
   out of cycle.
@@ -93,6 +95,97 @@ Backup requirement / verified backup:                   (operator-confirmed)
 Disposition: deploy | defer (reason, next review date):
 Operator rollout result: /healthz expected version, /readyz, or rollback:
 ```
+
+## Automatic rollouts
+
+Every change flows: merge to `main` -> CI -> `docker.yml` publishes the image
+-> `pin-bump.yml` opens or updates **one** bot PR (`bot/pin-bump`) repinning
+`deployment.yaml` to that image's digest -> review + CI -> merge -> the
+in-cluster `dibs-autodeploy` CronJob rolls it out.
+
+**Pull-based, in-cluster.** No cluster credential lives in GitHub. The
+CronJob (`deploy/autodeploy/`) reads the public repository and acts through
+the `dibs-autodeploy` ServiceAccount, whose Role can only get/patch (and
+watch, by name) the `dibs` Deployment and Ingress in this namespace. It
+triggers on the **pinned digest on `main`**, not on every published image, so
+the reviewed pin PR stays the release gate (a GitHub Actions deploy job with
+OIDC would also need the cluster API reachable from GitHub and a
+cluster-side trust for GitHub's issuer; this avoids both).
+
+Each run (every 10 minutes, `concurrencyPolicy: Forbid`):
+
+1. Resolves `main`, fetches `deploy/deployment.yaml` and `deploy/ingress.yaml`
+   at that exact commit and validates them: one `ghcr.io/hivecommons/dibs@sha256:`
+   pin with a `# main <full sha>` line above it, fixed kinds, names and
+   namespace, no ServiceAccount or token on the app pod, ingress backends only
+   `dibs`, and a server-side dry run.
+2. Does nothing if the live image already matches, the Deployment is annotated
+   `dibs.hivecommons.dev/autodeploy-pause=true`, it is scaled to zero or
+   mid-rollout, or this digest already failed
+   (`dibs.hivecommons.dev/autodeploy-failed-image`).
+3. Backs up `/data` (read-only mount) to the `dibs-backups` volume, verifies
+   every file's checksum against the tar, and keeps the newest
+   `BACKUP_RETENTION_COUNT` (default 30) backups. A failed backup stops the run.
+4. Records the previous image (`dibs.hivecommons.dev/autodeploy-previous-image`),
+   applies both manifests, waits for `rollout status`, then requires `/healthz`
+   to report the pinned sha and `/readyz` to return 200, three times in a row.
+5. On failure, sets the image back to the previous one, verifies it,
+   marks the digest failed, and opens or updates a single open issue
+   labelled `auto-rollout` (needs the optional token below). On success it
+   comments on [#567](https://github.com/hivecommons/dibs/issues/567) and
+   closes any open `auto-rollout` issue.
+
+Only `deployment.yaml` and `ingress.yaml` are applied. Changes to the
+ConfigMap, Service, PVCs or Secrets are applied by hand before the pin PR
+merges (the bot PR flags `deploy/` changes). Pin PRs also flag changes in
+the persistence packages for the review in
+[candidate gates](#candidate-gates).
+
+Settings (CronJob env, all with defaults in `autodeploy.sh`):
+`BACKUP_RETENTION_COUNT` (30), `REPORT_ISSUE` (567), `DRY_RUN` (false),
+`ROLLOUT_TIMEOUT` (300s), `HEALTH_TIMEOUT_SECONDS` (180),
+`HEALTH_INTERVAL_SECONDS` (10), `HEALTH_REQUIRED_SUCCESSES` (3),
+`BACKUP_VOLATILE_FILES` (`repo-news.json`, a cache the app rewrites often,
+whose checksum may change during the copy).
+
+### Enable (after the first manual rollout is live)
+
+The CronJob ships `suspend: true`. With the production context selected:
+
+```sh
+kubectl apply -f deploy/autodeploy/rbac.yaml -f deploy/autodeploy/pvc.yaml
+kubectl -n dibs create configmap dibs-autodeploy-script \
+  --from-file=autodeploy.sh=deploy/autodeploy/autodeploy.sh \
+  --dry-run=client -o yaml | kubectl apply -f -
+# Optional, for failure issues: a fine-grained token limited to
+# hivecommons/dibs with Issues read/write only.
+kubectl -n dibs create secret generic dibs-autodeploy-github --from-literal=GITHUB_TOKEN=<token>
+kubectl apply -f deploy/autodeploy/cronjob.yaml          # still suspended
+
+# One supervised run: the cluster is already at the pin, so it must log "in sync".
+kubectl -n dibs create job --from=cronjob/dibs-autodeploy dibs-autodeploy-check
+kubectl -n dibs wait --for=condition=complete job/dibs-autodeploy-check --timeout=300s
+kubectl -n dibs logs job/dibs-autodeploy-check
+kubectl -n dibs delete job dibs-autodeploy-check
+
+kubectl -n dibs patch cronjob dibs-autodeploy -p '{"spec":{"suspend":false}}'
+```
+
+Re-run the `create configmap ... | kubectl apply` line whenever
+`autodeploy.sh` changes on `main`. The job never updates itself.
+
+### Pause, retry, disable
+
+```sh
+kubectl -n dibs annotate deploy/dibs dibs.hivecommons.dev/autodeploy-pause=true --overwrite   # pause
+kubectl -n dibs annotate deploy/dibs dibs.hivecommons.dev/autodeploy-pause-                   # resume
+kubectl -n dibs annotate deploy/dibs dibs.hivecommons.dev/autodeploy-failed-image-            # retry a failed pin
+kubectl -n dibs patch cronjob dibs-autodeploy -p '{"spec":{"suspend":true}}'                  # disable
+```
+
+After an automatic rollback, `main` still pins the failed digest. Revert or
+replace the pin in a PR. Until then the job skips that digest, but a manual
+`kubectl apply -f deploy/deployment.yaml` would roll it out again.
 
 ## Environment variables
 

@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  # pin-bump.yml dispatches this on its bot branch: PRs opened with
+  # GITHUB_TOKEN do not trigger pull_request runs.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -42,6 +45,14 @@ jobs:
             -schema-location default \
             -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
             deploy/
+      - name: Auto-rollout script (shellcheck, then tests in the CronJob image)
+        # deploy/autodeploy/autodeploy.sh runs in-cluster under busybox sh;
+        # run its stubbed tests in that exact image, not the runner's shell.
+        run: |
+          set -euo pipefail
+          shellcheck --severity=warning deploy/autodeploy/autodeploy.sh hack/autodeploy-test.sh
+          image=$(sed -nE 's/^[[:space:]]+image:[[:space:]]*([^[:space:]]+)$/\1/p' deploy/autodeploy/cronjob.yaml)
+          docker run --rm -v "${GITHUB_WORKSPACE}:/src:ro" -w /src --entrypoint /bin/sh "$image" hack/autodeploy-test.sh
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: go.mod

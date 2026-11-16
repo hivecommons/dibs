@@ -1,0 +1,107 @@
+# Pull-based auto-rollout (deploy/README.md, "Automatic rollouts"). Every
+# run compares the live image with the digest pinned in deploy/deployment.yaml
+# on main; on a change it backs up the data, applies deployment.yaml and
+# ingress.yaml from that commit, verifies /healthz reports the pinned commit,
+# and rolls back + files an issue if not. Script: autodeploy.sh, loaded into
+# the dibs-autodeploy-script ConfigMap at enable time.
+#
+# Ships SUSPENDED. Enable only after the first reviewed rollout (#558) is live,
+# so the first automatic run finds the cluster already in sync.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: dibs-autodeploy
+  namespace: dibs
+  labels:
+    app.kubernetes.io/name: dibs-autodeploy
+spec:
+  suspend: true
+  schedule: "*/10 * * * *"
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      # A failed run has already rolled back and filed an issue; retrying
+      # blindly would just repeat the attempt.
+      backoffLimit: 0
+      activeDeadlineSeconds: 1800
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: dibs-autodeploy
+        spec:
+          serviceAccountName: dibs-autodeploy
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            fsGroup: 65532
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: autodeploy
+              # kubectl + busybox (sh, curl, tar, sha256sum).
+              image: docker.io/alpine/kubectl:1.34.2@sha256:96a7d245a74d461925a56e3024d2f027c2a7a822b3e9e0117ec558db42de9c35
+              command: ["/bin/sh", "/scripts/autodeploy.sh"]
+              env:
+                - name: HOME
+                  value: /tmp
+                - name: POD_NAME
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.name
+                - name: BACKUP_RETENTION_COUNT
+                  value: "30"
+                - name: REPORT_ISSUE
+                  value: "567"
+                - name: DRY_RUN
+                  value: "false"
+              envFrom:
+                # Optional GITHUB_TOKEN: a fine-grained token limited to
+                # hivecommons/dibs with Issues read/write, used only to file
+                # and update rollout issues. Without it failures are logged
+                # (and the Job fails) but no issue is filed.
+                - secretRef:
+                    name: dibs-autodeploy-github
+                    optional: true
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  memory: 128Mi
+              volumeMounts:
+                - name: data
+                  mountPath: /data
+                  readOnly: true
+                - name: backups
+                  mountPath: /backups
+                - name: scripts
+                  mountPath: /scripts
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: data
+              persistentVolumeClaim:
+                claimName: dibs-data-rwx
+                readOnly: true
+            - name: backups
+              persistentVolumeClaim:
+                claimName: dibs-backups
+            - name: scripts
+              configMap:
+                name: dibs-autodeploy-script
+                defaultMode: 0555
+            - name: tmp
+              emptyDir:
+                sizeLimit: 64Mi

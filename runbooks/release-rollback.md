@@ -12,7 +12,18 @@ pod keeps serving until the new one is Ready. A release that never becomes
 Ready therefore stalls instead of taking Dibs down; a release that becomes
 Ready and then misbehaves needs the rollback below.
 
-Release candidates are reviewed weekly and handed to an operator; see
+When [automatic rollouts](../deploy/README.md#automatic-rollouts) are
+enabled, the `dibs-autodeploy` job rolls back by itself when the new pod does
+not become Ready or `/healthz` does not report the pinned sha: it sets the
+image back to the one recorded in the
+`dibs.hivecommons.dev/autodeploy-previous-image` annotation, marks the digest
+in `dibs.hivecommons.dev/autodeploy-failed-image`, and opens or updates an
+`auto-rollout` issue. A release that passes those checks and misbehaves later
+needs the manual steps below. **Pause the job first**
+(`kubectl -n dibs annotate deploy/dibs dibs.hivecommons.dev/autodeploy-pause=true --overwrite`)
+so it cannot roll the bad pin forward again, then revert the pin in a PR.
+
+Without automatic rollouts, release candidates are reviewed weekly and handed to an operator; see
 [Weekly production image review](../deploy/README.md#weekly-production-image-review)
 for the cadence and the handoff record (including the previous image/digest
 to roll back to).

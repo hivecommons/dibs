@@ -1,0 +1,17 @@
+# Pre-rollout backups taken by the dibs-autodeploy CronJob. A separate block
+# volume, not the data file system, so a bad write or deletion on the data
+# volume cannot reach the backups. The store is a few MB; 50Gi is the
+# smallest block volume the production storage class provisions. The Retain
+# policy is not settable here: the default class deletes the volume with the
+# claim, so never delete this claim while you still need its backups.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dibs-backups
+  namespace: dibs
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
