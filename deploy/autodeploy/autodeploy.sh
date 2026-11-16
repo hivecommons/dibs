@@ -230,7 +230,7 @@ rollback() {
 		log "could not mark $desired_image failed"
 	log "rollback: $result"
 	report_failure "$reason" "$result"
-	phase=done
+	phase=finished
 	exit 1
 }
 
@@ -371,7 +371,7 @@ main() {
 	if ! wait_healthy "$expected_version"; then
 		rollback "/healthz did not report $expected_version with /readyz 200 within ${HEALTH_TIMEOUT_SECONDS}s"
 	fi
-	phase=done
+	phase=finished
 	log "rolled out $desired_image (main $expected_version)"
 	report_success
 }
