@@ -141,6 +141,9 @@ textarea.md { font-family: var(--font-mono); font-size: .88rem; min-height: 220p
 .intake-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 8px 0 6px; color: var(--muted); font-size: .82rem; }
 .intake-row input[type=file] { display: none; }
 .intake-status { color: var(--muted); font-size: .78rem; min-height: 1.2em; }
+.intake-level { display: inline-block; width: 60px; height: 8px; border-radius: 4px; background: var(--line, rgba(128,128,128,.25)); overflow: hidden; }
+.intake-level[hidden] { display: none; }
+.intake-level span { display: block; height: 100%; width: 0; background: var(--amber); transition: width .1s; }
 .intake-status.err { color: var(--red); }
 .intake-status.warn { color: var(--amber); }
 .pill.recording { border-color: var(--amber); color: var(--amber); background: rgba(244,199,95,.08); }
@@ -1064,8 +1067,11 @@ details.how-details .how-body { padding: 16px 18px; }
       <button type="button" class="pill small" id="btn-intake-file">Attach file</button>
       <input type="file" id="f-intake-file" accept=".txt,.md,.html,.htm,.pdf,.docx,.rtf,.mp3,.m4a,.wav,.ogg,.webm,.flac,text/plain,text/markdown,text/html,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/rtf,audio/*,video/webm">
       <button type="button" class="pill small" id="btn-intake-record" hidden>Record</button>
+      <button type="button" class="pill small" id="btn-intake-pause" hidden>Pause</button>
+      <span class="intake-level" id="intake-level" hidden aria-hidden="true"><span id="intake-level-bar"></span></span>
       <span class="intake-status" id="intake-status" role="status" aria-live="polite"></span>
     </div>
+    <div class="intake-status" id="intake-note" hidden>Recording? Make sure everyone being recorded knows. Keep this screen open while you record.</div>
     <div class="meter-wrap">
       <div class="meter" id="idea-meter" role="progressbar" aria-label="Idea completeness" aria-valuemin="0" aria-valuemax="4" aria-valuenow="0">
         <i title="Title"></i><i title="Problem"></i><i title="Beneficiaries"></i><i title="Acceptance criteria"></i>
@@ -2678,6 +2684,7 @@ hive-contribute connect https://hive.hivecommons.dev/hive/HIVE_ID</code>
     api('GET', 'intake/config').then(function (cfg) {
       intakeAudio = !!(cfg && cfg.audio);
       $('btn-intake-record').hidden = !intakeAudio || !navigator.mediaDevices || !window.MediaRecorder;
+      $('intake-note').hidden = $('btn-intake-record').hidden;
     }).catch(function () {
       intakeAudio = false;
       $('btn-intake-record').hidden = true;
@@ -2716,50 +2723,196 @@ hive-contribute connect https://hive.hivecommons.dev/hive/HIVE_ID</code>
     var file = $('f-intake-file').files && $('f-intake-file').files[0];
     if (file) uploadIntakeFile(file);
   });
+  /* Voice recorder: 10 s slices are uploaded in order as they are produced
+     (api/intake/audio/...), so a long recording survives a flaky link and the
+     final request only asks the server to transcribe. 32 kbps keeps 60 min near
+     14 MB, well under the 25 MB intake cap (about 100 min). */
+  var RECORD_SLICE_MS = 10000;
+  var RECORD_BITS_PER_SECOND = 32000;
+  var CHUNK_RETRIES = 3;
+  var CHUNK_RETRY_MS = 1500;
+  var recordMime = '';
+  var recordSession = null;
+  var recordBlobs = [];
+  var recordUploadChain = null;
+  var recordUploadFailed = false;
+  var recordPausedMs = 0;
+  var recordPausedAt = 0;
+  var recordWakeLock = null;
+  var recordAudioCtx = null;
+  var recordMeterTimer = null;
+  function audioFileInfo(mime) {
+    var base = String(mime || '').split(';')[0].trim().toLowerCase();
+    if (base === 'audio/ogg' || base === 'application/ogg' || base === 'video/ogg') return { ext: 'ogg', type: 'audio/ogg' };
+    if (base === 'audio/mp4' || base === 'audio/x-m4a' || base === 'audio/m4a' || base === 'audio/aac') return { ext: 'm4a', type: 'audio/mp4' };
+    if (base === 'video/mp4') return { ext: 'mp4', type: 'video/mp4' };
+    return { ext: 'webm', type: 'audio/webm' };
+  }
+  function pickRecorderMime() {
+    var cands = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'];
+    if (!window.MediaRecorder || !MediaRecorder.isTypeSupported) return '';
+    for (var i = 0; i < cands.length; i++) if (MediaRecorder.isTypeSupported(cands[i])) return cands[i];
+    return '';
+  }
+  function recordElapsedSeconds() {
+    var end = recordPausedAt || Date.now();
+    return Math.max(0, Math.floor((end - recordStarted - recordPausedMs) / 1000));
+  }
+  function recordClock() {
+    var s = recordElapsedSeconds();
+    return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+  }
   function setRecordingUI(active) {
     var b = $('btn-intake-record');
-    b.textContent = active ? 'Stop 00:00' : 'Record';
+    b.textContent = active ? 'Stop ' + recordClock() : 'Record';
     b.classList.toggle('recording', active);
+    $('btn-intake-pause').hidden = !active;
+    $('intake-level').hidden = !active;
+    if (!active) $('btn-intake-pause').textContent = 'Pause';
   }
   function stopTracks() {
     if (recordStream) recordStream.getTracks().forEach(function (t) { t.stop(); });
     recordStream = null;
+    window.clearInterval(recordMeterTimer);
+    if (recordAudioCtx) { try { recordAudioCtx.close(); } catch (e) {} recordAudioCtx = null; }
+    if (recordWakeLock) { try { recordWakeLock.release(); } catch (e) {} recordWakeLock = null; }
+  }
+  function requestWakeLock() {
+    if (!navigator.wakeLock || !navigator.wakeLock.request) return;
+    navigator.wakeLock.request('screen').then(function (l) { recordWakeLock = l; }).catch(function () {});
+  }
+  function startLevelMeter(stream) {
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    try {
+      recordAudioCtx = new AC();
+      var an = recordAudioCtx.createAnalyser();
+      an.fftSize = 256;
+      recordAudioCtx.createMediaStreamSource(stream).connect(an);
+      var buf = new Uint8Array(an.fftSize);
+      recordMeterTimer = window.setInterval(function () {
+        an.getByteTimeDomainData(buf);
+        var peak = 0;
+        for (var i = 0; i < buf.length; i++) peak = Math.max(peak, Math.abs(buf[i] - 128));
+        $('intake-level-bar').style.width = Math.min(100, Math.round(peak / 128 * 100)) + '%';
+      }, 100);
+    } catch (e) { recordAudioCtx = null; }
   }
   function startRecordTimer() {
     recordStarted = Date.now();
+    recordPausedMs = 0;
+    recordPausedAt = 0;
     recordTimer = window.setInterval(function () {
-      var s = Math.floor((Date.now() - recordStarted) / 1000);
-      $('btn-intake-record').textContent = 'Stop ' + String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+      if (!recordPausedAt) $('btn-intake-record').textContent = 'Stop ' + recordClock();
     }, 250);
   }
+  function sendChunk(idx, blob, attempt) {
+    return fetch('api/intake/audio/' + recordSession + '/chunks/' + idx, {
+      method: 'PUT', body: blob, credentials: 'same-origin'
+    }).then(function (r) {
+      if (r.ok) return;
+      if (r.status >= 500 && attempt < CHUNK_RETRIES) throw new Error('retry');
+      var e = new Error('chunk ' + r.status); e.fatal = true; throw e;
+    }).catch(function (e) {
+      if (e.fatal || attempt >= CHUNK_RETRIES) throw e;
+      return new Promise(function (res) { window.setTimeout(res, CHUNK_RETRY_MS * (attempt + 1)); }).then(function () {
+        return sendChunk(idx, blob, attempt + 1);
+      });
+    });
+  }
+  function queueChunk(blob) {
+    var idx = recordBlobs.length;
+    recordBlobs.push(blob);
+    recordUploadChain = recordUploadChain.then(function () {
+      if (recordUploadFailed) return;
+      return sendChunk(idx, blob, 0);
+    }).catch(function () { recordUploadFailed = true; });
+  }
+  function finishRecording() {
+    var info = audioFileInfo(recordMime || (recordBlobs[0] && recordBlobs[0].type));
+    var session = recordSession;
+    setIntakeStatus('Reading...', '');
+    $('btn-intake-file').disabled = true;
+    $('btn-intake-record').disabled = true;
+    recordUploadChain.then(function () {
+      if (recordUploadFailed || !session) {
+        // Chunked path broke (session lost, link down): fall back to one request.
+        if (session) fetch('api/intake/audio/' + session, { method: 'DELETE', credentials: 'same-origin' }).catch(function () {});
+        var form = new FormData();
+        form.append('file', new Blob(recordBlobs, { type: info.type }), 'idea.' + info.ext);
+        return apiForm('intake', form);
+      }
+      return api('POST', 'intake/audio/' + session + '/finish');
+    }).then(function (res) {
+      appendIntakeText(res.text || '', !!res.truncated);
+    }).catch(function (e) {
+      setIntakeStatus(e.message, 'err');
+    }).finally(function () {
+      $('btn-intake-file').disabled = false;
+      $('btn-intake-record').disabled = false;
+      recordSession = null;
+      recordBlobs = [];
+    });
+  }
+  $('btn-intake-pause').addEventListener('click', function () {
+    if (!recorder) return;
+    if (recorder.state === 'recording') {
+      recorder.pause();
+      recordPausedAt = Date.now();
+      this.textContent = 'Resume';
+      setIntakeStatus('Paused.', '');
+    } else if (recorder.state === 'paused') {
+      recorder.resume();
+      recordPausedMs += Date.now() - recordPausedAt;
+      recordPausedAt = 0;
+      this.textContent = 'Pause';
+      setIntakeStatus('Recording... keep this screen open.', '');
+    }
+  });
   $('btn-intake-record').addEventListener('click', function () {
-    if (recorder && recorder.state === 'recording') {
+    if (recorder && recorder.state !== 'inactive') {
       recorder.stop();
       return;
     }
     if (!intakeAudio) return;
     navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }).then(function (stream) {
       recordStream = stream;
-      recordChunks = [];
-      var opts = MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('audio/webm') ? { mimeType: 'audio/webm' } : {};
+      recordBlobs = [];
+      recordSession = null;
+      recordUploadFailed = false;
+      recordMime = pickRecorderMime();
+      var opts = { audioBitsPerSecond: RECORD_BITS_PER_SECOND };
+      if (recordMime) opts.mimeType = recordMime;
       recorder = new MediaRecorder(stream, opts);
-      recorder.addEventListener('dataavailable', function (ev) { if (ev.data && ev.data.size) recordChunks.push(ev.data); });
+      recordMime = recorder.mimeType || recordMime;
+      var info = audioFileInfo(recordMime);
+      // Open the server session first; if that fails the recording still
+      // works and is sent in one request at the end.
+      recordUploadChain = api('POST', 'intake/audio', { mime_type: info.type }).then(function (res) {
+        recordSession = res.id;
+      }).catch(function () { recordUploadFailed = true; });
+      recorder.addEventListener('dataavailable', function (ev) { if (ev.data && ev.data.size) queueChunk(ev.data); });
       recorder.addEventListener('stop', function () {
         window.clearInterval(recordTimer);
         setRecordingUI(false);
         stopTracks();
-        var blob = new Blob(recordChunks, { type: recorder.mimeType || 'audio/webm' });
-        uploadIntakeFile(blob, 'idea.webm');
+        finishRecording();
       });
-      recorder.start();
+      recorder.start(RECORD_SLICE_MS);
       setRecordingUI(true);
       startRecordTimer();
-      setIntakeStatus('Recording...', '');
+      startLevelMeter(stream);
+      requestWakeLock();
+      setIntakeStatus('Recording... keep this screen open.', '');
     }).catch(function (e) {
       setIntakeStatus(e && e.message ? e.message : 'Could not start recording.', 'err');
       stopTracks();
       setRecordingUI(false);
     });
+  });
+  document.addEventListener('visibilitychange', function () {
+    // The wake lock is released when the tab is hidden; take it again.
+    if (document.visibilityState === 'visible' && recorder && recorder.state !== 'inactive') requestWakeLock();
   });
   function setWizStep(n) {
     [1, 2, 3].forEach(function (k) {

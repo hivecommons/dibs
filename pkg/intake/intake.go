@@ -52,7 +52,10 @@ const (
 	// reading any entry, so /W [1 2000000000000 1] demands terabytes. Real
 	// files use widths of a few bytes.
 	maxPDFXrefFieldWidth = 64
-	sttTimeout           = 60 * time.Second
+	// sttTimeout bounds one transcription call. A 60 minute recording at the
+	// recorder's 32 kbps is ~14 MB; STT backends can take minutes to decode
+	// that, so one minute (the old value) would fail long recordings.
+	sttTimeout = 5 * time.Minute
 	// DefaultUploadReadTimeout bounds how long HandleUpload waits for the
 	// whole multipart body. MaxBytesReader caps the bytes, not the time: a
 	// client that trickles a 26 MiB body one byte at a time would otherwise
@@ -68,7 +71,7 @@ var uploadReadTimeout = DefaultUploadReadTimeout
 
 var (
 	DocumentExts = map[string]bool{".txt": true, ".md": true, ".html": true, ".htm": true, ".pdf": true, ".docx": true, ".rtf": true}
-	AudioExts    = map[string]bool{".mp3": true, ".m4a": true, ".wav": true, ".ogg": true, ".webm": true, ".flac": true}
+	AudioExts    = map[string]bool{".mp3": true, ".m4a": true, ".wav": true, ".ogg": true, ".webm": true, ".mp4": true, ".flac": true}
 )
 
 type Response struct {
@@ -1136,7 +1139,7 @@ func sniffMatchesAudio(ext, sniff, declared string) bool {
 		return strings.Contains(sniff, "wave") || strings.Contains(sniff, "wav") || sniff == "application/octet-stream"
 	case ".mp3":
 		return sniff == "audio/mpeg" || sniff == "application/octet-stream"
-	case ".ogg", ".flac", ".m4a", ".webm":
+	case ".ogg", ".flac", ".m4a", ".webm", ".mp4":
 		return strings.HasPrefix(sniff, "audio/") || strings.HasPrefix(sniff, "video/") || sniff == "application/octet-stream" || sniff == "application/ogg"
 	default:
 		return false

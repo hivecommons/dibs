@@ -103,3 +103,23 @@ func itoa(n int) string {
 	b, _ := json.Marshal(n)
 	return string(b)
 }
+
+func TestUIAudioFileInfoMatchesRecorderMime(t *testing.T) {
+	h := newTestServer(t, "/")
+	rec := doJSON(t, h, "GET", "/", "", nil)
+	fn := uiJSFunc(t, rec.Body.String(), "audioFileInfo")
+	script := fn + `
+var cases = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4', 'AUDIO/MP4;codecs=mp4a.40.2', 'video/mp4', ''];
+console.log(JSON.stringify(cases.map(audioFileInfo)));
+`
+	var got []struct{ Ext, Type string }
+	if err := json.Unmarshal([]byte(strings.TrimSpace(runUIJS(t, script))), &got); err != nil {
+		t.Fatal(err)
+	}
+	want := [][2]string{{"webm", "audio/webm"}, {"webm", "audio/webm"}, {"ogg", "audio/ogg"}, {"m4a", "audio/mp4"}, {"m4a", "audio/mp4"}, {"mp4", "video/mp4"}, {"webm", "audio/webm"}}
+	for i, w := range want {
+		if got[i].Ext != w[0] || got[i].Type != w[1] {
+			t.Errorf("case %d = %+v, want %v", i, got[i], w)
+		}
+	}
+}
