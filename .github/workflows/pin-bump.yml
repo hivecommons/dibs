@@ -137,6 +137,8 @@ jobs:
             deploy/deployment.yaml
           grep -q "image: ${IMAGE}@${DIGEST}" deploy/deployment.yaml || { echo "::error::could not rewrite the image line"; exit 1; }
           git diff --stat
+          # Stage only the pin; the earlier steps leave headers and index.json behind.
+          git add deploy/deployment.yaml
           git commit -s -q -m "🌱 deploy: pin main ${short}" -m "Repin deploy/deployment.yaml to ${IMAGE}@${DIGEST} (main ${CANDIDATE})."
           git push -f origin "$BRANCH"
 
