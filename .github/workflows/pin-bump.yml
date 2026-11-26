@@ -48,14 +48,33 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-      # PRs and pushes made with GITHUB_TOKEN do not trigger workflows, so the
-      # required checks are dispatched on the bot branch explicitly.
+      # Fallback only: PRs and pushes made with GITHUB_TOKEN do not trigger
+      # workflows, so without the App credentials the required checks are
+      # dispatched on the bot branch explicitly.
       actions: write
+    env:
+      # The hive GitHub App (same App ID / private key as the hive's
+      # gh-app-token.sh). A PR opened and pushed with its installation token
+      # fires pull_request normally, so the required checks run on their own.
+      HAS_APP: ${{ secrets.GH_APP_ID != '' && secrets.GH_APP_PRIVATE_KEY != '' }}
     steps:
+      - name: Mint the App installation token
+        id: app-token
+        if: env.HAS_APP == 'true'
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: main
           fetch-depth: 0
+          # The push of the bot branch uses this token too, so with the App it
+          # also triggers pull_request synchronize on an existing PR.
+          token: ${{ steps.app-token.outputs.token || github.token }}
 
       - name: Decide whether a new pin is needed
         id: plan
@@ -119,7 +138,8 @@ jobs:
       - name: Write the pin and open or update the PR
         if: steps.plan.outputs.skip == 'false' && steps.digest.outputs.skip == 'false'
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
+          DISPATCH_TOKEN: ${{ github.token }}
           CANDIDATE: ${{ steps.plan.outputs.candidate }}
           PINNED: ${{ steps.plan.outputs.pinned }}
           DIGEST: ${{ steps.digest.outputs.digest }}
@@ -189,7 +209,10 @@ jobs:
           else
             gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$BRANCH" --title "$title" --body-file body.md
           fi
-          # Required checks for the bot commit (see the actions: write note).
-          for wf in ci.yml docker.yml go-security.yml; do
-            gh workflow run "$wf" --repo "$GITHUB_REPOSITORY" --ref "$BRANCH"
-          done
+          # With the App token the PR and push trigger the required checks
+          # themselves. Without it, dispatch them (see the actions: write note).
+          if [ "$HAS_APP" != 'true' ]; then
+            for wf in ci.yml docker.yml go-security.yml; do
+              GH_TOKEN=$DISPATCH_TOKEN gh workflow run "$wf" --repo "$GITHUB_REPOSITORY" --ref "$BRANCH"
+            done
+          fi
