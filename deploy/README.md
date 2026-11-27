@@ -148,6 +148,17 @@ Settings (CronJob env, all with defaults in `autodeploy.sh`):
 `BACKUP_VOLATILE_FILES` (`repo-news.json`, a cache the app rewrites often,
 whose checksum may change during the copy).
 
+**Pin-bump PR checks.** `pin-bump.yml` opens and pushes the bot PR with a
+GitHub App installation token when the repository secrets `GH_APP_ID` and
+`GH_APP_PRIVATE_KEY` are both set; the App needs Contents and Pull requests
+write on this repository. The PR then runs the required checks like any other
+PR. Without those secrets it falls back to `GITHUB_TOKEN`, whose events start
+no workflows, and dispatches `ci.yml`, `docker.yml` and `go-security.yml` on
+`bot/pin-bump` instead. On that path pin PRs have stalled with the required
+checks missing until someone closed and reopened them
+([#683](https://github.com/hivecommons/dibs/issues/683)), so set both secrets
+before relying on the pin PR as the release gate.
+
 ### Enable (after the first manual rollout is live)
 
 The CronJob ships `suspend: true`. With the production context selected:
