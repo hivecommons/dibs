@@ -39,8 +39,8 @@ spec:
           type: RuntimeDefault
       containers:
         - name: dibs
-          # main 70a2db52dcc3878f66d11f34e5f5d3dccfd3e900; reviewed rollout: deploy/rollout-558.md
-          image: ghcr.io/hivecommons/dibs@sha256:b65c4f332415c1c68c4812e0948d9356180e5f48c6ae2f7443346698c6745079
+          # main 4db46fdad625e7063a8da3346b68842f1274bc87; automated pin bump (.github/workflows/pin-bump.yml)
+          image: ghcr.io/hivecommons/dibs@sha256:069f3954f384a467416bb0f201ee06388fc1c62c0b2af6d87eee20011f493f19
           ports:
             - name: http
               containerPort: 8080
